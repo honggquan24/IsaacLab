@@ -7,7 +7,6 @@
 # Configuration for different assets.
 ##
 
-from .allegro import *
 from .ant import *
 from .anymal import *
 from .cart_double_pendulum import *

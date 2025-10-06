@@ -23,6 +23,7 @@ simulation_app = app_launcher.app
 
 import numpy as np
 import torch
+from icecream import ic
 
 import isaaclab.sim as sim_utils
 from isaaclab.actuators import ImplicitActuatorCfg
@@ -30,6 +31,7 @@ from isaaclab.assets import AssetBaseCfg
 from isaaclab.assets.articulation import ArticulationCfg
 from isaaclab.scene import InteractiveScene, InteractiveSceneCfg
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
+from isaaclab_assets import LEGGED_ROBOT_V1_CFG
 
 JETBOT_CONFIG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(usd_path=f"{ISAAC_NUCLEUS_DIR}/Robots/NVIDIA/Jetbot/jetbot.usd"),
@@ -94,9 +96,12 @@ class NewRobotsSceneCfg(InteractiveSceneCfg):
     )
 
     # robot
-    Jetbot = JETBOT_CONFIG.replace(prim_path="{ENV_REGEX_NS}/Jetbot")
-    Dofbot = DOFBOT_CONFIG.replace(prim_path="{ENV_REGEX_NS}/Dofbot")
+    # Jetbot = JETBOT_CONFIG.replace(prim_path="{ENV_REGEX_NS}/Jetbot")
+    # Dofbot = DOFBOT_CONFIG.replace(prim_path="{ENV_REGEX_NS}/Dofbot")
+    Legged_bot_v1 = LEGGED_ROBOT_V1_CFG.replace(prim_path="{ENV_REGEX_NS}/Legged_bot_v1")
 
+def print_info(input_):
+    print(f"{input_}: ")
 
 def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
     sim_dt = sim.get_physics_dt()
@@ -109,28 +114,42 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
             # reset counters
             count = 0
             # reset the scene entities to their initial positions offset by the environment origins
-            root_jetbot_state = scene["Jetbot"].data.default_root_state.clone()
-            root_jetbot_state[:, :3] += scene.env_origins
-            root_dofbot_state = scene["Dofbot"].data.default_root_state.clone()
-            root_dofbot_state[:, :3] += scene.env_origins
+            # root_jetbot_state = scene["Jetbot"].data.default_root_state.clone()
+            # root_jetbot_state[:, :3] += scene.env_origins
+            # root_dofbot_state = scene["Dofbot"].data.default_root_state.clone()
+            # root_dofbot_state[:, :3] += scene.env_origins
+            root_legged_bot_v1_state = scene["Legged_bot_v1"].data.default_root_state.clone()
+            ic(root_legged_bot_v1_state)
+            root_legged_bot_v1_state[:, :3] += scene.env_origins
+            ic(root_legged_bot_v1_state)
 
             # copy the default root state to the sim for the jetbot's orientation and velocity
-            scene["Jetbot"].write_root_pose_to_sim(root_jetbot_state[:, :7])
-            scene["Jetbot"].write_root_velocity_to_sim(root_jetbot_state[:, 7:])
-            scene["Dofbot"].write_root_pose_to_sim(root_dofbot_state[:, :7])
-            scene["Dofbot"].write_root_velocity_to_sim(root_dofbot_state[:, 7:])
+            # scene["Jetbot"].write_root_pose_to_sim(root_jetbot_state[:, :7])
+            # scene["Jetbot"].write_root_velocity_to_sim(root_jetbot_state[:, 7:])
+            # scene["Dofbot"].write_root_pose_to_sim(root_dofbot_state[:, :7])
+            # scene["Dofbot"].write_root_velocity_to_sim(root_dofbot_state[:, 7:])
+            scene["Legged_bot_v1"].write_root_pose_to_sim(root_legged_bot_v1_state[:, :7])
+            scene["Legged_bot_v1"].write_root_velocity_to_sim(root_legged_bot_v1_state[:, 7:])
 
             # copy the default joint states to the sim
+            # joint_pos, joint_vel = (
+            #     scene["Jetbot"].data.default_joint_pos.clone(),
+            #     scene["Jetbot"].data.default_joint_vel.clone(),
+            # )
+            # scene["Jetbot"].write_joint_state_to_sim(joint_pos, joint_vel)
+
+            # joint_pos, joint_vel = (
+            #     scene["Dofbot"].data.default_joint_pos.clone(),
+            #     scene["Dofbot"].data.default_joint_vel.clone(),
+            # )
+            # scene["Dofbot"].write_joint_state_to_sim(joint_pos, joint_vel)
+
             joint_pos, joint_vel = (
-                scene["Jetbot"].data.default_joint_pos.clone(),
-                scene["Jetbot"].data.default_joint_vel.clone(),
+                scene["Legged_bot_v1"].data.default_joint_pos.clone(),
+                scene["Legged_bot_v1"].data.default_joint_vel.clone(),
             )
-            scene["Jetbot"].write_joint_state_to_sim(joint_pos, joint_vel)
-            joint_pos, joint_vel = (
-                scene["Dofbot"].data.default_joint_pos.clone(),
-                scene["Dofbot"].data.default_joint_vel.clone(),
-            )
-            scene["Dofbot"].write_joint_state_to_sim(joint_pos, joint_vel)
+            scene["Legged_bot_v1"].write_joint_state_to_sim(joint_pos, joint_vel)
+
             # clear internal buffers
             scene.reset()
             print("[INFO]: Resetting Jetbot and Dofbot state...")
@@ -142,13 +161,16 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
         else:
             # Turn by applying different velocities
             action = torch.Tensor([[5.0, -5.0]])
-
-        scene["Jetbot"].set_joint_velocity_target(action)
+            
+        action_leg = 1000 * torch.randn((1, 10))
+        action_leg[:, 6:] = 0.0
+        # scene["Jetbot"].set_joint_velocity_target(action)
+        scene["Legged_bot_v1"].set_joint_velocity_target(action_leg)
 
         # wave
-        wave_action = scene["Dofbot"].data.default_joint_pos
-        wave_action[:, 0:4] = 0.25 * np.sin(2 * np.pi * 0.5 * sim_time)
-        scene["Dofbot"].set_joint_position_target(wave_action)
+        # wave_action = scene["Dofbot"].data.default_joint_pos
+        # wave_action[:, 0:4] = 0.25 * np.sin(2 * np.pi * 0.5 * sim_time)
+        # scene["Dofbot"].set_joint_position_target(wave_action)
 
         scene.write_data_to_sim()
         sim.step()

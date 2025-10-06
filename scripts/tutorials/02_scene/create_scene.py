@@ -40,6 +40,7 @@ from isaaclab.assets import ArticulationCfg, AssetBaseCfg
 from isaaclab.scene import InteractiveScene, InteractiveSceneCfg
 from isaaclab.sim import SimulationContext
 from isaaclab.utils import configclass
+from isaaclab_assets import LEGGED_ROBOT_V1_CFG
 
 ##
 # Pre-defined configs
@@ -60,14 +61,15 @@ class CartpoleSceneCfg(InteractiveSceneCfg):
     )
 
     # articulation
-    cartpole: ArticulationCfg = CARTPOLE_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
+    cartpole: ArticulationCfg = CARTPOLE_CFG.replace(prim_path="{ENV_REGEX_NS}/Cartpole")
+    robot_legged_v1: ArticulationCfg = LEGGED_ROBOT_V1_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
 
 
 def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
     """Runs the simulation loop."""
     # Extract scene entities
     # note: we only do this here for readability.
-    robot = scene["cartpole"]
+    robot = scene["robot_legged_v1"]
     # Define simulation stepping
     sim_dt = sim.get_physics_dt()
     count = 0
@@ -82,7 +84,7 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
             # we offset the root state by the origin since the states are written in simulation world frame
             # if this is not done, then the robots will be spawned at the (0, 0, 0) of the simulation world
             root_state = robot.data.default_root_state.clone()
-            root_state[:, :3] += scene.env_origins
+            root_state[:, :3] += scene.env_origins + 2 
             robot.write_root_pose_to_sim(root_state[:, :7])
             robot.write_root_velocity_to_sim(root_state[:, 7:])
             # set joint positions with some noise
@@ -94,7 +96,7 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
             print("[INFO]: Resetting robot state...")
         # Apply random action
         # -- generate random joint efforts
-        efforts = torch.randn_like(robot.data.joint_pos) * 5.0
+        efforts = torch.randn_like(robot.data.joint_pos) * 50.0
         # -- apply action to the robot
         robot.set_joint_effort_target(efforts)
         # -- write data to sim
