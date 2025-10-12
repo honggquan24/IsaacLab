@@ -32,7 +32,7 @@ class ImuData:
     """
 
     lin_vel_b: torch.Tensor = None
-    """IMU frame angular velocity relative to the world expressed in IMU frame.
+    """IMU frame linear velocity relative to the world expressed in IMU frame.
 
     Shape is (N, 3), where ``N`` is the number of environments.
     """

@@ -81,3 +81,4 @@ LEGGED_ROBOT_V1_CFG = ArticulationCfg(
         ),
     },
 )
+
