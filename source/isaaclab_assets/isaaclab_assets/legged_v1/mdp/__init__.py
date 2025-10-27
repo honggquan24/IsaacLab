@@ -1,1 +1,1 @@
-from .reward import *
+from .rewards import *

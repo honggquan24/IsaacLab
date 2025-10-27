@@ -4,11 +4,11 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 """
-This script demonstrates how to run the RL environment for the cartpole balancing task.
+This script demonstrates how to run the RL environment for a legged robot.
 
 .. code-block:: bash
 
-    ./isaaclab.sh -p scripts/tutorials/03_envs/run_cartpole_rl_env.py --num_envs 32
+    ./isaaclab.sh -p scripts/run_legged_robot_env.py --num_envs 32 --enable_cameras
 
 """
 
@@ -18,108 +18,116 @@ import argparse
 
 from isaaclab.app import AppLauncher
 
-# add argparse arguments
-parser = argparse.ArgumentParser(description="Tutorial on running the cartpole RL environment.")
+# Add argparse arguments
+parser = argparse.ArgumentParser(description="Tutorial on running the legged robot RL environment.")
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to spawn.")
+parser.add_argument("--seed", type=int, default=42, help="Seed for the environment for deterministic behavior.")
 
-# append AppLauncher cli args
+# Append AppLauncher CLI args
 AppLauncher.add_app_launcher_args(parser)
-# parse the arguments
+# Parse the arguments
 args_cli = parser.parse_args()
 
-# launch omniverse app
+# Launch omniverse app
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
 """Rest everything follows."""
-
-import torch
 from icecream import ic
-import time
-import isaaclab.sim as sim_utils 
-from isaaclab.envs import ManagerBasedRLEnv
-from isaaclab.scene import InteractiveScene, InteractiveSceneCfg
-from isaaclab_assets import LeggedRobotV1EnvCfg
-from isaaclab.utils import configclass
+import torch
 
-def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
-    sim_dt = sim.get_physics_dt()
-    sim_time = 0.0 
+import isaaclab.sim as sim_utils
+from isaaclab.envs import ManagerBasedRLEnv
+from isaaclab_assets import LeggedRobotV1EnvCfg
+
+
+def run_simulator(env: ManagerBasedRLEnv):
+    """Run the simulator loop.
+    
+    Args:
+        env: The RL environment instance.
+    """
     count = 0
+    
+    # Reset environment initially
+    env.reset()
+    print("[INFO]: Environment reset complete.")
 
     while simulation_app.is_running():
-        if count % 500 == 0:
-            count = 0 
+        # Reset environment periodically
+        if count % 500 == 0 and count > 0:
+            env.reset()
+            print("-" * 80)
+            print(f"[INFO]: Resetting environment at step {count}...")
 
+        # Generate random joint efforts as actions
+        actions = torch.ones_like(env.action_manager.action)
+        # print(f"actions: {actions.shape}")
+        # ic(actions)
+        
+        # Step the environment
+        obs, rewards, terminated, truncated, info = env.step(actions)
 
-            print("[INFO]: Resetting robot state...")
-            scene.reset()
+        # Print information periodically
+        if count % 100 == 0:
+            print("-" * 80)
+            print(f"[Step {count}]")
+            print(f"  Observation shape: {obs['policy'].shape}")
+            print(f"  Mean reward: {rewards.mean().item():.4f}")
+            ic(obs)
+            ic(rewards)
+            ic(terminated)
+            ic(truncated)
+            ic(info)
+            
+            # # Print sensor information from the scene
+            # scene = env.scene
+            # if "height_scanner" in scene:
+            #     max_height = torch.max(scene["height_scanner"].data.ray_hits_w[..., -1]).item()
+            #     print(f"  Max height scan value: {max_height:.4f}")
+            
+            # if "camera" in scene and args_cli.enable_cameras:
+            #     rgb_shape = scene["camera"].data.output["rgb"].shape
+            #     print(f"  Camera RGB shape: {rgb_shape}")
 
-        # Apply default actions to the robot
-        # -- generate actions/commands
-        targets = scene["robot"].data.default_joint_pos
-        # -- apply action to the robot
-        # scene["robot"].set_joint_position_target(targets)
-        # -- write data to sim
-        scene.write_data_to_sim()
-        # perform step
-        sim.step()
-        # update sim-time
-        sim_time += sim_dt
+        # Update counter
         count += 1
-        # update buffers
-        scene.update(sim_dt)
-
-        # print information from the sensors
-        # print("-------------------------------")
-        # print(scene["camera"])
-        # print("Received shape of rgb   image: ", scene["camera"].data.output["rgb"].shape)
-        # print("Received shape of depth image: ", scene["camera"].data.output["distance_to_image_plane"].shape)
-        print("-------------------------------")
-        print("Received max height value: ", torch.max(scene["height_scanner"].data.ray_hits_w[..., -1]).item())
-        # print("-------------------------------")
-        # print(scene["imu"])
-        # print("Received imu of robot:")
-        # print("Linear velocity: ", scene["imu"].data.lin_vel_b)
-        # print("Angular velocity: ", scene["imu"].data.ang_vel_b)
-        # print("Linear acceleration: ", scene["imu"].data.lin_acc_b)
-        # print("Angular acceleration: ", scene["imu"].data.ang_acc_b)
 
 
 def main():
     """Main function."""
-    # Initialize the simulation context
-    sim_cfg = sim_utils.SimulationCfg(
-        dt=0.01,
-        device=args_cli.device
-    )
-    sim = sim_utils.SimulationContext(sim_cfg)
-
-    # Config Env
+    # Configure environment
     env_cfg = LeggedRobotV1EnvCfg()
+    print(f"joint_pos_rel: {env_cfg.observations.policy.joint_pos_rel}")
+    # print(env_cfg.scene.imu.history_length)
     env_cfg.scene.num_envs = args_cli.num_envs
-    env_cfg.sim.device = args_cli.device
-
-    # Config scene
-    scene = InteractiveScene(env_cfg.scene)
-
-    # Play the simulator
-    sim.reset()
-    # Now we are ready!
-    print("[INFO]: Setup complete...")
+    env_cfg.seed = args_cli.seed
+    
+    # Setup RL environment
+    print("[INFO]: Creating environment...")
+    env = ManagerBasedRLEnv(cfg=env_cfg)
+    
+    print(f"[INFO]: Setup complete with {args_cli.num_envs} environment(s).")
+    print(f"[INFO]: Observation space: {env.observation_manager.group_obs_dim}")
+    print(f"[INFO]: Action space: {env.action_manager.action.shape}")
 
     # Run the simulator
-    run_simulator(sim, scene)
+    run_simulator(env)
 
-    # setup RL environment
-    # env = ManagerBasedRLEnv(cfg=env_cfg)
-    # env.close()
+    # Close environment
+    env.close()
 
 
 if __name__ == "__main__":
-    # run the main function
+    # Run the main function
     try:
         main()
-    # close sim app
+    except KeyboardInterrupt:
+        print("\n[INFO]: Interrupted by user.")
+    except Exception as e:
+        print(f"\n[ERROR]: {e}")
+        import traceback
+        traceback.print_exc()
     finally:
+        # Close sim app
         simulation_app.close()
