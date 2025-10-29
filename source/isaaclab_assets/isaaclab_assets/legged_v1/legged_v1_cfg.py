@@ -34,8 +34,8 @@ LEGGED_ROBOT_V1_CFG = ArticulationCfg(
         joint_pos={
             "Revolute_1": 0.0,
             "Revolute_2": 0.0,
-            "Revolute_3": 45 * math.pi / 180.0,
-            "Revolute_4": -45.0 * math.pi / 180,
+            "Revolute_3": math.pi / 4,
+            "Revolute_4": - math.pi / 2 + math.pi / 4,
             "Revolute_5": 0.0,
             "Revolute_6": 0.0,
         },

@@ -58,7 +58,7 @@ class LeggedRobotV1SceneConfig(InteractiveSceneCfg):
     # )
 
     cfg_ground = AssetBaseCfg( 
-        prim_path="/World/defaultGroundPlane", 
+        prim_path="/World/ground", 
         spawn=sim_utils.GroundPlaneCfg(), 
     )
 
@@ -73,6 +73,21 @@ class LeggedRobotV1SceneConfig(InteractiveSceneCfg):
         update_period=0.1,
         gravity_bias=(0.0, 0.0, 0.0),
         debug_vis=True,
+    )
+
+    height_scanner = RayCasterCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/Robot_2_leg_base/robot_2_leg/robot_2_leg/Group_1",
+        update_period=0.1,
+        offset=RayCasterCfg.OffsetCfg(
+            pos=(0.0, 0.0, 20.0)
+        ),
+        ray_alignment="yaw",
+        pattern_cfg=patterns.GridPatternCfg(
+            resolution=0.1,
+            size=[1.6, 1.0],
+        ),
+        debug_vis=True,
+        mesh_prim_paths=["/World/ground"],
     )
 
 
@@ -155,34 +170,43 @@ class EventCfg:
         },
     )
 
-
 @configclass
 class RewardCfg:
     """Reward terms for the MDP."""
-
+    
     # (1) Constant running reward - khuyến khích robot sống sót
     alive = RewardTermCfg(
-        func=rewards.is_alive, 
+        func=rewards.is_alive,
         weight=1.0
     )
-
+    
     # (2) Failure penalty - phạt khi bị terminate
     terminating = RewardTermCfg(
-        func=rewards.is_terminated, 
-        weight=-1.0
+        func=rewards.is_terminated,
+        weight=-2.0
     )
-
-    # (3) Keep upright - khuyến khích đứng thẳng
-    upright_balance = RewardTermCfg(
+    
+    # (3) Keep upright - khuyến khích đứng thẳng (chỉ roll & pitch)
+    upright_posture = RewardTermCfg(
+        func=mdp.rewards.upright_posture_reward,
+        weight=2.5,
+        params={
+            "imu_cfg": SceneEntityCfg(name="imu"),
+            "tolerance": 0.02,
+        },
+    )
+    
+    # (4) Full RPY alignment - căn chỉnh toàn bộ hướng (roll, pitch, yaw)
+    rpy_alignment = RewardTermCfg(
         func=mdp.rewards.rpy_alignment_imu,
-        weight=3.0,
+        weight=1.5,
         params={
             "target_rpy": (0.0, 0.0, 0.0),
             "imu_cfg": SceneEntityCfg(name="imu"),
         },
     )
-
-    # (4) Stay still - giảm rung lắc
+    
+    # (5) Stay still - giảm rung lắc (angular velocity)
     stillness = RewardTermCfg(
         func=mdp.rewards.imu_stillness_reward,
         weight=0.5,
@@ -190,7 +214,64 @@ class RewardCfg:
             "imu_cfg": SceneEntityCfg(name="imu")
         },
     )
+    
+    # (6) Forward velocity - di chuyển tiến với vận tốc mục tiêu
+    forward_velocity = RewardTermCfg(
+        func=mdp.rewards.forward_velocity_reward,
+        weight=2.0,
+        params={
+            "target_velocity": 1.0,
+            "imu_cfg": SceneEntityCfg(name="imu"),
+        },
+    )
+    
+    # (7) Smooth motion - chuyển động mượt mà (low acceleration)
+    smooth_motion = RewardTermCfg(
+        func=mdp.rewards.low_linear_acceleration_reward,
+        weight=0.3,
+        params={
+            "imu_cfg": SceneEntityCfg(name="imu"),
+            "threshold": 5.0,
+        },
+    )
+    
+    # (8) Balance stability - ổn định tổng hợp
+    # balance_stability = RewardTermCfg(
+    #     func=mdp.rewards.balance_stability_reward,
+    #     weight=1.0,
+    #     params={
+    #         "imu_cfg": SceneEntityCfg(name="imu"),
+    #         "ang_vel_weight": 1.0,
+    #         "lin_acc_weight": 0.5,
+    #     },
+    # )
+    
+    # (9) Heading alignment - giữ hướng di chuyển
+    heading_alignment = RewardTermCfg(
+        func=mdp.rewards.heading_alignment_reward,
+        weight=0.5,
+        params={
+            "target_heading": 0.0,
+            "imu_cfg": SceneEntityCfg(name="imu"),
+        },
+    )
+    
+    # (10) Smooth angular motion - chuyển động quay mượt
+    # smooth_angular = RewardTermCfg(
+    #     func=mdp.rewards.smooth_angular_motion_reward,
+    #     weight=0.4,
+    #     params={
+    #         "imu_cfg": SceneEntityCfg(name="imu"),
+    #     },
+    # )
 
+    height_reward = RewardTermCfg(
+        func=mdp.rewards.height_scanner_based_reward,
+        weight=4.0,
+        params={
+            "scanner_cfg": SceneEntityCfg(name="height_scanner")
+        }
+    )
 
 @configclass
 class TerminationsCfg:
@@ -210,7 +291,7 @@ class TerminationsCfg:
     base_height = TerminationTermCfg(
         func=terminations.root_height_below_minimum,
         params={
-            "minimum_height": 0.05,  # Terminate nếu base_z < 0.3 m
+            "minimum_height": 0.4,  # Terminate nếu base_z < 0.3 m
             "asset_cfg": SceneEntityCfg(name="robot"),
         },
     )
@@ -287,7 +368,7 @@ class LeggedRobotV1EnvCfg(ManagerBasedRLEnvCfg):
         """Post initialization."""
         # General settings
         self.decimation = 2  # Control frequency = sim_freq / decimation = 60/2 = 30 Hz
-        self.episode_length_s = 30  # Episode duration in seconds
+        self.episode_length_s = 10  # Episode duration in seconds
         
         # Viewer settings
         self.viewer.eye = (8.0, 0.0, 5.0)  # Camera position
