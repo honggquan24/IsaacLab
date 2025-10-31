@@ -327,7 +327,7 @@ class TerminationsCfg:
     joint_vel_limit = TerminationTermCfg(
         func=terminations.joint_vel_out_of_manual_limit,
         params={
-            "max_velocity": 500.0,  # rad/s - Giới hạn vận tốc góc tối đa
+            "max_velocity": 5.0,  # rad/s - Giới hạn vận tốc góc tối đa
             "asset_cfg": SceneEntityCfg(name="robot"),
         },
     )

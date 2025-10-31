@@ -15,6 +15,7 @@ def rpy_alignment_imu(
 ) -> torch.Tensor:
     """
     Reward for full RPY alignment using IMU orientation.
+    FIXED VERSION: Thêm clipping, normalization và numerical stability.
     
     Args:
         env: Environment object.
@@ -30,270 +31,255 @@ def rpy_alignment_imu(
     # Quaternion orientation (world frame)
     quat = imu.data.quat_w
     
+    # FIX 1: Normalize quaternion (tránh numerical issues)
+    quat = quat / torch.norm(quat, dim=-1, keepdim=True).clamp(min=1e-6)
+    
+    # FIX 2: Thêm safety check cho NaN/Inf
+    if torch.isnan(quat).any() or torch.isinf(quat).any():
+        print("[WARNING] Invalid quaternion detected in rpy_alignment_imu")
+        quat = torch.nan_to_num(quat, nan=1.0, posinf=1.0, neginf=-1.0)
+        # Normalize lại
+        quat = quat / torch.norm(quat, dim=-1, keepdim=True).clamp(min=1e-6)
+    
     # Convert to Euler angles
     roll, pitch, yaw = euler_xyz_from_quat(quat)
+    
+    # FIX 3: Clamp euler angles để tránh extreme values
+    roll = torch.clamp(roll, -torch.pi, torch.pi)
+    pitch = torch.clamp(pitch, -torch.pi, torch.pi)
+    yaw = torch.clamp(yaw, -torch.pi, torch.pi)
     
     # Target angles
     target_roll, target_pitch, target_yaw = target_rpy
     
-    # Errors
+    # Errors với wrap_to_pi (đảm bảo error trong [-π, π])
     roll_error = wrap_to_pi(roll - target_roll)
     pitch_error = wrap_to_pi(pitch - target_pitch)
     yaw_error = wrap_to_pi(yaw - target_yaw)
     
-    # Total orientation error
-    total_error = torch.square(roll_error) + torch.square(pitch_error) + torch.square(yaw_error)
+    # FIX 4: Clamp errors để tránh extreme values
+    roll_error = torch.clamp(roll_error, -torch.pi, torch.pi)
+    pitch_error = torch.clamp(pitch_error, -torch.pi, torch.pi)
+    yaw_error = torch.clamp(yaw_error, -torch.pi, torch.pi)
+    
+    # FIX 5: Dùng scale factor để tránh exp overflow
+    # Với error max = π, squared = π² ≈ 10
+    # exp(-10) ≈ 0.000045 (OK)
+    scale = 1.0  # Có thể điều chỉnh: càng lớn → reward càng smooth
+    
+    # Total orientation error (squared)
+    total_error = (
+        torch.square(roll_error) + 
+        torch.square(pitch_error) + 
+        torch.square(yaw_error)
+    ) / scale
+    
+    # FIX 6: Clamp total_error trước khi exp (tránh underflow)
+    # exp(-50) ≈ 1.9e-22 (quá nhỏ → có thể bị underflow)
+    total_error = torch.clamp(total_error, 0.0, 50.0)
     
     # Reward (smooth Gaussian)
-    reward = torch.exp(-total_error / 0.3)
+    reward = torch.exp(-total_error)
+    
+    # FIX 7: Final safety check
+    reward = torch.clamp(reward, 0.0, 1.0)
+    
+    # FIX 8: Kiểm tra NaN trong output
+    if torch.isnan(reward).any():
+        print("[ERROR] NaN in reward output! Replacing with 0")
+        reward = torch.nan_to_num(reward, nan=0.0)
     
     return reward
 
 
-def imu_stillness_reward(
+def rpy_alignment_imu_v2(
     env: ManagerBasedEnv,
+    target_rpy: tuple[float, float, float] = (0.0, 0.0, 0.0),
     imu_cfg: SceneEntityCfg = SceneEntityCfg("imu"),
+    weight_roll: float = 1.0,
+    weight_pitch: float = 1.0,
+    weight_yaw: float = 0.5,
+    sigma: float = 0.5,
 ) -> torch.Tensor:
     """
-    Reward for staying still (low angular velocity).
+    ALTERNATIVE VERSION: Weighted RPY alignment với individual control.
+    Dùng version này nếu muốn prioritize roll/pitch hơn yaw.
     
     Args:
         env: Environment object.
+        target_rpy: Desired (roll, pitch, yaw) in radians.
         imu_cfg: SceneEntityCfg of the IMU sensor.
+        weight_roll: Weight for roll error (default 1.0).
+        weight_pitch: Weight for pitch error (default 1.0).
+        weight_yaw: Weight for yaw error (default 0.5, less important).
+        sigma: Smoothness parameter (smaller = more sensitive).
     
     Returns:
         Reward tensor with shape (num_envs,)
     """
+    # Get IMU sensor
     imu = env.scene[imu_cfg.name]
-    ang_vel = imu.data.ang_vel_b  # body frame angular velocity
     
-    # Compute magnitude of angular velocity
-    ang_speed = torch.norm(ang_vel, dim=-1)
-    
-    # Reward high when angular speed ≈ 0
-    reward = torch.exp(-ang_speed**2 / 0.05)
-    
-    return reward
-
-
-def upright_posture_reward(
-    env: ManagerBasedEnv,
-    imu_cfg: SceneEntityCfg = SceneEntityCfg("imu"),
-    tolerance: float = 0.02,
-) -> torch.Tensor:
-    """
-    Reward for keeping robot upright (roll and pitch near 0).
-    
-    Args:
-        env: Environment object.
-        imu_cfg: SceneEntityCfg of the IMU sensor.
-        tolerance: Tolerance in radians for orientation error.
-    
-    Returns:
-        Reward tensor with shape (num_envs,)
-    """
-    imu = env.scene[imu_cfg.name]
+    # Quaternion orientation (world frame)
     quat = imu.data.quat_w
+    
+    # Normalize quaternion
+    quat = quat / torch.norm(quat, dim=-1, keepdim=True).clamp(min=1e-6)
+    
+    # Safety check
+    if torch.isnan(quat).any() or torch.isinf(quat).any():
+        quat = torch.nan_to_num(quat, nan=1.0, posinf=1.0, neginf=-1.0)
+        quat = quat / torch.norm(quat, dim=-1, keepdim=True).clamp(min=1e-6)
     
     # Convert to Euler angles
-    roll, pitch, _ = euler_xyz_from_quat(quat)
+    roll, pitch, yaw = euler_xyz_from_quat(quat)
     
-    # Calculate orientation error (only roll and pitch)
-    error = torch.square(roll) + torch.square(pitch)
+    # Clamp angles
+    roll = torch.clamp(roll, -torch.pi, torch.pi)
+    pitch = torch.clamp(pitch, -torch.pi, torch.pi)
+    yaw = torch.clamp(yaw, -torch.pi, torch.pi)
     
-    # Exponential reward
-    reward = torch.exp(-error / tolerance)
+    # Target angles
+    target_roll, target_pitch, target_yaw = target_rpy
     
-    return reward
-
-
-def forward_velocity_reward(
-    env: ManagerBasedEnv,
-    target_velocity: float = 1.0,
-    imu_cfg: SceneEntityCfg = SceneEntityCfg("imu"),
-) -> torch.Tensor:
-    """
-    Reward for moving forward at target velocity.
+    # Individual errors
+    roll_error = torch.clamp(wrap_to_pi(roll - target_roll), -torch.pi, torch.pi)
+    pitch_error = torch.clamp(wrap_to_pi(pitch - target_pitch), -torch.pi, torch.pi)
+    yaw_error = torch.clamp(wrap_to_pi(yaw - target_yaw), -torch.pi, torch.pi)
     
-    Args:
-        env: Environment object.
-        target_velocity: Desired forward velocity in m/s.
-        imu_cfg: SceneEntityCfg of the IMU sensor.
+    # Weighted squared errors
+    weighted_error = (
+        weight_roll * torch.square(roll_error) +
+        weight_pitch * torch.square(pitch_error) +
+        weight_yaw * torch.square(yaw_error)
+    ) / (weight_roll + weight_pitch + weight_yaw)
     
-    Returns:
-        Reward tensor with shape (num_envs,)
-    """
-    imu = env.scene[imu_cfg.name]
-    
-    # Linear velocity in body frame
-    lin_vel = imu.data.lin_vel_b
-    
-    # Forward velocity (x-axis in body frame)
-    forward_vel = lin_vel[:, 0]
-    
-    # Velocity error
-    vel_error = torch.square(forward_vel - target_velocity)
+    # Clamp before exp
+    weighted_error = torch.clamp(weighted_error / (sigma ** 2), 0.0, 50.0)
     
     # Reward
-    reward = torch.exp(-vel_error / 0.5)
+    reward = torch.exp(-weighted_error)
+    reward = torch.clamp(reward, 0.0, 1.0)
+    
+    # Safety check
+    if torch.isnan(reward).any():
+        reward = torch.nan_to_num(reward, nan=0.0)
     
     return reward
 
 
-def low_linear_acceleration_reward(
+def rpy_alignment_imu_simple(
     env: ManagerBasedEnv,
-    imu_cfg: SceneEntityCfg = SceneEntityCfg("imu"),
-    threshold: float = 5.0,
-) -> torch.Tensor:
-    """
-    Reward for smooth motion (low linear acceleration).
-    
-    Args:
-        env: Environment object.
-        imu_cfg: SceneEntityCfg of the IMU sensor.
-        threshold: Acceleration threshold for penalization.
-    
-    Returns:
-        Reward tensor with shape (num_envs,)
-    """
-    imu = env.scene[imu_cfg.name]
-    
-    # Linear acceleration in body frame
-    lin_acc = imu.data.lin_acc_b
-    
-    # Magnitude of acceleration
-    acc_magnitude = torch.norm(lin_acc, dim=-1)
-    
-    # Reward for low acceleration
-    reward = torch.exp(-acc_magnitude / threshold)
-    
-    return reward
-
-
-def balance_stability_reward(
-    env: ManagerBasedEnv,
-    imu_cfg: SceneEntityCfg = SceneEntityCfg("imu"),
-    ang_vel_weight: float = 1.0,
-    lin_acc_weight: float = 0.5,
-) -> torch.Tensor:
-    """
-    Combined reward for balance stability using angular velocity and linear acceleration.
-    
-    Args:
-        env: Environment object.
-        imu_cfg: SceneEntityCfg of the IMU sensor.
-        ang_vel_weight: Weight for angular velocity component.
-        lin_acc_weight: Weight for linear acceleration component.
-    
-    Returns:
-        Reward tensor with shape (num_envs,)
-    """
-    imu = env.scene[imu_cfg.name]
-    
-    # Angular velocity magnitude
-    ang_vel = imu.data.ang_vel_b
-    ang_speed = torch.norm(ang_vel, dim=-1)
-    
-    # Linear acceleration magnitude
-    lin_acc = imu.data.lin_acc_b
-    acc_magnitude = torch.norm(lin_acc, dim=-1)
-    
-    # Combined reward
-    ang_vel_reward = torch.exp(-ang_speed**2 / 0.1)
-    lin_acc_reward = torch.exp(-acc_magnitude / 5.0)
-    
-    reward = ang_vel_weight * ang_vel_reward + lin_acc_weight * lin_acc_reward
-    reward = reward / (ang_vel_weight + lin_acc_weight)
-    
-    return reward
-
-
-def heading_alignment_reward(
-    env: ManagerBasedEnv,
-    target_heading: float = 0.0,
+    target_rpy: tuple[float, float, float] = (0.0, 0.0, 0.0),
     imu_cfg: SceneEntityCfg = SceneEntityCfg("imu"),
 ) -> torch.Tensor:
     """
-    Reward for maintaining specific heading (yaw) direction.
+    SIMPLEST VERSION: Dùng projected gravity thay vì Euler angles.
+    Tránh gimbal lock và numerical issues của Euler conversion.
+    Chỉ track roll và pitch (không có yaw).
     
     Args:
         env: Environment object.
-        target_heading: Desired heading in radians.
+        target_rpy: Desired (roll, pitch, yaw) - chỉ dùng roll, pitch.
         imu_cfg: SceneEntityCfg of the IMU sensor.
     
     Returns:
         Reward tensor with shape (num_envs,)
     """
+    # Get IMU sensor
     imu = env.scene[imu_cfg.name]
+    
+    # Get projected gravity (z-component of gravity in body frame)
+    # Khi robot đứng thẳng: proj_g ≈ [0, 0, -9.81]
+    # Khi robot nghiêng: z-component giảm
     quat = imu.data.quat_w
     
-    # Convert to Euler angles and extract yaw
-    _, _, yaw = euler_xyz_from_quat(quat)
+    # Normalize quaternion
+    quat = quat / torch.norm(quat, dim=-1, keepdim=True).clamp(min=1e-6)
     
-    # Heading error
-    heading_error = wrap_to_pi(yaw - target_heading)
+    # Gravity vector in world frame
+    gravity_w = torch.tensor([0.0, 0.0, -1.0], device=env.device).repeat(env.num_envs, 1)
     
-    # Reward
-    reward = torch.exp(-torch.square(heading_error) / 0.2)
+    # Rotate gravity to body frame using quaternion
+    # q * v * q^-1 (quaternion rotation)
+    quat_w, quat_x, quat_y, quat_z = quat[:, 0], quat[:, 1], quat[:, 2], quat[:, 3]
+    
+    # Quaternion rotation formula (optimized)
+    x, y, z = gravity_w[:, 0], gravity_w[:, 1], gravity_w[:, 2]
+    
+    tx = 2.0 * (quat_y * z - quat_z * y)
+    ty = 2.0 * (quat_z * x - quat_x * z)
+    tz = 2.0 * (quat_x * y - quat_y * x)
+    
+    gravity_b = torch.stack([
+        x + quat_w * tx + quat_y * tz - quat_z * ty,
+        y + quat_w * ty + quat_z * tx - quat_x * tz,
+        z + quat_w * tz + quat_x * ty - quat_y * tx,
+    ], dim=-1)
+    
+    # Target: gravity should point down in body frame: [0, 0, -1]
+    target_gravity_b = torch.tensor([0.0, 0.0, -1.0], device=env.device).repeat(env.num_envs, 1)
+    
+    # Dot product (cosine similarity)
+    # cos(theta) = g_actual · g_target / (|g_actual| * |g_target|)
+    dot_product = torch.sum(gravity_b * target_gravity_b, dim=-1)
+    dot_product = torch.clamp(dot_product, -1.0, 1.0)
+    
+    # Reward: 1 when aligned (dot=1), 0 when perpendicular (dot=0)
+    # Dùng (1 + dot) / 2 để map [-1, 1] → [0, 1]
+    reward = (1.0 + dot_product) / 2.0
+    
+    # Hoặc dùng exponential: exp(k * dot_product)
+    # reward = torch.exp(5.0 * (dot_product - 1.0))  # Peak at dot=1
+    
+    reward = torch.clamp(reward, 0.0, 1.0)
     
     return reward
 
 
-def smooth_angular_motion_reward(
-    env: ManagerBasedEnv,
-    imu_cfg: SceneEntityCfg = SceneEntityCfg("imu"),
-) -> torch.Tensor:
+# ==== TESTING & DEBUGGING ====
+def test_rpy_alignment():
     """
-    Reward for smooth angular motion (penalizes sudden rotations).
-    
-    Args:
-        env: Environment object.
-        imu_cfg: SceneEntityCfg of the IMU sensor.
-    
-    Returns:
-        Reward tensor with shape (num_envs,)
+    Test function để verify rpy_alignment không tạo ra NaN/Inf.
     """
-    imu = env.scene[imu_cfg.name]
+    import torch
     
-    # Angular velocity components
-    ang_vel = imu.data.ang_vel_b
+    # Mock environment
+    class MockIMU:
+        class Data:
+            quat_w = torch.tensor([
+                [1.0, 0.0, 0.0, 0.0],  # Upright
+                [0.7071, 0.7071, 0.0, 0.0],  # 90° roll
+                [0.0, 0.0, 0.0, 1.0],  # 180° yaw
+                [0.5, 0.5, 0.5, 0.5],  # Complex rotation
+            ])
+        data = Data()
     
-    # Individual angular velocities
-    roll_rate = torch.abs(ang_vel[:, 0])
-    pitch_rate = torch.abs(ang_vel[:, 1])
-    yaw_rate = torch.abs(ang_vel[:, 2])
+    class MockScene:
+        def __getitem__(self, key):
+            return MockIMU()
     
-    # Penalize high rates individually
-    reward = torch.exp(-(roll_rate**2 + pitch_rate**2 + yaw_rate**2) / 0.3)
+    class MockEnv:
+        scene = MockScene()
+        device = "cpu"
+        num_envs = 4
     
-    return reward
+    env = MockEnv()
+    
+    print("Testing rpy_alignment_imu...")
+    reward = rpy_alignment_imu(env)
+    print(f"Reward: {reward}")
+    print(f"Contains NaN: {torch.isnan(reward).any()}")
+    print(f"Contains Inf: {torch.isinf(reward).any()}")
+    print(f"Min: {reward.min():.6f}, Max: {reward.max():.6f}")
+    
+    print("\nTesting rpy_alignment_imu_simple...")
+    reward_simple = rpy_alignment_imu_simple(env)
+    print(f"Reward: {reward_simple}")
+    print(f"Contains NaN: {torch.isnan(reward_simple).any()}")
+    print(f"Contains Inf: {torch.isinf(reward_simple).any()}")
+    print(f"Min: {reward_simple.min():.6f}, Max: {reward_simple.max():.6f}")
 
-def height_scanner_based_reward(
-    env: ManagerBasedEnv,
-    target_clearance: float = 0.35,
-    scanner_cfg: SceneEntityCfg = SceneEntityCfg("height_scanner"),
-    tolerance: float = 0.05,
-) -> torch.Tensor:
-    """
-    Reward for keeping the desired clearance from ground based on RayCaster data.
-    
-    Args:
-        env: Environment object.
-        target_clearance: Desired average distance from ground (m).
-        scanner_cfg: SceneEntityCfg for the height scanner.
-        tolerance: Smoothness of the reward curve.
-    
-    Returns:
-        Reward tensor with shape (num_envs,)
-    """
-    scanner = env.scene[scanner_cfg.name]
-    
-    # Dữ liệu quét (mỗi tia đo khoảng cách đến mặt đất)
-    hit_distances = scanner.data.ray_hits_w[..., 2]  # hoặc .hit_distance nếu dùng API khác
-    mean_height = torch.mean(hit_distances, dim=-1)
-    
-    # Sai số và phần thưởng
-    height_error = mean_height - target_clearance
-    reward = torch.exp(-torch.square(height_error) / tolerance)
-    
-    return reward
+
+if __name__ == "__main__":
+    test_rpy_alignment()

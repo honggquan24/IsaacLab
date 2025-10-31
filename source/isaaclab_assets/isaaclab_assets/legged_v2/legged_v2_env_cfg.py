@@ -27,9 +27,10 @@ from .legged_v2_cfg import LEGGED_ROBOT_V2_CFG
 
 from isaaclab.envs.mdp import actions, observations, events, rewards, terminations
 import isaaclab.utils.math as math_utils
+from isaaclab.sim import SimulationCfg, RenderCfg
 from icecream import ic
 from . import mdp
-
+import math
 
 @configclass
 class LeggedRobotV2SceneConfig(InteractiveSceneCfg):
@@ -42,25 +43,25 @@ class LeggedRobotV2SceneConfig(InteractiveSceneCfg):
     )
 
     # Add terrain
-    # terrain = TerrainImporterCfg(
-    #     prim_path="/World/ground",
-    #     terrain_type="generator",
-    #     terrain_generator=ROUGH_TERRAINS_CFG,
-    #     max_init_terrain_level=3,
-    #     physics_material=sim_utils.RigidBodyMaterialCfg(
-    #         friction_combine_mode="multiply",
-    #         restitution_combine_mode="average",
-    #         static_friction=1.0,
-    #         dynamic_friction=1.0,
-    #         restitution=0.0,
-    #     ),
-    #     debug_vis=True,          
-    # )
-
-    cfg_ground = AssetBaseCfg( 
-        prim_path="/World/ground", 
-        spawn=sim_utils.GroundPlaneCfg(), 
+    terrain = TerrainImporterCfg(
+        prim_path="/World/ground",
+        terrain_type="generator",
+        terrain_generator=ROUGH_TERRAINS_CFG,
+        max_init_terrain_level=3,
+        physics_material=sim_utils.RigidBodyMaterialCfg(
+            friction_combine_mode="multiply",
+            restitution_combine_mode="average",
+            static_friction=0.8,
+            dynamic_friction=0.05,
+            restitution=0.0,
+        ),
+        debug_vis=True,          
     )
+
+    # cfg_ground = AssetBaseCfg( 
+    #     prim_path="/World/ground", 
+    #     spawn=sim_utils.GroundPlaneCfg(), 
+    # )
 
     # Add robot 
     robot: Articulation = LEGGED_ROBOT_V2_CFG.replace(
@@ -69,26 +70,26 @@ class LeggedRobotV2SceneConfig(InteractiveSceneCfg):
 
     # Add IMU sensor
     imu = ImuCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/Robot_2_leg_base/robot_2_leg/robot_2_leg/Group_1",
+        prim_path="{ENV_REGEX_NS}/Robot/robot_legged_v2/robot_legged_v2/base_42",
         update_period=0.1,
         gravity_bias=(0.0, 0.0, 0.0),
         debug_vis=True,
     )
 
-    height_scanner = RayCasterCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/Robot_2_leg_base/robot_2_leg/robot_2_leg/Group_1",
-        update_period=0.1,
-        offset=RayCasterCfg.OffsetCfg(
-            pos=(0.0, 0.0, 20.0)
-        ),
-        ray_alignment="yaw",
-        pattern_cfg=patterns.GridPatternCfg(
-            resolution=0.1,
-            size=[1.6, 1.0],
-        ),
-        debug_vis=True,
-        mesh_prim_paths=["/World/ground"],
-    )
+    # height_scanner = RayCasterCfg(
+    #     prim_path="{ENV_REGEX_NS}/Robot/robot_legged_v2/robot_legged_v2/base_42",
+    #     update_period=0.1,
+    #     offset=RayCasterCfg.OffsetCfg(
+    #         pos=(0.0, 0.0, 20.0)
+    #     ),
+    #     ray_alignment="yaw",
+    #     pattern_cfg=patterns.GridPatternCfg(
+    #         resolution=0.1,
+    #         size=[1.6, 1.0],
+    #     ),
+    #     debug_vis=True,
+    #     mesh_prim_paths=["/World/ground"],
+    # )
 
 
 @configclass
@@ -98,16 +99,22 @@ class ActionCfg:
     joint_effort = actions.JointEffortActionCfg(
         asset_name="robot",
         joint_names=[
-            "Revolute_1",
-            "Revolute_2",
-            "Revolute_3",
-            "Revolute_4",
-            "Revolute_5",
-            "Revolute_6",
+            "Revolute_1",  # hip_left
+            "Revolute_2",  # hip_right
+            "Revolute_3",  # knee_left
+            "Revolute_4",  # knee_right
+            "Revolute_5",  # ankle_left
+            "Revolute_6",  # ankle_right
+            "Revolute_7",  # wheel_left
+            "Revolute_8",  # wheel_right
         ],
-        scale={".*": 250.0},
+        scale={
+            "Revolute_[1-6]": 1000.0,  # Leg joints: scale lớn hơn
+            "Revolute_[7-8]": 5000.0,  # Wheels: scale GẤP 10 LẦN
+        },
         clip={
-            ".*": (-250.0, 250.0)  # Giới hạn mô-men (Nm) cho tất cả các khớp
+            "Revolute_[1-6]": (-1.0, 1.0),  # Clip INPUT action, không phải output
+            "Revolute_[7-8]": (-1.0, 1.0),
         },
         debug_vis=True,
     )
@@ -121,11 +128,19 @@ class ObservationsCfg:
     class PolicyCfg(ObservationGroupCfg):
         """Policy observation group."""
         
-        # Joint positions relative to default
+        # Base orientation (projected gravity)
+        base_orientation = ObservationTermCfg(
+            func=observations.base_lin_vel  # Hoặc dùng IMU data
+        )
+        
+        # Joint positions
         joint_pos_rel = ObservationTermCfg(func=observations.joint_pos_rel)
         
-        # Joint velocities relative to default (commented out for now)
-        # joint_vel_rel = ObservationTermCfg(func=observations.joint_vel_rel)
+        # Joint velocities - QUAN TRỌNG!
+        joint_vel_rel = ObservationTermCfg(func=observations.joint_vel_rel)
+        
+        # Previous actions (for smoothness)
+        last_action = ObservationTermCfg(func=observations.last_action)
 
         def __post_init__(self) -> None:
             self.enable_corruption = False
@@ -138,34 +153,32 @@ class ObservationsCfg:
 class EventCfg:
     """Event configuration for environment resets."""
     
-    # Reset joint positions and velocities with small random offsets
     reset_joints = EventTermCfg(
         func=events.reset_joints_by_offset,
         mode="reset",
         params={
             "asset_cfg": SceneEntityCfg(name="robot"),
-            "position_range": (-0.02, 0.02),  # Giảm từ 0.05 để ổn định hơn
-            "velocity_range": (-0.05, 0.05),  # Giảm từ 0.1 để ổn định hơn
+            "position_range": (-0.1, 0.1),  # Thêm randomization
+            "velocity_range": (-0.5, 0.5),  # Thêm randomization
         },
     )
 
-    # Reset root state (position, orientation, velocities)
     reset_position = EventTermCfg(
         func=events.reset_root_state_uniform,
         mode="reset",
         params={
             "asset_cfg": SceneEntityCfg(name="robot"),
             "pose_range": {
-                "x": (-2.0, 2.0),      # Giảm từ (-5, 5) để tránh spawn ngoài terrain
-                "y": (-2.0, 2.0),      # Giảm từ (-5, 5) để tránh spawn ngoài terrain
-                "z": (0.5, 0.51),       # Phù hợp với init_state.pos[2]=0.75
-                "roll": (-0.05, 0.05), # Thêm variation nhỏ cho roll
-                "pitch": (-0.05, 0.05),# Thêm variation nhỏ cho pitch
-                "yaw": (-0.3, 0.3),    # Giảm từ (-0.5, 0.5) để ổn định hơn
+                "x": (-5, 5),    # Thêm variation
+                "y": (-5, 5),    # Thêm variation
+                "z": (0.3, 0.6),
+                "roll": (-0.1, 0.1),   # Giảm xuống
+                "pitch": (-0.1, 0.1),  # Giảm xuống
+                "yaw": (-math.pi, math.pi),
             },
             "velocity_range": {
-                "linear": (0.0, 0.0),  # Không có vận tốc tịnh tiến ban đầu
-                "angular": (0.0, 0.0), # Không có vận tốc góc ban đầu
+                "linear": (0.0, 0.0),
+                "angular": (0.0, 0.0),
             },
         },
     )
@@ -186,92 +199,26 @@ class RewardCfg:
         weight=-2.0
     )
     
-    # (3) Keep upright - khuyến khích đứng thẳng (chỉ roll & pitch)
-    upright_posture = RewardTermCfg(
-        func=mdp.rewards.upright_posture_reward,
-        weight=2.5,
-        params={
-            "imu_cfg": SceneEntityCfg(name="imu"),
-            "tolerance": 0.02,
-        },
-    )
+    # # (3) Keep upright - khuyến khích đứng thẳng (chỉ roll & pitch)
+    # upright_posture = RewardTermCfg(
+    #     func=mdp.rewards.upright_posture_reward,
+    #     weight=2.5,
+    #     params={
+    #         "imu_cfg": SceneEntityCfg(name="imu"),
+    #         "tolerance": 0.02,
+    #     },
+    # )
     
     # (4) Full RPY alignment - căn chỉnh toàn bộ hướng (roll, pitch, yaw)
     rpy_alignment = RewardTermCfg(
         func=mdp.rewards.rpy_alignment_imu,
-        weight=1.5,
+        weight=5,
         params={
             "target_rpy": (0.0, 0.0, 0.0),
             "imu_cfg": SceneEntityCfg(name="imu"),
         },
     )
     
-    # (5) Stay still - giảm rung lắc (angular velocity)
-    stillness = RewardTermCfg(
-        func=mdp.rewards.imu_stillness_reward,
-        weight=0.5,
-        params={
-            "imu_cfg": SceneEntityCfg(name="imu")
-        },
-    )
-    
-    # (6) Forward velocity - di chuyển tiến với vận tốc mục tiêu
-    forward_velocity = RewardTermCfg(
-        func=mdp.rewards.forward_velocity_reward,
-        weight=2.0,
-        params={
-            "target_velocity": 1.0,
-            "imu_cfg": SceneEntityCfg(name="imu"),
-        },
-    )
-    
-    # (7) Smooth motion - chuyển động mượt mà (low acceleration)
-    smooth_motion = RewardTermCfg(
-        func=mdp.rewards.low_linear_acceleration_reward,
-        weight=0.3,
-        params={
-            "imu_cfg": SceneEntityCfg(name="imu"),
-            "threshold": 5.0,
-        },
-    )
-    
-    # (8) Balance stability - ổn định tổng hợp
-    # balance_stability = RewardTermCfg(
-    #     func=mdp.rewards.balance_stability_reward,
-    #     weight=1.0,
-    #     params={
-    #         "imu_cfg": SceneEntityCfg(name="imu"),
-    #         "ang_vel_weight": 1.0,
-    #         "lin_acc_weight": 0.5,
-    #     },
-    # )
-    
-    # (9) Heading alignment - giữ hướng di chuyển
-    heading_alignment = RewardTermCfg(
-        func=mdp.rewards.heading_alignment_reward,
-        weight=0.5,
-        params={
-            "target_heading": 0.0,
-            "imu_cfg": SceneEntityCfg(name="imu"),
-        },
-    )
-    
-    # (10) Smooth angular motion - chuyển động quay mượt
-    # smooth_angular = RewardTermCfg(
-    #     func=mdp.rewards.smooth_angular_motion_reward,
-    #     weight=0.4,
-    #     params={
-    #         "imu_cfg": SceneEntityCfg(name="imu"),
-    #     },
-    # )
-
-    height_reward = RewardTermCfg(
-        func=mdp.rewards.height_scanner_based_reward,
-        weight=4.0,
-        params={
-            "scanner_cfg": SceneEntityCfg(name="height_scanner")
-        }
-    )
 
 @configclass
 class TerminationsCfg:
@@ -288,25 +235,25 @@ class TerminationsCfg:
     )
     # ROOT HEIGHT BELOW MINIMUM
     # Kết thúc khi robot rơi xuống quá thấp (base của robot < minimum_height)
-    base_height = TerminationTermCfg(
-        func=terminations.root_height_below_minimum,
-        params={
-            "minimum_height": 0.4,  # Terminate nếu base_z < 0.3 m
-            "asset_cfg": SceneEntityCfg(name="robot"),
-        },
-    )
+    # base_height = TerminationTermCfg(
+    #     func=terminations.root_height_below_minimum,
+    #     params={
+    #         "minimum_height": 0.01,  # Terminate nếu base_z < 0.3 m
+    #         "asset_cfg": SceneEntityCfg(name="robot"),
+    #     },
+    # )
     # Lưu ý: Chỉ hoạt động với flat terrain hoặc terrain trong world frame
 
     # BAD ORIENTATION
     # Kết thúc khi robot nghiêng quá nhiều so với trọng lực
     # Tính toán dựa trên góc giữa gravity vector được chiếu và trục z
-    bad_orientation = TerminationTermCfg(
-        func=terminations.bad_orientation,
-        params={
-            "limit_angle": math.pi / 3,  # Góc giới hạn (radians) = ? độ
-            "asset_cfg": SceneEntityCfg(name="robot"),
-        },
-    )
+    # bad_orientation = TerminationTermCfg(
+    #     func=terminations.bad_orientation,
+    #     params={
+    #         "limit_angle": math.pi / 5,  # Góc giới hạn (radians) = ? độ
+    #         "asset_cfg": SceneEntityCfg(name="robot"),
+    #     },
+    # )
 
     # JOINT POSITION OUT OF SOFT LIMITS
     # Kết thúc khi bất kỳ khớp nào vượt quá soft joint limits
@@ -327,29 +274,25 @@ class TerminationsCfg:
     joint_vel_limit = TerminationTermCfg(
         func=terminations.joint_vel_out_of_manual_limit,
         params={
-            "max_velocity": 500.0,  # rad/s - Giới hạn vận tốc góc tối đa
+            "max_velocity": 200.0,  # rad/s - Giới hạn vận tốc góc tối đa
             "asset_cfg": SceneEntityCfg(name="robot"),
         },
     )
 
     # JOINT EFFORT OUT OF LIMITS
     # Kết thúc khi mô-men khớp vượt quá soft effort limits
-    joint_effort_limit = TerminationTermCfg(
-        func=terminations.joint_effort_out_of_limit,
-        params={
-            "asset_cfg": SceneEntityCfg(name="robot"),
-        },
-    )
+    # joint_effort_limit = TerminationTermCfg(
+    #     func=terminations.joint_effort_out_of_limit,
+    #     params={
+    #         "asset_cfg": SceneEntityCfg(name="robot"),
+    #     },
+    # )
+    
+    
 
 @configclass
 class LeggedRobotV2EnvCfg(ManagerBasedRLEnvCfg):
     """Configuration for the legged robot environment."""
-    
-    # Render settings
-    render_cfg = sim_utils.RenderCfg(
-        rendering_mode="performance",
-    )
-    
     # Scene settings
     scene: LeggedRobotV2SceneConfig = LeggedRobotV2SceneConfig(
         env_spacing=1.0,
@@ -371,8 +314,25 @@ class LeggedRobotV2EnvCfg(ManagerBasedRLEnvCfg):
         self.episode_length_s = 10  # Episode duration in seconds
         
         # Viewer settings
-        self.viewer.eye = (8.0, 0.0, 5.0)  # Camera position
-        
+        self.viewer.eye = (0.0, 5.0, 50.0)  # Camera position
+                
         # Simulation settings
         self.sim.dt = 1 / 60  # Physics timestep = 60 Hz
-        self.sim.render_interval = self.decimation  # Render every decimation steps
+        self.sim.render_interval = self.decimation  # Render every decimation steps 
+        
+        self.sim.substeps = 4  # Số substeps mỗi physics step
+        # Với dt=1/60 và substeps=2:
+        #   → Mỗi physics step = 16.67ms
+        #   → Được chia thành 2 substeps = 8.33ms mỗi substep
+        #   → Effective physics rate = 60 * 2 = 120 Hz
+        
+        # OPTION 2: Tăng PhysX solver iterations (nếu cần stability cao hơn)
+        self.sim.render_cfg = sim_utils.RenderCfg(
+            rendering_mode="performance",
+            # user friendly setting overwrites
+            enable_translucency=False, # defaults to False in performance mode
+            enable_reflections=False, # defaults to False in performance mode
+            antialiasing_mode="Off",
+            dlss_mode="1", # defaults to 1 in performance mode
+        )
+            

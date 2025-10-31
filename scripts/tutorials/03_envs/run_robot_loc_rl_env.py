@@ -39,6 +39,7 @@ import torch
 import isaaclab.sim as sim_utils
 from isaaclab.envs import ManagerBasedRLEnv
 from isaaclab_assets import LeggedRobotV1EnvCfg
+from isaaclab_assets import LeggedRobotV2EnvCfg
 
 
 def run_simulator(env: ManagerBasedRLEnv):
@@ -98,6 +99,7 @@ def main():
     """Main function."""
     # Configure environment
     env_cfg = LeggedRobotV1EnvCfg()
+    env_cfg = LeggedRobotV2EnvCfg()
     print(f"joint_pos_rel: {env_cfg.observations.policy.joint_pos_rel}")
     # print(env_cfg.scene.imu.history_length)
     env_cfg.scene.num_envs = args_cli.num_envs

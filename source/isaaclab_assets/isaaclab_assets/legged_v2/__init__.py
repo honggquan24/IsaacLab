@@ -1,8 +1,10 @@
-from .legged_v_cfg import *
+from .legged_v2_cfg import *
 from .legged_v2_env_cfg import * 
 import gymnasium as gym
 from . import agents
 
+# Nho vao source/isaaclab_assets/isaaclab_assets/__init__.py
+# Them dong from .legged_v1 import *
 gym.register(
     id="Isaac-Legged-Robot-V2-Balance",
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
