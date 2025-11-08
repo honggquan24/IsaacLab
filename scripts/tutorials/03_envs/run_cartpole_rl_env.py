@@ -54,13 +54,13 @@ def main():
     while simulation_app.is_running():
         with torch.inference_mode():
             # reset
-            if count % 300 == 0:
+            if count % 3000000 == 0:
                 count = 0
                 env.reset()
                 print("-" * 80)
                 print("[INFO]: Resetting environment...")
             # sample random actions
-            joint_efforts = torch.randn_like(env.action_manager.action)
+            joint_efforts = torch.randn_like(env.action_manager.action) * 0.0 
             # step the environment
             obs, rew, terminated, truncated, info = env.step(joint_efforts)
             # print current orientation of pole

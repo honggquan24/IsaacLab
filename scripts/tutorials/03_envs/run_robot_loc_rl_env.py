@@ -21,7 +21,7 @@ from isaaclab.app import AppLauncher
 # Add argparse arguments
 parser = argparse.ArgumentParser(description="Tutorial on running the legged robot RL environment.")
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to spawn.")
-parser.add_argument("--seed", type=int, default=42, help="Seed for the environment for deterministic behavior.")
+parser.add_argument("--seed", type=int, default=2, help="Seed for the environment for deterministic behavior.")
 
 # Append AppLauncher CLI args
 AppLauncher.add_app_launcher_args(parser)
@@ -38,68 +38,90 @@ import torch
 
 import isaaclab.sim as sim_utils
 from isaaclab.envs import ManagerBasedRLEnv
-from isaaclab_assets import LeggedRobotV1EnvCfg
-from isaaclab_assets import LeggedRobotV2EnvCfg
+from isaaclab.utils.math import wrap_to_pi, euler_xyz_from_quat
+
+from isaaclab_assets import LeggedRobotV2EnvCfgTest
+
+from isaaclab.managers import SceneEntityCfg
 
 
 def run_simulator(env: ManagerBasedRLEnv):
-    """Run the simulator loop.
+    """Run the sensor test loop."""
+    imu_cfg = SceneEntityCfg("imu")
+    imu = env.scene[imu_cfg.name]
     
-    Args:
-        env: The RL environment instance.
-    """
+    ray__caster_cfg = SceneEntityCfg("height_scanner")
+    ray__caster = env.scene[ray__caster_cfg.name]
+    
+    print("[INFO]: Resetting environment...")
+    obs, _ = env.reset()
     count = 0
-    
-    # Reset environment initially
-    env.reset()
-    print("[INFO]: Environment reset complete.")
+
+    num_joints = env.action_manager.action.shape[1]
+
+    # Tạo tensor hành động cơ bản (0 cho tất cả)
+    base_action = torch.zeros_like(env.action_manager.action)
+
+    # Biên độ xoay (giá trị ±)
+    amplitude = 1.0   # có thể tăng lên 0.5 hoặc 1.0 tùy scale
+    duration = 0.5    # thời gian giữ mỗi khớp (giây)
 
     while simulation_app.is_running():
-        # Reset environment periodically
-        if count % 500 == 0 and count > 0:
-            env.reset()
-            print("-" * 80)
-            print(f"[INFO]: Resetting environment at step {count}...")
+        # Random small torques to keep robot slightly moving
+        actions = base_action
 
-        # Generate random joint efforts as actions
-        actions = torch.ones_like(env.action_manager.action)
-        # print(f"actions: {actions.shape}")
-        # ic(actions)
-        
-        # Step the environment
+        # Step simulation
         obs, rewards, terminated, truncated, info = env.step(actions)
-
-        # Print information periodically
-        if count % 100 == 0:
-            print("-" * 80)
-            print(f"[Step {count}]")
-            print(f"  Observation shape: {obs['policy'].shape}")
-            print(f"  Mean reward: {rewards.mean().item():.4f}")
-            ic(obs)
-            ic(rewards)
-            ic(terminated)
-            ic(truncated)
-            ic(info)
-            
-            # # Print sensor information from the scene
-            # scene = env.scene
-            # if "height_scanner" in scene:
-            #     max_height = torch.max(scene["height_scanner"].data.ray_hits_w[..., -1]).item()
-            #     print(f"  Max height scan value: {max_height:.4f}")
-            
-            # if "camera" in scene and args_cli.enable_cameras:
-            #     rgb_shape = scene["camera"].data.output["rgb"].shape
-            #     print(f"  Camera RGB shape: {rgb_shape}")
-
-        # Update counter
         count += 1
+        
+        print(actions)
+
+        # Print every 100 steps
+        if count % 100 == 0:
+            print("=" * 80)
+            print(f"[Step {count}] Sensor readings:")
+
+            # ---- IMU ----
+            imu_data = imu.data
+            quat = imu.data.quat_w
+            lin_acc = imu_data.lin_acc_b
+            ang_vel = imu_data.ang_vel_b
+            print(f"  Quaternion: {quat}")
+            roll, pitch, yaw = euler_xyz_from_quat(quat)
+            print(env.scene["robot"].data.root_state_w)  # robot base orientation
+            print(f"  roll, pitch, yaw: {roll}, {pitch}, {yaw}")
+            print(f"  IMU Linear Acc (m/s²): {lin_acc}")
+            print(f"  IMU Angular Vel (rad/s): {ang_vel}")
+            
+            # raycaster_data = ray__caster.data
+            # height = torch.max(raycaster_data.ray_hits_w[0])
+            # print(f"  height (m): {height}")
+
+            # # ---- Joint states ----
+            # joint_pos = env.scene["robot"].data.joint_pos[0].cpu().numpy()
+            # joint_vel = env.scene["robot"].data.joint_vel[0].cpu().numpy()
+            # print(f"  Joint Pos (rad): {joint_pos}")
+            # print(f"  Joint Vel (rad/s): {joint_vel}")
+
+            # # ---- Contact forces ----
+            # # if "contact_forces" in env.scene:
+            # #     contact = env.scene["contact_forces"].data
+            # #     total_force = contact.total_force_w[0].cpu().numpy()
+            # #     print(f"  Contact Force (N): {total_force}")
+
+        if count % 2000 == 0:
+            print("[INFO]: Resetting environment for next test...")
+            env.reset()
+
+    env.close()
+    print("[INFO]: Simulation ended.")
+
 
 
 def main():
     """Main function."""
     # Configure environment
-    env_cfg = LeggedRobotV1EnvCfg()
-    env_cfg = LeggedRobotV2EnvCfg()
+    env_cfg = LeggedRobotV2EnvCfgTest()
     print(f"joint_pos_rel: {env_cfg.observations.policy.joint_pos_rel}")
     # print(env_cfg.scene.imu.history_length)
     env_cfg.scene.num_envs = args_cli.num_envs

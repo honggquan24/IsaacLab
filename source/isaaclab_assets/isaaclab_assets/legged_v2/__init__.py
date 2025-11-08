@@ -1,5 +1,8 @@
 from .legged_v2_cfg import *
+from .legged_v2_cfg_test import *
 from .legged_v2_env_cfg import * 
+from .legged_v2_env_cfg_test import *
+
 import gymnasium as gym
 from . import agents
 

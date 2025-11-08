@@ -11,19 +11,14 @@ LEGGED_ROBOT_USD_PATH = os.path.join(
     CURRENT_DIR, "usd_file", "robot_legged_v2_base.usd"
 )
 
-# Khong limitt cac khop khong dieu khien
-# Set break force va torque
-# Nho assign material
-# max joint vel
-
 # ROBOT CONFIG
-LEGGED_ROBOT_V2_CFG = ArticulationCfg(
+LEGGED_ROBOT_V2_CFG_TEST = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(
         usd_path=LEGGED_ROBOT_USD_PATH,
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             rigid_body_enabled=True,
             max_linear_velocity=25.0,
-            max_angular_velocity=250.0,
+            max_angular_velocity=50.0,
             linear_damping=0.002,
             angular_damping=0.005,
             max_depenetration_velocity=1.0,
@@ -77,56 +72,56 @@ LEGGED_ROBOT_V2_CFG = ArticulationCfg(
             effort_limit_sim=1000,
             stiffness=0,
             damping=0,
-            velocity_limit_sim=50.0,
+            velocity_limit=250.0,
         ),
         "knee_right": ImplicitActuatorCfg(
             joint_names_expr=["Revolute_4"],
             effort_limit_sim=1000,
             stiffness=0,
             damping=0,
-            velocity_limit_sim=50.0,
+            velocity_limit=50.0,
         ),
         "ankle_right": ImplicitActuatorCfg(
             joint_names_expr=["Revolute_6"],
             effort_limit_sim=1000,
             stiffness=0,
             damping=0,
-            velocity_limit_sim=250.0,
+            velocity_limit=50.0,
         ),
         "wheel_right": ImplicitActuatorCfg(
             joint_names_expr=["Revolute_8"],
             effort_limit_sim=1000,
             stiffness=0,
             damping=0,
-            velocity_limit_sim=50.0,
+            velocity_limit=50.0,
         ),
         "hip_left": ImplicitActuatorCfg(
             joint_names_expr=["Revolute_1"],
             effort_limit_sim=1000,
             stiffness=0,
             damping=0,
-            velocity_limit_sim=50.0,
+            velocity_limit=50.0,
         ),
         "knee_left": ImplicitActuatorCfg(
             joint_names_expr=["Revolute_3"],
             effort_limit_sim=1000,
             stiffness=0,
             damping=0,
-            velocity_limit_sim=50.0,
+            velocity_limit=50.0,
         ),
         "ankle_left": ImplicitActuatorCfg(
             joint_names_expr=["Revolute_5"],
             effort_limit_sim=1000,
             stiffness=0,
             damping=0,
-            velocity_limit_sim=50.0,
+            velocity_limit=50.0,
         ),
         "wheel_left": ImplicitActuatorCfg(
             joint_names_expr=["Revolute_7"],
             effort_limit_sim=1000,
             stiffness=0,
             damping=0,
-            velocity_limit_sim=250.0,
+            velocity_limit=250.0,
         ),
     },
 )
