@@ -50,8 +50,8 @@ def run_simulator(env: ManagerBasedRLEnv):
     imu_cfg = SceneEntityCfg("imu")
     imu = env.scene[imu_cfg.name]
     
-    ray__caster_cfg = SceneEntityCfg("height_scanner")
-    ray__caster = env.scene[ray__caster_cfg.name]
+    # ray__caster_cfg = SceneEntityCfg("height_scanner")
+    # ray__caster = env.scene[ray__caster_cfg.name]
     
     print("[INFO]: Resetting environment...")
     obs, _ = env.reset()

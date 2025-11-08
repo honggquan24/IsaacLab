@@ -16,8 +16,8 @@ class LegV2PPORunnerCfg(RslRlOnPolicyRunnerCfg):
         init_noise_std=0.1,
         actor_obs_normalization=True,
         critic_obs_normalization=True,
-        actor_hidden_dims=[512, 1024, 1024, 512],
-        critic_hidden_dims=[512, 1024, 1024, 512],
+        actor_hidden_dims=[128, 256, 128],
+        critic_hidden_dims=[128, 256, 256, 128],
         activation="elu",
     )
     algorithm = RslRlPpoAlgorithmCfg(

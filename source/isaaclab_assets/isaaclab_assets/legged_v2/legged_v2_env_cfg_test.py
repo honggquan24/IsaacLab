@@ -61,10 +61,10 @@ class LeggedRobotV2SceneConfigTest(InteractiveSceneCfg):
     #     debug_vis=True,          
     # )
 
-    # cfg_ground = AssetBaseCfg( 
-    #     prim_path="/World/ground", 
-    #     spawn=sim_utils.GroundPlaneCfg(), 
-    # )
+    cfg_ground = AssetBaseCfg( 
+        prim_path="/World/ground", 
+        spawn=sim_utils.GroundPlaneCfg(), 
+    )
 
     # Add robot 
     robot: Articulation = LEGGED_ROBOT_V2_CFG_TEST.replace(
@@ -103,23 +103,26 @@ class ActionCfgTest:
     joint_effort = actions.JointEffortActionCfg(
         asset_name="robot",
         joint_names=[
-            "Revolute_1",  # hip_left
-            "Revolute_2",  # hip_right
-            "Revolute_3",  # knee_left
-            "Revolute_4",  # knee_right
-            "Revolute_5",  # ankle_left
-            "Revolute_6",  # ankle_right
-            "Revolute_7",  # wheel_left
-            "Revolute_8",  # wheel_right
+            "Left_Revolute_01",  # hip_left
+            "Left_Revolute_02",  # hip_right
+            "Left_Revolute_03",  # knee_left
+            "Left_Revolute_04",  # knee_right
+            "Right_Revolute_01",  # ankle_left
+            "Right_Revolute_02",  # ankle_right
+            "Right_Revolute_03",  # wheel_left
+            "Right_Revolute_04",  # wheel_right
         ],
         scale={
-            "Revolute_[1-6]": 5000.0,  # Leg joints: scale lớn hơn
-            "Revolute_[7-8]": 5000.0,  # Wheels: scale GẤP 10 LẦN
+            "Left_Revolute_0[1-3]": 100.0, 
+            "Right_Revolute_0[1-3]": 100.0,
+            "Right_Revolute_04" : 500,
+            "Left_Revolute_04"  : 500,       # Leg joints: scale lớn hơn
+            # Wheels: scale GẤP 10 LẦN
         },
-        clip={
-            "Revolute_[1-6]": (-1.0, 1.0),  # Clip INPUT action, không phải output
-            "Revolute_[7-8]": (-1.0, 1.0),
-        },
+        # clip={
+        #     "Revolute_[1-6]": (-1.0, 1.0),  # Clip INPUT action, không phải output
+        #     "Revolute_[7-8]": (-1.0, 1.0),
+        # },
         debug_vis=True,
     )
 

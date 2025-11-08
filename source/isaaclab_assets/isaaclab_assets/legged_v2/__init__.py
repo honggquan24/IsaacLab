@@ -13,7 +13,7 @@ gym.register(
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
     disable_env_checker=True,
     kwargs={
-        "env_cfg_entry_point": f"{__name__}.legged_v2_env_cfg:LeggedRobotV2EnvCfg",
+        "env_cfg_entry_point": f"{__name__}.legged_v2_env_cfg_test:LeggedRobotV2EnvCfgTest",
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:LegV2PPORunnerCfg"
     },
 )

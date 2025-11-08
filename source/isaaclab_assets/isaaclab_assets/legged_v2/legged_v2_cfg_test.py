@@ -8,7 +8,7 @@ from isaaclab.assets import ArticulationCfg
 # PATH CONFIG
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 LEGGED_ROBOT_USD_PATH = os.path.join(
-    CURRENT_DIR, "usd_file", "robot_legged_v2_base.usd"
+    CURRENT_DIR, "usd_file", "robot_v2_cfg.usd"
 )
 
 # ROBOT CONFIG
@@ -44,80 +44,88 @@ LEGGED_ROBOT_V2_CFG_TEST = ArticulationCfg(
     init_state=ArticulationCfg.InitialStateCfg(
         pos=(0.0, 0.0, 0.2),  # Tăng chiều cao spawn để phù hợp với reset range
         joint_pos={
-            "Revolute_1": 0.0,
-            "Revolute_2": 0.0,
-            "Revolute_3": 0.0,
-            "Revolute_4": 0.0,
-            "Revolute_5": 0.0,
-            "Revolute_6": 0.0,
-            "Revolute_7": 0.0,
-            "Revolute_8": 0.0,
+            "Left_Revolute_01": 0.0,
+            "Left_Revolute_02": 0.0,
+            "Left_Revolute_03": 0.263,
+            "Left_Revolute_04": 0.0,
+            "Left_Revolute_05": 0.0,
+            "Left_Revolute_06": 0.0,
+            "Right_Revolute_01": 0.0,
+            "Right_Revolute_02": 0.0,
+            "Right_Revolute_03": -0.263,
+            "Right_Revolute_04": 0.0,
+            "Right_Revolute_05": 0.0,
+            "Right_Revolute_06": 0.0,
         },
         # Đảm bảo velocity ban đầu = 0
         joint_vel={
-            "Revolute_1": 0.0,
-            "Revolute_2": 0.0,
-            "Revolute_3": 0.0,
-            "Revolute_4": 0.0,
-            "Revolute_5": 0.0,
-            "Revolute_6": 0.0,  
-            "Revolute_7": 0.0,
-            "Revolute_8": 0.0,
+            "Left_Revolute_01": 0.0,
+            "Left_Revolute_02": 0.0,
+            "Left_Revolute_03": 0.0,
+            "Left_Revolute_04": 0.0,
+            "Left_Revolute_05": 0.0,
+            "Left_Revolute_06": 0.0,
+            "Right_Revolute_01": 0.0,
+            "Right_Revolute_02": 0.0,
+            "Right_Revolute_03": 0.0,
+            "Right_Revolute_04": 0.0,
+            "Right_Revolute_05": 0.0,
+            "Right_Revolute_06": 0.0,
         },
     ),
     # ACTUATORS
     actuators={
         "hip_right": ImplicitActuatorCfg(
-            joint_names_expr=["Revolute_2"],
+            joint_names_expr=["Right_Revolute_01"],
             effort_limit_sim=1000,
             stiffness=0,
             damping=0,
             velocity_limit=250.0,
         ),
         "knee_right": ImplicitActuatorCfg(
-            joint_names_expr=["Revolute_4"],
+            joint_names_expr=["Right_Revolute_02"],
             effort_limit_sim=1000,
             stiffness=0,
             damping=0,
             velocity_limit=50.0,
         ),
         "ankle_right": ImplicitActuatorCfg(
-            joint_names_expr=["Revolute_6"],
+            joint_names_expr=["Right_Revolute_03"],
             effort_limit_sim=1000,
             stiffness=0,
             damping=0,
             velocity_limit=50.0,
         ),
         "wheel_right": ImplicitActuatorCfg(
-            joint_names_expr=["Revolute_8"],
+            joint_names_expr=["Right_Revolute_04"],
             effort_limit_sim=1000,
             stiffness=0,
             damping=0,
             velocity_limit=50.0,
         ),
         "hip_left": ImplicitActuatorCfg(
-            joint_names_expr=["Revolute_1"],
+            joint_names_expr=["Left_Revolute_01"],
             effort_limit_sim=1000,
             stiffness=0,
             damping=0,
             velocity_limit=50.0,
         ),
         "knee_left": ImplicitActuatorCfg(
-            joint_names_expr=["Revolute_3"],
+            joint_names_expr=["Left_Revolute_02"],
             effort_limit_sim=1000,
             stiffness=0,
             damping=0,
             velocity_limit=50.0,
         ),
         "ankle_left": ImplicitActuatorCfg(
-            joint_names_expr=["Revolute_5"],
+            joint_names_expr=["Left_Revolute_03"],
             effort_limit_sim=1000,
             stiffness=0,
             damping=0,
             velocity_limit=50.0,
         ),
         "wheel_left": ImplicitActuatorCfg(
-            joint_names_expr=["Revolute_7"],
+            joint_names_expr=["Left_Revolute_04"],
             effort_limit_sim=1000,
             stiffness=0,
             damping=0,
