@@ -135,16 +135,20 @@ class ObservationsCfgTest:
     class PolicyCfg(ObservationGroupCfg):
         """Policy observation group."""
         
-        # Base orientation (projected gravity)
-        base_orientation = ObservationTermCfg(
-            func=observations.base_lin_vel  # Hoặc dùng IMU data
-        )
+        # Cảm biến phụ
+        imu_lin_acc = ObservationTermCfg(func=observations.imu_lin_acc)                   # gia tốc IMU
+        imu_ang_vel = ObservationTermCfg(func=observations.imu_ang_vel)
+        imu_orientation = ObservationTermCfg(func=observations.imu_orientation)
+        imu_projected_gravity = ObservationTermCfg(func=observations.imu_projected_gravity)
         
         # Joint positions
-        joint_pos_rel = ObservationTermCfg(func=observations.joint_pos_rel)
+        joint_pos = ObservationTermCfg(func=observations.joint_pos_rel)
         
-        # Joint velocities - QUAN TRỌNG!
-        joint_vel_rel = ObservationTermCfg(func=observations.joint_vel_rel)
+        # Joint velocities
+        joint_vel = ObservationTermCfg(func=observations.joint_vel_rel)
+        
+        # Joint forces
+        joint_effort = ObservationTermCfg(func=observations.joint_effort)
         
         # Previous actions (for smoothness)
         last_action = ObservationTermCfg(func=observations.last_action)
@@ -153,7 +157,48 @@ class ObservationsCfgTest:
             self.enable_corruption = False
             self.concatenate_terms = True
     
+    @configclass
+    class CriticCfg(ObservationGroupCfg):
+        
+        # Thông tin đầy đủ hơn (critic cần nhìn rộng hơn)
+        root_pos_w = ObservationTermCfg(func=observations.root_pos_w)                     # vị trí gốc trong world
+        root_quat_w = ObservationTermCfg(func=observations.root_quat_w)                   # hướng gốc trong world
+        root_lin_vel_w = ObservationTermCfg(func=observations.root_lin_vel_w)             # vận tốc gốc trong world
+        root_ang_vel_w = ObservationTermCfg(func=observations.root_ang_vel_w)
+        
+        # Base orientation (projected gravity)
+        base_lin_vel = ObservationTermCfg(
+            func=observations.base_lin_vel  # Hoặc dùng IMU data
+        )
+        
+        # Dữ liệu IMU
+        imu_lin_acc = ObservationTermCfg(func=observations.imu_lin_acc)                   # gia tốc IMU
+        imu_ang_vel = ObservationTermCfg(func=observations.imu_ang_vel)
+        imu_orientation = ObservationTermCfg(func=observations.imu_orientation)
+        imu_projected_gravity = ObservationTermCfg(func=observations.imu_projected_gravity)
+        
+        # Joint positions
+        joint_pos = ObservationTermCfg(func=observations.joint_pos_rel)
+        
+        # Joint velocities
+        joint_vel = ObservationTermCfg(func=observations.joint_vel_rel)
+        
+        # Joint forces
+        joint_effort = ObservationTermCfg(func=observations.joint_effort)
+        
+        # Previous actions (for smoothness)
+        last_action = ObservationTermCfg(func=observations.last_action)
+        
+        # Thời gian (critic có thể dùng để học discount)
+        current_time = ObservationTermCfg(func=observations.current_time_s)
+        remaining_time = ObservationTermCfg(func=observations.remaining_time_s)
+        
+        def __post_init__(self) -> None:
+            self.enable_corruption = False
+            self.concatenate_terms = True
+        
     policy: PolicyCfg = PolicyCfg()
+    critic: CriticCfg = CriticCfg()
 
 
 @configclass
@@ -165,30 +210,30 @@ class EventCfgTest:
         mode="reset",
         params={
             "asset_cfg": SceneEntityCfg(name="robot"),
-            "position_range": (-0.1, 0.1),  # Thêm randomization
-            "velocity_range": (-0.5, 0.5),  # Thêm randomization
+            "position_range": (0.0, 0.0),  # Thêm randomization
+            "velocity_range": (0.0, 0.0),  # Thêm randomization
         },
     )
 
-    # reset_position = EventTermCfg(
-    #     func=events.reset_root_state_uniform,
-    #     mode="reset",
-    #     params={
-    #         "asset_cfg": SceneEntityCfg(name="robot"),
-    #         "pose_range": {
-    #             "x": (-5, 5),    # Thêm variation
-    #             "y": (-5, 5),    # Thêm variation
-    #             "z": (0.3, 0.6),
-    #             "roll": (-0.1, 0.1),   # Giảm xuống
-    #             "pitch": (-0.1, 0.1),  # Giảm xuống
-    #             "yaw": (-math.pi, math.pi),
-    #         },
-    #         "velocity_range": {
-    #             "linear": (0.0, 0.0),
-    #             "angular": (0.0, 0.0),
-    #         },
-    #     },
-    # )
+    reset_position = EventTermCfg(
+        func=events.reset_root_state_uniform,
+        mode="reset",
+        params={
+            "asset_cfg": SceneEntityCfg(name="robot"),
+            "pose_range": {
+                "x": (0.0, 0.0),    # Thêm variation
+                "y": (0.0, 0.0),    # Thêm variation
+                "z": (0.2, 0.2),
+                "roll": (0.0, 0.0),   # Giảm xuống
+                "pitch": (0.0, 0.0),  # Giảm xuống
+                "yaw": (0.0, 0.0),
+            },
+            "velocity_range": {
+                "linear": (0.0, 0.0),
+                "angular": (0.0, 0.0),
+            },
+        },
+    )
 
 @configclass
 class RewardCfgTest:
@@ -206,17 +251,8 @@ class RewardCfgTest:
         weight=-2.0
     )
     
-    # # (3) Keep upright - khuyến khích đứng thẳng (chỉ roll & pitch)
-    # upright_posture = RewardTermCfg(
-    #     func=mdp.rewards.upright_posture_reward,
-    #     weight=2.5,
-    #     params={
-    #         "imu_cfg": SceneEntityCfg(name="imu"),
-    #         "tolerance": 0.02,
-    #     },
-    # )
     
-    # (4) Full RPY alignment - căn chỉnh toàn bộ hướng (roll, pitch, yaw)
+    # (3) Full RPY alignment - căn chỉnh toàn bộ hướng (roll, pitch, yaw)
     rpy_alignment = RewardTermCfg(
         func=mdp.rewards.rpy_alignment_imu,
         weight=5,
@@ -321,25 +357,10 @@ class LeggedRobotV2EnvCfgTest(ManagerBasedRLEnvCfg):
         self.episode_length_s = 100  # Episode duration in seconds
         
         # Viewer settings
-        self.viewer.eye = (0.0, 5.0, 10.0)  # Camera position
+        self.viewer.eye = (0.0, 5.0, 2.0)  # Camera position
                 
         # Simulation settings
         self.sim.dt = 1 / 60  # Physics timestep = 60 Hz
         self.sim.render_interval = self.decimation  # Render every decimation steps 
-        
-        self.sim.substeps = 4  # Số substeps mỗi physics step
-        # Với dt=1/60 và substeps=2:
-        #   → Mỗi physics step = 16.67ms
-        #   → Được chia thành 2 substeps = 8.33ms mỗi substep
-        #   → Effective physics rate = 60 * 2 = 120 Hz
-        
-        # OPTION 2: Tăng PhysX solver iterations (nếu cần stability cao hơn)
-        self.sim.render_cfg = sim_utils.RenderCfg(
-            rendering_mode="performance",
-            # user friendly setting overwrites
-            enable_translucency=False, # defaults to False in performance mode
-            enable_reflections=False, # defaults to False in performance mode
-            antialiasing_mode="Off",
-            dlss_mode="1", # defaults to 1 in performance mode
-        )
+
             

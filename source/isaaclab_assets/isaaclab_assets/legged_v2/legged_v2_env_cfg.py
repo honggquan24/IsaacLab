@@ -138,7 +138,7 @@ class ObservationsCfg:
         # Joint positions
         joint_pos_rel = ObservationTermCfg(func=observations.joint_pos_rel)
         
-        # Joint velocities - QUAN TRỌNG!
+        # Joint velocities
         joint_vel_rel = ObservationTermCfg(func=observations.joint_vel_rel)
         
         # Previous actions (for smoothness)
@@ -360,6 +360,4 @@ class LeggedRobotV2EnvCfg(ManagerBasedRLEnvCfg):
         # Simulation settings
         self.sim.dt = 1 / 60  # Physics timestep = 60 Hz
         self.sim.render_interval = self.decimation  # Render every decimation steps 
-        
-        self.sim.device = "cpu"
-            
+                    
