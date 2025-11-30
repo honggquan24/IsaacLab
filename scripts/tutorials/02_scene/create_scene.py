@@ -21,7 +21,7 @@ from isaaclab.app import AppLauncher
 
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Tutorial on using the interactive scene interface.")
-parser.add_argument("--num_envs", type=int, default=2, help="Number of environments to spawn.")
+parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to spawn.")
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
 # parse the arguments
@@ -41,8 +41,7 @@ from isaaclab.scene import InteractiveScene, InteractiveSceneCfg
 from isaaclab.sim import SimulationContext
 from isaaclab.utils import configclass
 
-from isaaclab_assets import LEGGED_ROBOT_V1_CFG
-from isaaclab_assets import LEGGED_ROBOT_V2_CFG_TEST
+from isaaclab_assets import CARTPOLE_ROBOT_CFG
 
 ##
 # Pre-defined configs
@@ -65,14 +64,14 @@ class CartpoleSceneCfg(InteractiveSceneCfg):
     # articulation
     # cartpole: ArticulationCfg = CARTPOLE_CFG.replace(prim_path="{ENV_REGEX_NS}/Cartpole")
     # robot_legged_v1: ArticulationCfg = LEGGED_ROBOT_V1_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
-    robot_legged_v2: ArticulationCfg = LEGGED_ROBOT_V2_CFG_TEST.replace(prim_path="{ENV_REGEX_NS}/Robot")
+    robot: ArticulationCfg = CARTPOLE_ROBOT_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
 
 
 def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
     """Runs the simulation loop."""
     # Extract scene entities
     # note: we only do this here for readability.
-    robot = scene["robot_legged_v2"]
+    robot = scene["robot"]
     # Define simulation stepping
     sim_dt = sim.get_physics_dt()
     count = 0
@@ -86,20 +85,20 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
             # root state
             # we offset the root state by the origin since the states are written in simulation world frame
             # if this is not done, then the robots will be spawned at the (0, 0, 0) of the simulation world
-            root_state = robot.data.default_root_state.clone()
-            root_state[:, :3] += scene.env_origins + 2 
-            robot.write_root_pose_to_sim(root_state[:, :7])
-            robot.write_root_velocity_to_sim(root_state[:, 7:])
-            # set joint positions with some noise
-            joint_pos, joint_vel = robot.data.default_joint_pos.clone(), robot.data.default_joint_vel.clone()
-            joint_pos += torch.rand_like(joint_pos) * 0.1
-            robot.write_joint_state_to_sim(joint_pos, joint_vel)
+            # root_state = robot.data.default_root_state.clone()
+            # root_state[:, :3] += scene.env_origins + 2 
+            # robot.write_root_pose_to_sim(root_state[:, :7])
+            # robot.write_root_velocity_to_sim(root_state[:, 7:])
+            # # set joint positions with some noise
+            # joint_pos, joint_vel = robot.data.default_joint_pos.clone(), robot.data.default_joint_vel.clone()
+            # joint_pos += torch.rand_like(joint_pos) * 0.1
+            # robot.write_joint_state_to_sim(joint_pos, joint_vel)
             # clear internal buffers
             scene.reset()
             print("[INFO]: Resetting robot state...")
         # Apply random action
         # -- generate random joint efforts
-        efforts = torch.randn_like(robot.data.joint_pos) * 50.0
+        efforts = torch.rand_like(robot.data.joint_pos)
         # -- apply action to the robot
         robot.set_joint_effort_target(efforts)
         # -- write data to sim
