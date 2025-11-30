@@ -52,6 +52,7 @@ def main():
     while simulation_app.is_running():
         # perform step
         sim.step()
+        break
 
 
 if __name__ == "__main__":

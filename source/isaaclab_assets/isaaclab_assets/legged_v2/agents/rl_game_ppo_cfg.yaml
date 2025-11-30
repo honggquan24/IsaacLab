@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 params:
-  seed: 42
+  seed: 1
 
   # environment wrapper clipping
   env:
@@ -48,7 +48,7 @@ params:
   load_path: '' # path to the checkpoint to load
 
   config:
-    name: leg_v1
+    name: leg_v2
     env_name: rlgpu
     device: 'cuda:0'
     device_name: 'cuda:0'
@@ -63,7 +63,7 @@ params:
     normalize_advantage: False
     gamma: 0.99
     tau : 0.95
-    learning_rate: 1e-3 #3e-4
+    learning_rate: 3e-4 #3e-4
     lr_schedule: adaptive
     kl_threshold: 0.008
     score_to_win: 20000

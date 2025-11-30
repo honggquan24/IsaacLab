@@ -40,7 +40,9 @@ from isaaclab.assets import ArticulationCfg, AssetBaseCfg
 from isaaclab.scene import InteractiveScene, InteractiveSceneCfg
 from isaaclab.sim import SimulationContext
 from isaaclab.utils import configclass
+
 from isaaclab_assets import LEGGED_ROBOT_V1_CFG
+from isaaclab_assets import LEGGED_ROBOT_V2_CFG_TEST
 
 ##
 # Pre-defined configs
@@ -61,15 +63,16 @@ class CartpoleSceneCfg(InteractiveSceneCfg):
     )
 
     # articulation
-    cartpole: ArticulationCfg = CARTPOLE_CFG.replace(prim_path="{ENV_REGEX_NS}/Cartpole")
-    robot_legged_v1: ArticulationCfg = LEGGED_ROBOT_V1_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
+    # cartpole: ArticulationCfg = CARTPOLE_CFG.replace(prim_path="{ENV_REGEX_NS}/Cartpole")
+    # robot_legged_v1: ArticulationCfg = LEGGED_ROBOT_V1_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
+    robot_legged_v2: ArticulationCfg = LEGGED_ROBOT_V2_CFG_TEST.replace(prim_path="{ENV_REGEX_NS}/Robot")
 
 
 def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
     """Runs the simulation loop."""
     # Extract scene entities
     # note: we only do this here for readability.
-    robot = scene["robot_legged_v1"]
+    robot = scene["robot_legged_v2"]
     # Define simulation stepping
     sim_dt = sim.get_physics_dt()
     count = 0

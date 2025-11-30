@@ -101,7 +101,7 @@ class EventCfg:
             "velocity_range": (-0.1, 0.1),
         },
     )
-
+724hunsb
     reset_pole_position = EventTerm(
         func=mdp.reset_joints_by_offset,
         mode="reset",
