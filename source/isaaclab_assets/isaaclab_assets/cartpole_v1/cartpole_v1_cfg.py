@@ -19,8 +19,8 @@ CARTPOLE_ROBOT_CFG = ArticulationCfg(
         usd_path=CARTPOLE_ROBOT_USD_PATH,
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             rigid_body_enabled=True,
-            max_linear_velocity=25.0,
-            max_angular_velocity=50.0,
+            max_linear_velocity=500.0,
+            max_angular_velocity=500.0,
             linear_damping=0.002,
             angular_damping=0.005,
             max_depenetration_velocity=1.0,
@@ -41,7 +41,14 @@ CARTPOLE_ROBOT_CFG = ArticulationCfg(
             effort_limit_sim=100.0,      
             stiffness=0.0,
             damping=0.5,                 
-            velocity_limit_sim=50.0,     
+            velocity_limit_sim=100.0,     
+        ),
+        "passive": ImplicitActuatorCfg( 
+            joint_names_expr=["Revolute_1"],
+            effort_limit_sim=100.0,      
+            stiffness=0.0,
+            damping=0.0,                 
+            velocity_limit_sim=100.0,     
         ),
     },
     init_state= ArticulationCfg.InitialStateCfg(

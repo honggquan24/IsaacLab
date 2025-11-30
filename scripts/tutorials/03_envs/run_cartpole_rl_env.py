@@ -20,7 +20,7 @@ from isaaclab.app import AppLauncher
 
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Tutorial on running the cartpole RL environment.")
-parser.add_argument("--num_envs", type=int, default=16, help="Number of environments to spawn.")
+parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to spawn.")
 
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
@@ -50,6 +50,11 @@ def main():
     env = ManagerBasedRLEnv(cfg=env_cfg)
 
     # simulate physics
+    
+    robot = env.scene['robot']
+    joint_pos = robot.data.joint_pos
+    
+    
     count = 0
     while simulation_app.is_running():
         with torch.inference_mode():
@@ -63,8 +68,19 @@ def main():
             joint_efforts = torch.randn_like(env.action_manager.action)
             # step the environment
             obs, rew, terminated, truncated, info = env.step(joint_efforts)
-            # print current orientation of pole
-            print("[Env 0]: Pole joint: ", obs["policy"][0][1].item())
+            # print("-"*50)
+            # print(f"[obs]: {obs}")   
+            # print(type(obs))         
+            
+            # print("-"*50)
+            # print(f"[rew]: {rew}")   
+            # print(type(rew))     
+            
+            
+            print("-"*50)
+            print(f"[joint_pos]: {joint_pos}")   
+            print(type(joint_pos))    
+                
             # update counter
             count += 1
 

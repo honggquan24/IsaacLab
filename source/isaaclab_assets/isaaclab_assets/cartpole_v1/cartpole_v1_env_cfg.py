@@ -30,6 +30,7 @@ import isaaclab.utils.math as math_utils
 from isaaclab.sim import SimulationCfg, RenderCfg
 from icecream import ic
 import isaaclab.envs.mdp as mdp
+from .mdp.rewards import cartpole_reward
 
 @configclass
 class CartpoleRobotV1SceneConfig(InteractiveSceneCfg):
@@ -55,8 +56,19 @@ class CartpoleRobotV1SceneConfig(InteractiveSceneCfg):
 
 @configclass
 class ActionsCfg :
-    joint_effort = mdp.actions.actions_cfg.JointEffortActionCfg (joint_names=["Slider_1"],asset_name="robot",scale=1.0)
-
+    # joint_effort = mdp.actions.actions_cfg.JointEffortActionCfg (joint_names=["Slider_1"],asset_name="robot",scale=1.0)
+    joint_effort = actions.JointEffortActionCfg(
+        asset_name="robot",
+        joint_names=[
+            "Slider_1",
+            "Revolute_1"
+        ],
+        scale={
+            "Slider_1": 100.0, 
+            "Revolute_1": 0.0, 
+        },
+        debug_vis=True,
+    )
 @configclass
 class ObservationsCfg:
 
@@ -67,8 +79,8 @@ class ObservationsCfg:
 
         """Observations for policy group."""
         # observation terms (order preserved)
-        joint_pos_rel = ObsTerm(func=mdp.joint_pos_rel,params={"asset_cfg": SceneEntityCfg("robot")},)
-        joint_vel_rel = ObsTerm(func=mdp.joint_vel_rel,params={"asset_cfg": SceneEntityCfg("robot")},)
+        joint_pos = ObsTerm(func=mdp.joint_pos,params={"asset_cfg": SceneEntityCfg("robot")},)
+        joint_vel = ObsTerm(func=mdp.joint_vel,params={"asset_cfg": SceneEntityCfg("robot")},)
         def __post_init__(self) -> None:
             self.enable_corruption = False
             self.concatenate_terms = True
@@ -100,7 +112,7 @@ class EventCfg:
     )
         
 @configclass
-class RewardCfgTest:
+class RewardCfg:
     """Reward terms for the MDP."""
     
     # (1) Constant running reward - encourage survival
@@ -109,14 +121,20 @@ class RewardCfgTest:
         weight=1.0
     )
     
-    # (2) Failure penalty - penalize termination
+    # (2) Failure penalty - penalize termination0
     terminating = RewardTermCfg(
         func=rewards.is_terminated,
         weight=-2.0
     )
+    
+    rw = RewardTermCfg(
+        func=cartpole_reward,
+        weight=1.0
+    )
+    0
 
 @configclass
-class TerminationsCfgTest:
+class TerminationsCfg:
     """Termination configuration for legged r
 
 Có thể có trễ âm thanh khi chơi game hoặc xem video.
@@ -140,8 +158,8 @@ class CartPoleV1EnvCfg(ManagerBasedRLEnvCfg):
     observations: ObservationsCfg = ObservationsCfg()
     actions: ActionsCfg = ActionsCfg()
     events: EventCfg = EventCfg()
-    rewards: RewardCfgTest = RewardCfgTest()
-    terminations: TerminationsCfgTest = TerminationsCfgTest()
+    rewards: RewardCfg = RewardCfg()
+    terminations: TerminationsCfg = TerminationsCfg()
 
     def __post_init__(self) -> None:
         """Post initialization."""
