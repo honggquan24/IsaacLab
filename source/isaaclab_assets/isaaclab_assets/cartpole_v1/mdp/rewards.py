@@ -43,7 +43,7 @@ def cartpole_reward_joint_vel(
     scale: float = 0.8
 ):
     robot = env.scene['robot']
-    joint_vel = robot.data.joint_vel  # shape [num_env, 2]
+    joint_vel = robot.data.joint_vel  
     
     device = joint_vel.device
     if target.device != device:
@@ -55,23 +55,14 @@ def cartpole_reward_joint_vel(
 
     err_pendulum = torch.abs(joint_vel[:, 1]) - target[2]
     err_pendulum = torch.clamp (err_pendulum , min= 0.0)
-
-
-    reward_cart = torch.exp(
-        -scale * (err_cart**2)
-        )
-    reward_pedulum = torch.exp(
-        -scale * (err_pendulum**2)
-        )
     
-    reward =1.0 -  reward_cart + reward_pedulum
+    reward = torch.exp(-scale * (err_cart**2 + err_pendulum**2))
+    return 1- reward
 
-
-    return reward
 
 def cartpole_reward_fall(
     env: ManagerBasedRLEnv,
-    threshold_fall: float = 0.3, 
+    threshold_fall: float = 0.5, 
     scale: float = 2.0,
 ):
     robot = env.scene["robot"]
