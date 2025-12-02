@@ -30,7 +30,8 @@ import isaaclab.utils.math as math_utils
 from isaaclab.sim import SimulationCfg, RenderCfg
 from icecream import ic
 import isaaclab.envs.mdp as mdp
-from .mdp.rewards import cartpole_reward
+
+from .mdp.rewards import *
 
 @configclass
 class CartpoleRobotV1SceneConfig(InteractiveSceneCfg):
@@ -126,11 +127,20 @@ class RewardCfg:
         func=rewards.is_terminated,
         weight=-2.0
     )
-    
-    rw = RewardTermCfg(
-        func=cartpole_reward,
-        weight=1.0
+    rw_joint_pos = RewardTermCfg(
+        func=cartpole_reward_joint_pos,
+        weight=2.0
     )
+
+    rw_joint_vel = RewardTermCfg(
+        func=cartpole_reward_joint_vel,
+        weight=-3.0
+    )
+    rw_fall = RewardTermCfg(
+        func= cartpole_reward_fall,
+        weight= -3.0
+    )
+    
 
 @configclass
 class TerminationsCfg:

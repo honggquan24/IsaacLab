@@ -8,17 +8,15 @@ import math
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
 
-# ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py --task=Isaac-Legged-Robot-V2-Pose --num_envs 4096 --resume --load_run=pose_1 --checkpoint=model_150.pt --video
-
 
 # TARGET JOINT
-TARGET_JOINT_POS = torch.tensor([
+TARGET_JOINT = torch.tensor([
     # index: joint_name                # comment
-    0.0, 0.0                
+    0.0, 2.0, 2.0 ,0.0 ,          
 ])
 
 
-def cartpole_reward(
+def cartpole_reward_joint_pos(
     env: ManagerBasedRLEnv,
     target: torch.Tensor = TARGET_JOINT_POS,
     scale_pos: float = 5.0,
@@ -27,8 +25,12 @@ def cartpole_reward(
     robot = env.scene['robot']
     joint_pos = robot.data.joint_pos      # shape: [batch, joints]
     joint_vel = robot.data.joint_vel
+):
+    robot = env.scene['robot']
+    joint_pos = robot.data.joint_pos
 
-    # match device
+    
+    # Move tensors to correct device
     device = joint_pos.device
 
     if target.device != device: 
@@ -44,3 +46,54 @@ def cartpole_reward(
     reward = torch.exp(-(total_err ** 2))
 
     return reward
+
+
+def cartpole_reward_joint_vel(
+    env: ManagerBasedRLEnv,
+    target: torch.Tensor = TARGET_JOINT,
+    scale: float = 0.8
+):
+    robot = env.scene['robot']
+    joint_vel = robot.data.joint_vel  # shape [num_env, 2]
+    
+    device = joint_vel.device
+    if target.device != device:
+        target = target.to(device)
+
+
+    err_cart = torch.abs(joint_vel[:, 0]) - target[1]
+    err_cart = torch.clamp (err_cart , min= 0.0 )
+
+    err_pendulum = torch.abs(joint_vel[:, 1]) - target[2]
+    err_pendulum = torch.clamp (err_pendulum , min= 0.0)
+
+
+    reward_cart = torch.exp(
+        -scale * (err_cart**2)
+        )
+    reward_pedulum = torch.exp(
+        -scale * (err_pendulum**2)
+        )
+    
+    reward =1.0 -  reward_cart + reward_pedulum
+
+
+    return reward
+
+def cartpole_reward_fall(
+    env: ManagerBasedRLEnv,
+    threshold_fall: float = 0.3, 
+    scale: float = 2.0,
+):
+    robot = env.scene["robot"]
+    joint_pos = robot.data.joint_pos 
+
+    theta = joint_pos[:, 1]
+
+    err = torch.abs(theta) - threshold_fall
+    err = torch.clamp(err, min=0.0)
+
+
+    reward = 1.0 - torch.exp(-scale * err**2)
+    return reward 
+
