@@ -72,24 +72,30 @@ class LeggedRobotV2SceneConfigTest(InteractiveSceneCfg):
 
     # Add IMU sensor
     imu = ImuCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/robot_legged_v2/robot_legged_v2/Sensor",
+        prim_path="{ENV_REGEX_NS}/Robot/.*/.*/Sensor",
         update_period=0.02,  # FIX: Changed from 0.1 to match control frequency (50Hz)
         gravity_bias=(0.0, 0.0, 0.0),
-        debug_vis=True,
+        # debug_vis=True,
     )
 
-    # height_scanner = RayCasterCfg(
-    #     prim_path="{ENV_REGEX_NS}/Robot/robot_legged_v2/robot_legged_v2/Sensor",
-    #     update_period=0.02,
-    #     offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 0.0)),
-    #     ray_alignment="yaw",
-    #     pattern_cfg=patterns.GridPatternCfg(
-    #         resolution=0.001,
-    #         size=[0.02, 0.02],
-    #     ),
-    #     debug_vis=True,
-    #     mesh_prim_paths=["/World/ground"],
-    # )
+    height_scanner = RayCasterCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/.*/.*/Sensor",
+        update_period=0.02,
+        offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 0.0)),
+        ray_alignment="yaw",
+        pattern_cfg=patterns.GridPatternCfg(
+            resolution=0.1,
+            size=[0.3, 0.3],
+        ),
+        # debug_vis=True,
+        mesh_prim_paths=["/World/ground"],
+    )
+    
+    contact_forces = ContactSensorCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/.*/.*/(Right|Left)_Leg|Sensor", 
+        update_period=0.0, 
+        # debug_vis=True
+    )
 
 
 @configclass
@@ -108,12 +114,7 @@ class ActionCfgTest:
             "Left_Revolute_04",   # wheel_left
             "Right_Revolute_04",  # wheel_right
         ],
-        scale={
-            "Left_Revolute_0[1-3]": 80.0,   # Leg joints
-            "Right_Revolute_0[1-3]": 80.0,  # Leg joints
-            "Left_Revolute_04": 100.0,      # Left wheel
-            "Right_Revolute_04": 100.0,     # Right wheel
-        },
+        scale=200.0,
         debug_vis=True,
     )
 
@@ -233,13 +234,13 @@ class RewardCfgTest:
     # (2) Failure penalty - penalize termination
     terminating = RewardTermCfg(
         func=rewards.is_terminated,
-        weight=-2.0
+        weight=-10.0
     )
     
     # (3) Full RPY alignment (commented out - using pose alignment instead)
     rpy_alignment = RewardTermCfg(
         func=mdp.rewards.rpy_alignment_imu,
-        weight=1.0,
+        weight=1.5,
         params={
             "target_rpy": (0.0, 0.0, 0.0),
             "imu_cfg": SceneEntityCfg(name="imu"),
@@ -249,20 +250,34 @@ class RewardCfgTest:
     # (4) Pose alignment reward - encourage target joint configuration
     pose_alignment = RewardTermCfg(
         func=mdp.rewards.pose_align_reward,
-        weight=4.0,
+        weight=7.0,
         params={
-            # Uses default TARGET_JOINT_POS and JOINT_MASK from mdp.rewards
-            "scale": 50.0,  # FIX: Explicitly set scale parameter
         },
     )
     
-    # (5) Height reward when robot reach 0.4m
-    # height = RewardTermCfg(
-    #     func=mdp.rewards.height_reward,
-    #     weight=5.0,
-    #     params={
-    #     },
-    # )
+    # (5) Height reward when robot reach 0.5m
+    height = RewardTermCfg(
+        func=mdp.rewards.height_reward,
+        weight=2.0,
+        params={
+        },
+    )
+    
+    # (6) Contact force reward for not contacting with ground
+    contact = RewardTermCfg(
+        func=mdp.rewards.contact_force_reward,
+        weight=2.5,
+        params={
+        },
+    )
+    
+    # (6) Contact force reward for not contacting with ground
+    vel_ = RewardTermCfg(
+        func=mdp.rewards.velocity_reward,
+        weight=2.0,
+        params={
+        },
+    )
 
 
 @configclass

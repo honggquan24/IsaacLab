@@ -37,27 +37,28 @@ LEGGED_ROBOT_V2_CFG_TEST = ArticulationCfg(
             solver_position_iteration_count=20,
             solver_velocity_iteration_count=1,
         ),
-        collision_props=sim_utils.schemas.CollisionPropertiesCfg(
-            collision_enabled=True,
-        ),
+        # collision_props=sim_utils.schemas.CollisionPropertiesCfg(
+        #     collision_enabled=True,
+        # ),
+        activate_contact_sensors=True,
     ),
     
     # INITIAL STATE - Must match reset_position in env config
     init_state=ArticulationCfg.InitialStateCfg(
-        pos=(0.0, 0.0, 0.27),  # FIX: Changed from 0.2 to 0.27 (match env reset)
+        pos=(0.0, 0.0, 0.5),  # FIX: Changed from 0.2 to 0.27 (match env reset)
         joint_pos={
             # --- Left leg joints ---
             "Left_Revolute_01": 0.0,                    # Hip
-            "Left_Revolute_02": 0.7,     # Knee
-            "Left_Revolute_03": 0.27,     # Ankle
+            "Left_Revolute_02": 0.34,     # Knee
+            "Left_Revolute_03": 0.08,     # Ankle
             "Left_Revolute_04": 0.0,                    # Wheel - FIX: Uncommented
             # "Left_Revolute_05": math.radians(-13.0),    # Passive - FIX: Fixed angle
             # "Left_Revolute_06": math.radians(-13.0),    # Passive - FIX: Fixed angle
 
             # --- Right leg joints ---
             "Right_Revolute_01": 0.0,                   # Hip
-            "Right_Revolute_02": -0.7,   # Knee
-            "Right_Revolute_03": -0.27,   # Ankle
+            "Right_Revolute_02": -0.34,   # Knee
+            "Right_Revolute_03": -0.08,   # Ankle
             "Right_Revolute_04": 0.0,                   # Wheel - FIX: Uncommented
             # "Right_Revolute_05": math.radians(12.6),    # Passive
             # "Right_Revolute_06": math.radians(12.6),    # Passive
@@ -84,28 +85,28 @@ LEGGED_ROBOT_V2_CFG_TEST = ArticulationCfg(
         # --- RIGHT LEG ---
         "hip_right": ImplicitActuatorCfg( 
             joint_names_expr=["Right_Revolute_01"],
-            effort_limit_sim=100.0,      # FIX: Reduced from 1000 (too high)
+            effort_limit_sim=200.0,      # FIX: Reduced from 1000 (too high)
             stiffness=0.0,
             damping=0.5,                 # FIX: Added damping for stability
             velocity_limit_sim=50.0,     # FIX: Reduced from 250 (unrealistic)
         ),
         "knee_right": ImplicitActuatorCfg(
             joint_names_expr=["Right_Revolute_02"],
-            effort_limit_sim=100.0,      # FIX: Reduced from 1000
+            effort_limit_sim=200.0,      # FIX: Reduced from 1000
             stiffness=0.0,
             damping=0.5,                 # FIX: Added damping
             velocity_limit_sim=50.0,
         ),
         "ankle_right": ImplicitActuatorCfg(
             joint_names_expr=["Right_Revolute_03"],
-            effort_limit_sim=100.0,      # FIX: Reduced from 1000
+            effort_limit_sim=200.0,      # FIX: Reduced from 1000
             stiffness=10.0,
             damping=0.5,                 # FIX: Added damping
             velocity_limit_sim=50.0,
         ),
         "wheel_right": ImplicitActuatorCfg(
             joint_names_expr=["Right_Revolute_04"],
-            effort_limit_sim=50.0,       # FIX: Reduced from 1000 (wheels need less)
+            effort_limit_sim=200.0,       # FIX: Reduced from 1000 (wheels need less)
             stiffness=0.0,
             damping=0.1,                 # FIX: Lower damping for wheels
             velocity_limit_sim=100.0,    # FIX: Increased from 50 (wheels can spin fast)
@@ -114,28 +115,28 @@ LEGGED_ROBOT_V2_CFG_TEST = ArticulationCfg(
         # --- LEFT LEG ---
         "hip_left": ImplicitActuatorCfg(
             joint_names_expr=["Left_Revolute_01"],
-            effort_limit_sim=100.0,      # FIX: Reduced from 1000
+            effort_limit_sim=200.0,      # FIX: Reduced from 1000
             stiffness=0.0,
             damping=0.5,                 # FIX: Added damping
             velocity_limit_sim=50.0,
         ),
         "knee_left": ImplicitActuatorCfg(
             joint_names_expr=["Left_Revolute_02"],
-            effort_limit_sim=100.0,      # FIX: Reduced from 1000
+            effort_limit_sim=200.0,      # FIX: Reduced from 1000
             stiffness=0.0,
             damping=0.5,                 # FIX: Added damping
             velocity_limit_sim=50.0,
         ),
         "ankle_left": ImplicitActuatorCfg(
             joint_names_expr=["Left_Revolute_03"],
-            effort_limit_sim=100.0,      # FIX: Reduced from 1000
+            effort_limit_sim=200.0,      # FIX: Reduced from 1000
             stiffness=10.0,
             damping=0.5,                 # FIX: Added damping
             velocity_limit_sim=50.0,
         ),
         "wheel_left": ImplicitActuatorCfg(
             joint_names_expr=["Left_Revolute_04"],
-            effort_limit_sim=50.0,       # FIX: Reduced from 1000
+            effort_limit_sim=200.0,       # FIX: Reduced from 1000
             stiffness=0.0,
             damping=0.1,                 # FIX: Lower damping for wheels
             velocity_limit_sim=100.0,    # FIX: Increased from 50

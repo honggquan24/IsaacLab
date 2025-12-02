@@ -123,7 +123,7 @@ def pose_align_reward(
     env: ManagerBasedRLEnv,
     target_joint_pos: torch.Tensor = TARGET_JOINT_POS,
     mask: torch.Tensor = JOINT_MASK,
-    scale: float = 20.0,
+    scale: float = 1.5,
 ) -> torch.Tensor:
     """
     Computes a pose-alignment reward based on joint-space error.
@@ -181,45 +181,125 @@ def pose_align_reward(
 
 def height_reward(
     env: ManagerBasedRLEnv,
-    target_height: float = 0.4,
-    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
-    sigma: float = 5.0,
+    target_height: float = 0.5,
+    sigma: float = 0.1,
     min_height: float = 0.1,
 ) -> torch.Tensor:
     """
     Reward for maintaining base height close to target.
-    
-    Encourages the robot to stay at a specific height (e.g., standing upright).
     Uses Gaussian reward: exp(-((z - target)^2) / (2 * sigma^2))
-    
-    Args:
-        env: Environment instance.
-        target_height: Desired height (meters) of the robot's base (z-coordinate).
-        asset_cfg: Scene entity config for the robot.
-        sigma: Standard deviation for Gaussian reward (controls width). 
-               Smaller sigma → stricter height requirement.
-        min_height: Minimum height threshold — below this, reward sharply decreases.
-    
-    Returns:
-        torch.Tensor: Reward per env, shape (num_envs,), values in [0, 1].
     """
-    # Get robot base position (world frame)
-    robot = env.scene[asset_cfg.name]
-    root_pos = robot.data.root_pos_w  # [num_envs, 3]
-    height = root_pos[:, 2]  # z-coordinate
-
-    # Safety: avoid NaN/Inf
-    height = torch.clamp(height, min=0.0, max=5.0)
-
-    # Gaussian reward around target
-    reward = sigma * height ** 2
-
-    # Final safety clamp
-    reward = torch.clamp(reward, 0.0, 10.0)
+    ray_caster = env.scene['height_scanner']
+    sensor_pos_z = ray_caster.data.pos_w[:, 2]  # [num_envs]
+    ray_hits_z = ray_caster.data.ray_hits_w[..., 2]  # [num_envs, num_rays]
+    
+    # Vectorized ground height calculation
+    valid_mask = ray_hits_z > -1e6  # [num_envs, num_rays]
+    
+    # Mean ground height (chỉ tính trên valid hits)
+    masked_hits = ray_hits_z * valid_mask  # Invalid rays = 0
+    num_valid = valid_mask.sum(dim=-1).clamp(min=1)  # [num_envs]
+    ground_z = masked_hits.sum(dim=-1) / num_valid  # [num_envs]
+    
+    # Robot heights
+    robot_heights = torch.where(
+        valid_mask.any(dim=-1),  # Có ít nhất 1 valid hit?
+        sensor_pos_z - ground_z,  # Yes: dùng ground_z
+        sensor_pos_z              # No: dùng sensor position
+    )
+    
+    # Gaussian reward
+    height_error = robot_heights - target_height
+    reward = torch.exp(-(height_error ** 2) / (2 * sigma ** 2))
+    
+    # Penalty for too low
+    reward = torch.where(robot_heights < min_height, torch.zeros_like(reward), reward)
     
     # NaN guard
-    if torch.isnan(reward).any():
-        reward = torch.nan_to_num(reward, nan=0.0, posinf=1.0, neginf=0.0)
-        print("[WARNING] NaN in height_reward — replaced with 0.0")
+    reward = torch.nan_to_num(reward, nan=0.0, posinf=1.0, neginf=0.0)
+    
+    return torch.clamp(reward, 0.0, 1.0)
 
+def contact_force_reward(
+    env: ManagerBasedRLEnv,
+    target_contact_force: float = 0.0,
+    scale: float = 1.0,
+) -> torch.Tensor:
+    contact_sensor = env.scene['contact_forces']
+    contact_forces = contact_sensor.data.net_forces_w
+    
+    force_norms = torch.norm(contact_forces, dim=-1)
+    
+    max_force_per_env = torch.max(force_norms, dim=1).values
+    
+    max_contact_forces = torch.clamp(max_force_per_env, 0.0, 1000.0)
+    
+    error = (max_contact_forces - target_contact_force) ** 2 
+    reward = torch.exp(-scale * error)
+    reward = torch.nan_to_num(reward, nan=0.0, posinf=1.0, neginf=0.0)
+    
+    return torch.clamp(reward, 0.0, 1.0)
+
+def velocity_reward(
+    env: ManagerBasedRLEnv,
+    target_linear_vel: float = 0.0,
+    target_angular_vel: float = 0.0,
+    linear_scale: float = 1.0,
+    angular_scale: float = 0.5,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """
+    Reward for keeping velocity small (encouraging robot to stand still or move slowly).
+    
+    Penalizes both linear and angular velocities using exponential decay.
+    Higher reward when robot moves slower.
+    
+    Args:
+        env: Environment object.
+        target_linear_vel: Desired linear velocity magnitude (m/s), default 0.0
+        target_angular_vel: Desired angular velocity magnitude (rad/s), default 0.0
+        linear_scale: Exponential decay rate for linear velocity (higher = stricter)
+        angular_scale: Exponential decay rate for angular velocity (higher = stricter)
+        asset_cfg: SceneEntityCfg of the robot.
+    
+    Returns:
+        Reward tensor with shape (num_envs,), values in (0, 1]
+    """
+    # Get robot asset
+    robot = env.scene[asset_cfg.name]
+    
+    # Linear velocity in world frame [num_envs, 3]
+    lin_vel = robot.data.root_lin_vel_w
+    
+    # Angular velocity in world frame [num_envs, 3]
+    ang_vel = robot.data.root_ang_vel_w
+    
+    # FIX 1: Compute velocity magnitudes
+    lin_vel_norm = torch.norm(lin_vel, dim=-1)  # [num_envs]
+    ang_vel_norm = torch.norm(ang_vel, dim=-1)  # [num_envs]
+    
+    # FIX 2: Clamp velocities to avoid extreme values
+    lin_vel_norm = torch.clamp(lin_vel_norm, 0.0, 100.0)
+    ang_vel_norm = torch.clamp(ang_vel_norm, 0.0, 100.0)
+    
+    # FIX 3: Compute errors from target
+    lin_vel_error = torch.abs(lin_vel_norm - target_linear_vel)
+    ang_vel_error = torch.abs(ang_vel_norm - target_angular_vel)
+    
+    # FIX 4: Exponential rewards (separate for linear and angular)
+    lin_reward = torch.exp(-linear_scale * torch.square(lin_vel_error))
+    ang_reward = torch.exp(-angular_scale * torch.square(ang_vel_error))
+    
+    # FIX 5: Combined reward (weighted average)
+    # You can adjust weights: 0.7 for linear, 0.3 for angular
+    reward = 0.5 * lin_reward + 0.5 * ang_reward
+    
+    # FIX 6: Clamp to valid range
+    reward = torch.clamp(reward, 0.0, 1.0)
+    
+    # FIX 7: Safety check for NaN/Inf
+    if torch.isnan(reward).any() or torch.isinf(reward).any():
+        print("[WARNING] Invalid reward detected in velocity_reward")
+        reward = torch.nan_to_num(reward, nan=0.0, posinf=1.0, neginf=0.0)
+    
     return reward
