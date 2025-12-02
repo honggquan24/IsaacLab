@@ -3,7 +3,7 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""
+"""[obs]: {'policy': tensor([[ 4.9938e-01, -1.6016e+00, -1.1879e-02, -5.2375e+01]], device='cuda:0')}
 This script demonstrates how to run the RL environment for the cartpole balancing task.
 
 .. code-block:: bash

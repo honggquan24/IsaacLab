@@ -18,8 +18,13 @@ TARGET_JOINT = torch.tensor([
 
 def cartpole_reward_joint_pos(
     env: ManagerBasedRLEnv,
-    target: torch.Tensor = TARGET_JOINT,
-    scale: float = 5.0
+    target: torch.Tensor = TARGET_JOINT_POS,
+    scale_pos: float = 5.0,
+    scale_vel: float = 4.0
+)-> torch.Tensor:
+    robot = env.scene['robot']
+    joint_pos = robot.data.joint_pos      # shape: [batch, joints]
+    joint_vel = robot.data.joint_vel
 ):
     robot = env.scene['robot']
     joint_pos = robot.data.joint_pos
@@ -27,15 +32,21 @@ def cartpole_reward_joint_pos(
     
     # Move tensors to correct device
     device = joint_pos.device
-    if target.device != device:
+
+    if target.device != device: 
         target = target.to(device)
-    
-    err = joint_pos[:,1] - target[0]
-    
-    reward = torch.exp(
-        -scale*(err**2)
-    )
+
+        
+    err_pos = scale_pos * (joint_pos[:, 1] - target[0])
+    err_vel = scale_vel * (joint_vel[:, 1] - target[1])
+
+    total_err = err_pos + err_vel
+
+
+    reward = torch.exp(-(total_err ** 2))
+
     return reward
+
 
 def cartpole_reward_joint_vel(
     env: ManagerBasedRLEnv,

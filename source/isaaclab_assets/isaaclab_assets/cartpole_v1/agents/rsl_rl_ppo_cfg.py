@@ -16,8 +16,8 @@ class CartPoleV1PPORunnerCfg(RslRlOnPolicyRunnerCfg):
         init_noise_std=0.2,
         actor_obs_normalization=True,
         critic_obs_normalization=True,
-        actor_hidden_dims=[64, 64],
-        critic_hidden_dims=[128, 128, 64],
+        actor_hidden_dims=[256, 256],
+        critic_hidden_dims=[256, 512, 256],
         activation="relu",
     )
     algorithm = RslRlPpoAlgorithmCfg(
