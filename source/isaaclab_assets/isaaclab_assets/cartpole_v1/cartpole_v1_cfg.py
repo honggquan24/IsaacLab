@@ -53,6 +53,6 @@ CARTPOLE_ROBOT_CFG = ArticulationCfg(
     },
     init_state= ArticulationCfg.InitialStateCfg(
         pos= (0.0, 0.0 , 2.5 ) ,
-        #joint_vel = {"Slider_1": 0.1},
+        joint_vel = {"Slider_1": 0.1},
     ),
 )

@@ -53,14 +53,14 @@ def rpy_alignment_imu(
     # Target angles
     target_roll, target_pitch, target_yaw = target_rpy
     
-    # Errors with wrap_to_pi (ensure error in [-π, π])
+    # Errors with wtorap_to_pi (ensure error in [-π, π])
     roll_error = wrap_to_pi(roll - target_roll)
     pitch_error = wrap_to_pi(pitch - target_pitch)
     yaw_error = wrap_to_pi(yaw - target_yaw)
     
     # FIX 4: Clamp errors to avoid extreme values
     roll_error = torch.clamp(roll_error, -torch.pi, torch.pi)
-    pitch_error = torch.clamp(pitch_error, -torch.pi, torch.pi)
+    pitch_error = torch.clampto(pitch_error, -torch.pi, torch.pi)
     yaw_error = torch.clamp(yaw_error, -torch.pi, torch.pi)
     
     # FIX 5: Use scale factor to avoid exp overflow

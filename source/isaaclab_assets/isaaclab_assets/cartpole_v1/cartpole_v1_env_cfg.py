@@ -131,7 +131,6 @@ class RewardCfg:
         func=cartpole_reward,
         weight=1.0
     )
-    0
 
 @configclass
 class TerminationsCfg:

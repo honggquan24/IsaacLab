@@ -3,7 +3,7 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""
+"""[obs]: {'policy': tensor([[ 4.9938e-01, -1.6016e+00, -1.1879e-02, -5.2375e+01]], device='cuda:0')}
 This script demonstrates how to run the RL environment for the cartpole balancing task.
 
 .. code-block:: bash
@@ -68,9 +68,9 @@ def main():
             joint_efforts = torch.randn_like(env.action_manager.action)
             # step the environment
             obs, rew, terminated, truncated, info = env.step(joint_efforts)
-            # print("-"*50)
-            # print(f"[obs]: {obs}")   
-            # print(type(obs))         
+            print("-"*50)
+            print(f"[obs]: {obs}")   
+            print(type(obs))         
             
             # print("-"*50)
             # print(f"[rew]: {rew}")   
