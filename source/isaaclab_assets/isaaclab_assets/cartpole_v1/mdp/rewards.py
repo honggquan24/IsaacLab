@@ -63,7 +63,7 @@ def cartpole_reward_joint_vel(
 def cartpole_reward_fall(
     env: ManagerBasedRLEnv,
     threshold_fall: float = 0.5, 
-    scale: float = 2.0,
+    scale: float = 1.0,
 ):
     robot = env.scene["robot"]
     joint_pos = robot.data.joint_pos 
