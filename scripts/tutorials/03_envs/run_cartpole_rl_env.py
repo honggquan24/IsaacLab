@@ -38,14 +38,14 @@ import torch
 
 from isaaclab.envs import ManagerBasedRLEnv
 
-from isaaclab_assets import LeggedRobotV2EnvCfgTest
+from isaaclab_assets import LeggedRobotV2EnvCfg
 from isaaclab_tasks.manager_based.classic.cartpole.cartpole_env_cfg import CartpoleEnvCfg
 from icecream import ic
 
 def main():
     """Main function."""
     # create environment configuration
-    env_cfg = LeggedRobotV2EnvCfgTest()
+    env_cfg = LeggedRobotV2EnvCfg()
     env_cfg.scene.num_envs = args_cli.num_envs
     env_cfg.sim.device = args_cli.device
     
@@ -53,7 +53,7 @@ def main():
     env = ManagerBasedRLEnv(cfg=env_cfg)
     robot = env.scene['robot']
     ray_caster = env.scene['height_scanner']
-    contact_forces = env.scene['contact_forces']
+    contact_sensor = env.scene['contact_forces']
     
     # simulate physics
     count = 0
@@ -89,10 +89,15 @@ def main():
             #     print(f"[Sensor Z position]: {sensor_pos_z[0].item():.4f}")  # VD: 0.3
             #     print(f"[Ground Z position]: {ground_z.item():.4f}")  # VD: 0.0
             #     print(f"[Robot Height]: {robot_height.item():.4f}")  # VD: 0.3
-            print("contact sensor","-"*50, end="\t")
+            # print("contact sensor","-"*50, end="\t")
+            # ic(contact_forces)
+            # ic(contact_forces.data)
+            # ic(contact_forces.data.net_forces_w)
+            joint_pos = robot.data.joint_pos  # shape: [num_envs, num_joints]
+            print("joint_pos","-"*50, end="\t")
+            contact_forces = contact_sensor.data.net_forces_w
             ic(contact_forces)
-            ic(contact_forces.data)
-            ic(contact_forces.data.net_forces_w)
+            ic(robot.data.root_ang_vel_w)
             
             # update counter
             count += 1

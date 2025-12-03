@@ -4,129 +4,150 @@ import math
 import isaaclab.sim as sim_utils
 from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.assets import ArticulationCfg
+from isaaclab.actuators import ImplicitActuatorCfg
 
 # PATH CONFIG
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-LEGGED_ROBOT_USD_PATH = os.path.join(
-    CURRENT_DIR, "usd_file", "robot_legged_v2_base.usd"
-)
 
-# Khong limitt cac khop khong dieu khien
-# Set break force va torque
-# Nho assign material
-# max joint vel
+LEGGED_ROBOT_USD_PATH = os.path.join(
+    CURRENT_DIR, "usd_file", "robot_v2_cfg.usd"
+)
 
 # ROBOT CONFIG
 LEGGED_ROBOT_V2_CFG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(
         usd_path=LEGGED_ROBOT_USD_PATH,
+        mass_props=sim_utils.schemas.MassPropertiesCfg(
+            mass=10,
+            density=100,
+        ),
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             rigid_body_enabled=True,
             max_linear_velocity=25.0,
-            max_angular_velocity=250.0,
+            max_angular_velocity=50.0,
             linear_damping=0.002,
             angular_damping=0.005,
             max_depenetration_velocity=1.0,
             enable_gyroscopic_forces=True,
             max_contact_impulse=500,
             retain_accelerations=True,
-            
         ),
         articulation_props=sim_utils.ArticulationRootPropertiesCfg(
             enabled_self_collisions=True,
             solver_position_iteration_count=20,
             solver_velocity_iteration_count=1,
         ),
-        collision_props=sim_utils.schemas.CollisionPropertiesCfg(
-            collision_enabled=True,
-            contact_offset=0.02,
-            rest_offset=0.1,
-            torsional_patch_radius=0.001,
-            min_torsional_patch_radius = 0.001,
-        ),
+        # collision_props=sim_utils.schemas.CollisionPropertiesCfg(
+        #     collision_enabled=True,
+        # ),
+        activate_contact_sensors=True,
     ),
-    # INITIAL STATE - Đồng bộ với reset_position
+    
+    # INITIAL STATE - Must match reset_position in env config
     init_state=ArticulationCfg.InitialStateCfg(
-        pos=(0.0, 0.0, 0.2),  # Tăng chiều cao spawn để phù hợp với reset range
+        pos=(0.0, 0.0, 0.5),  # FIX: Changed from 0.2 to 0.27 (match env reset)
         joint_pos={
-            "Revolute_1": 0.0,
-            "Revolute_2": 0.0,
-            "Revolute_3": 0.0,
-            "Revolute_4": 0.0,
-            "Revolute_5": 0.0,
-            "Revolute_6": 0.0,
-            "Revolute_7": 0.0,
-            "Revolute_8": 0.0,
+            # --- Left leg joints ---
+            "Left_Revolute_01": 0.0,                    # Hip
+            "Left_Revolute_02": 0.34,     # Knee
+            "Left_Revolute_03": 0.08,     # Ankle
+            "Left_Revolute_04": 0.0,                    # Wheel - FIX: Uncommented
+            # "Left_Revolute_05": math.radians(-13.0),    # Passive - FIX: Fixed angle
+            # "Left_Revolute_06": math.radians(-13.0),    # Passive - FIX: Fixed angle
+
+            # --- Right leg joints ---
+            "Right_Revolute_01": 0.0,                   # Hip
+            "Right_Revolute_02": -0.34,   # Knee
+            "Right_Revolute_03": -0.08,   # Ankle
+            "Right_Revolute_04": 0.0,                   # Wheel - FIX: Uncommented
+            # "Right_Revolute_05": math.radians(12.6),    # Passive
+            # "Right_Revolute_06": math.radians(12.6),    # Passive
         },
-        # Đảm bảo velocity ban đầu = 0
         joint_vel={
-            "Revolute_1": 0.0,
-            "Revolute_2": 0.0,
-            "Revolute_3": 0.0,
-            "Revolute_4": 0.0,
-            "Revolute_5": 0.0,
-            "Revolute_6": 0.0,  
-            "Revolute_7": 0.0,
-            "Revolute_8": 0.0,
+            # --- All joints start with zero velocity ---
+            "Left_Revolute_01": 0.0,
+            "Left_Revolute_02": 0.0,
+            "Left_Revolute_03": 0.0,
+            "Left_Revolute_04": 0.0,
+            "Left_Revolute_05": 0.0,
+            "Left_Revolute_06": 0.0,
+            "Right_Revolute_01": 0.0,
+            "Right_Revolute_02": 0.0,
+            "Right_Revolute_03": 0.0,
+            "Right_Revolute_04": 0.0,
+            "Right_Revolute_05": 0.0,
+            "Right_Revolute_06": 0.0,
         },
     ),
+    
     # ACTUATORS
     actuators={
-        "hip_right": ImplicitActuatorCfg(
-            joint_names_expr=["Revolute_2"],
-            effort_limit_sim=1000,
-            stiffness=0,
-            damping=0,
-            velocity_limit_sim=50.0,
+        # --- RIGHT LEG ---
+        "hip_right": ImplicitActuatorCfg( 
+            joint_names_expr=["Right_Revolute_01"],
+            effort_limit_sim=200.0,      # FIX: Reduced from 1000 (too high)
+            stiffness=0.0,
+            damping=0.5,                 # FIX: Added damping for stability
+            velocity_limit_sim=50.0,     # FIX: Reduced from 250 (unrealistic)
         ),
         "knee_right": ImplicitActuatorCfg(
-            joint_names_expr=["Revolute_4"],
-            effort_limit_sim=1000,
-            stiffness=0,
-            damping=0,
+            joint_names_expr=["Right_Revolute_02"],
+            effort_limit_sim=200.0,      # FIX: Reduced from 1000
+            stiffness=0.0,
+            damping=0.5,                 # FIX: Added damping
             velocity_limit_sim=50.0,
         ),
         "ankle_right": ImplicitActuatorCfg(
-            joint_names_expr=["Revolute_6"],
-            effort_limit_sim=1000,
-            stiffness=0,
-            damping=0,
-            velocity_limit_sim=250.0,
-        ),
-        "wheel_right": ImplicitActuatorCfg(
-            joint_names_expr=["Revolute_8"],
-            effort_limit_sim=1000,
-            stiffness=0,
-            damping=0,
+            joint_names_expr=["Right_Revolute_03"],
+            effort_limit_sim=200.0,      # FIX: Reduced from 1000
+            stiffness=10.0,
+            damping=0.5,                 # FIX: Added damping
             velocity_limit_sim=50.0,
         ),
+        "wheel_right": ImplicitActuatorCfg(
+            joint_names_expr=["Right_Revolute_04"],
+            effort_limit_sim=200.0,       # FIX: Reduced from 1000 (wheels need less)
+            stiffness=0.0,
+            damping=0.1,                 # FIX: Lower damping for wheels
+            velocity_limit_sim=100.0,    # FIX: Increased from 50 (wheels can spin fast)
+        ),
+        
+        # --- LEFT LEG ---
         "hip_left": ImplicitActuatorCfg(
-            joint_names_expr=["Revolute_1"],
-            effort_limit_sim=1000,
-            stiffness=0,
-            damping=0,
+            joint_names_expr=["Left_Revolute_01"],
+            effort_limit_sim=200.0,      # FIX: Reduced from 1000
+            stiffness=0.0,
+            damping=0.5,                 # FIX: Added damping
             velocity_limit_sim=50.0,
         ),
         "knee_left": ImplicitActuatorCfg(
-            joint_names_expr=["Revolute_3"],
-            effort_limit_sim=1000,
-            stiffness=0,
-            damping=0,
+            joint_names_expr=["Left_Revolute_02"],
+            effort_limit_sim=200.0,      # FIX: Reduced from 1000
+            stiffness=0.0,
+            damping=0.5,                 # FIX: Added damping
             velocity_limit_sim=50.0,
         ),
         "ankle_left": ImplicitActuatorCfg(
-            joint_names_expr=["Revolute_5"],
-            effort_limit_sim=1000,
-            stiffness=0,
-            damping=0,
+            joint_names_expr=["Left_Revolute_03"],
+            effort_limit_sim=200.0,      # FIX: Reduced from 1000
+            stiffness=10.0,
+            damping=0.5,                 # FIX: Added damping
             velocity_limit_sim=50.0,
         ),
         "wheel_left": ImplicitActuatorCfg(
-            joint_names_expr=["Revolute_7"],
-            effort_limit_sim=1000,
-            stiffness=0,
-            damping=0,
-            velocity_limit_sim=250.0,
+            joint_names_expr=["Left_Revolute_04"],
+            effort_limit_sim=200.0,       # FIX: Reduced from 1000
+            stiffness=0.0,
+            damping=0.1,                 # FIX: Lower damping for wheels
+            velocity_limit_sim=100.0,    # FIX: Increased from 50
+        ),
+        
+        # --- PASSIVE JOINTS ---
+        "passive": ImplicitActuatorCfg(
+            joint_names_expr=[".*_Revolute_0[5-6]"],
+            effort_limit_sim=0.0,        # No actuation
+            stiffness=0.0,
+            damping=0.0,
         ),
     },
 )

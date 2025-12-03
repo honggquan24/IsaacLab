@@ -8,7 +8,8 @@ import math
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
 
-# ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py --task=Isaac-Legged-Robot-V2-Pose --num_envs 4096 --resume --load_run=pose_1 --checkpoint=model_150.pt --video
+
+
 def rpy_alignment_imu(
     env: ManagerBasedRLEnv,
     target_rpy: tuple[float, float, float] = (0.0, 0.0, 0.0),
@@ -66,7 +67,7 @@ def rpy_alignment_imu(
     # FIX 5: Use scale factor to avoid exp overflow
     # With error max = π, squared = π² ≈ 10
     # exp(-10) ≈ 0.000045 (OK)
-    scale = 1.0  # Can adjust: higher → smoother reward
+    scale = 3.0  # Can adjust: higher → smoother reward
     
     # Total orientation error (squared)
     total_error = (
@@ -220,32 +221,50 @@ def height_reward(
     
     return torch.clamp(reward, 0.0, 1.0)
 
-def contact_force_reward(
-    env: ManagerBasedRLEnv,
-    target_contact_force: float = 0.0,
-    scale: float = 1.0,
-) -> torch.Tensor:
+def stable_contact_reward(env):
     contact_sensor = env.scene['contact_forces']
     contact_forces = contact_sensor.data.net_forces_w
     
-    force_norms = torch.norm(contact_forces, dim=-1)
+    # Khuyến khích lực đều ở 2 bàn chân
+    left_foot_force = contact_forces[..., 0, :].norm(dim=-1)
+    right_foot_force = contact_forces[..., 1, :].norm(dim=-1)
     
-    max_force_per_env = torch.max(force_norms, dim=1).values
-    
-    max_contact_forces = torch.clamp(max_force_per_env, 0.0, 1000.0)
-    
-    error = (max_contact_forces - target_contact_force) ** 2 
-    reward = torch.exp(-scale * error)
-    reward = torch.nan_to_num(reward, nan=0.0, posinf=1.0, neginf=0.0)
-    
-    return torch.clamp(reward, 0.0, 1.0)
+    # Reward khi 2 chân có lực gần bằng nhau
+    force_balance = torch.abs(left_foot_force - right_foot_force)
+    reward = torch.exp(-0.01 * force_balance)
+    return reward
 
-def velocity_reward(
+def contact_force_reward_per_foot(
+    env: ManagerBasedRLEnv,
+    foot_idx: int,
+    target_contact_force: float = 0.0,
+    scale: float = 0.01,
+    sensor_cfg: SceneEntityCfg = SceneEntityCfg("contact_forces"),
+) -> torch.Tensor:
+    """
+    Reward for contact force on a specific foot.
+    
+    Args:
+        foot_idx: Index of the foot (0 for left, 1 for right)
+    """
+    contact_sensor = env.scene[sensor_cfg.name]
+    contact_forces = contact_sensor.data.net_forces_w[:, foot_idx, :]  # [num_envs, 3]
+    
+    # Tính magnitude của lực
+    force_norm = torch.norm(contact_forces, dim=-1).clamp(0.0, 1000.0)
+    
+    # Gaussian reward
+    error = (force_norm - target_contact_force) ** 2
+    reward = torch.exp(-scale * error)
+    
+    return torch.clamp(torch.nan_to_num(reward, nan=0.0), 0.0, 1.0)
+
+def angular_reward(
     env: ManagerBasedRLEnv,
     target_linear_vel: float = 0.0,
     target_angular_vel: float = 0.0,
     linear_scale: float = 1.0,
-    angular_scale: float = 0.5,
+    angular_scale: float = 2.0,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
 ) -> torch.Tensor:
     """
@@ -269,33 +288,33 @@ def velocity_reward(
     robot = env.scene[asset_cfg.name]
     
     # Linear velocity in world frame [num_envs, 3]
-    lin_vel = robot.data.root_lin_vel_w
+    # lin_vel = robot.data.root_lin_vel_w
     
     # Angular velocity in world frame [num_envs, 3]
     ang_vel = robot.data.root_ang_vel_w
     
     # FIX 1: Compute velocity magnitudes
-    lin_vel_norm = torch.norm(lin_vel, dim=-1)  # [num_envs]
+    # lin_vel_norm = torch.norm(lin_vel, dim=-1)  # [num_envs]
     ang_vel_norm = torch.norm(ang_vel, dim=-1)  # [num_envs]
     
     # FIX 2: Clamp velocities to avoid extreme values
-    lin_vel_norm = torch.clamp(lin_vel_norm, 0.0, 100.0)
+    # lin_vel_norm = torch.clamp(lin_vel_norm, 0.0, 100.0)
     ang_vel_norm = torch.clamp(ang_vel_norm, 0.0, 100.0)
     
     # FIX 3: Compute errors from target
-    lin_vel_error = torch.abs(lin_vel_norm - target_linear_vel)
-    ang_vel_error = torch.abs(ang_vel_norm - target_angular_vel)
+    # lin_vel_error = torch.abs(lin_vel_norm - target_linear_vel)
+    ang_vel_error = ang_vel_norm - target_angular_vel
     
     # FIX 4: Exponential rewards (separate for linear and angular)
-    lin_reward = torch.exp(-linear_scale * torch.square(lin_vel_error))
+    # lin_reward = torch.exp(-linear_scale * torch.square(lin_vel_error))
     ang_reward = torch.exp(-angular_scale * torch.square(ang_vel_error))
     
     # FIX 5: Combined reward (weighted average)
     # You can adjust weights: 0.7 for linear, 0.3 for angular
-    reward = 0.5 * lin_reward + 0.5 * ang_reward
+    # reward = 0.7 * lin_reward + 0.3 * ang_reward
     
     # FIX 6: Clamp to valid range
-    reward = torch.clamp(reward, 0.0, 1.0)
+    reward = torch.clamp(ang_reward, 0.0, 1.0)
     
     # FIX 7: Safety check for NaN/Inf
     if torch.isnan(reward).any() or torch.isinf(reward).any():
