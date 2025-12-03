@@ -1,6 +1,6 @@
 from __future__ import annotations
 import torch
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.utils.math import wrap_to_pi, euler_xyz_from_quat
 import math
@@ -236,10 +236,9 @@ def stable_contact_reward(env):
 
 def contact_force_reward_per_foot(
     env: ManagerBasedRLEnv,
-    foot_idx: int,
     target_contact_force: float = 0.0,
-    scale: float = 0.01,
-    sensor_cfg: SceneEntityCfg = SceneEntityCfg("contact_forces"),
+    scale: float = 1.0,
+    sensor_cfg_name: Literal["contact_forces_left", "contact_forces_left"] =  "contact_forces_left",
 ) -> torch.Tensor:
     """
     Reward for contact force on a specific foot.
@@ -247,11 +246,12 @@ def contact_force_reward_per_foot(
     Args:
         foot_idx: Index of the foot (0 for left, 1 for right)
     """
+    sensor_cfg = SceneEntityCfg(sensor_cfg_name)
     contact_sensor = env.scene[sensor_cfg.name]
-    contact_forces = contact_sensor.data.net_forces_w[:, foot_idx, :]  # [num_envs, 3]
+    contact_forces = contact_sensor.data.net_forces_w  # [num_envs, 4, 3]
     
     # Tính magnitude của lực
-    force_norm = torch.norm(contact_forces, dim=-1).clamp(0.0, 1000.0)
+    force_norm = torch.norm(contact_forces, dim=-1).sum(dim= -1).clamp(0.0, 100.0)
     
     # Gaussian reward
     error = (force_norm - target_contact_force) ** 2

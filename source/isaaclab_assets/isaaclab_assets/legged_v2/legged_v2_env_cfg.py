@@ -92,8 +92,14 @@ class LeggedRobotV2SceneConfig(InteractiveSceneCfg):
         mesh_prim_paths=["/World/ground"],
     )
     
-    contact_forces = ContactSensorCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/.*/.*/(Right|Left)_Leg", 
+    contact_forces_left = ContactSensorCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/.*/.*/Left_Leg|Linkage_2_01", 
+        update_period=0.0, 
+        # debug_vis=True
+    )
+
+    contact_forces_right = ContactSensorCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/.*/.*/Right_Leg|Linkage_2", 
         update_period=0.0, 
         # debug_vis=True
     )
@@ -241,7 +247,7 @@ class RewardCfg:
     # (3) Full RPY alignment (commented out - using pose alignment instead)
     rpy_alignment = RewardTermCfg(
         func=mdp.rewards.rpy_alignment_imu,
-        weight=2.5,
+        weight=3.5,
         params={
             "target_rpy": (0.0, 0.0, 0.0),
             "imu_cfg": SceneEntityCfg(name="imu"),
@@ -259,7 +265,7 @@ class RewardCfg:
     # (5) Height reward when robot reach 0.5m
     height = RewardTermCfg(
         func=mdp.rewards.height_reward,
-        weight=2.0,
+        weight=3.0,
         params={
         },
     )
@@ -267,29 +273,20 @@ class RewardCfg:
     # (6) Contact force reward for not contacting with ground
     contact_left = RewardTermCfg(
         func=mdp.rewards.contact_force_reward_per_foot,
-        weight=1.5,
+        weight=2.0,
         params={
-            "foot_idx": 0,  # Chân trái
-            "target_contact_force": 0.0,
+            "sensor_cfg_name": "contact_forces_left",
         },
     )
 
     contact_right = RewardTermCfg(
         func=mdp.rewards.contact_force_reward_per_foot,
-        weight=1.5,
+        weight=2.0,
         params={
-            "foot_idx": 1,  # Chân phải
-            "target_contact_force": 0.0,
+            "sensor_cfg_name": "contact_forces_right",
         },
     )
-    
-    # (7) Angular 
-    angular = RewardTermCfg(
-        func=mdp.rewards.angular_reward,
-        weight=0.5,
-        params={
-        },
-    )
+
     
 
 

@@ -24,17 +24,17 @@ from . import agents
 # Continue train
 # ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
 # --task=Isaac-Legged-Robot-V2-Pose \
-# --num_envs 3 \
-# --resume --load_run=2025-12-03_00-37-52 \
-# --checkpoint=model_450.pt \
+# --num_envs 2048 \
+# --resume --load_run=2025-12-03_09-35-52 \
+# --checkpoint=model_600.pt \
 # --video --rendering_mode performance
 
 
 # ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
 # --task Isaac-Legged-Robot-V2-Pose \
 # --num_envs 4 \
-# 'agent.load_run=2025-12-03_00-37-52' \
-# 'agent.load_checkpoint="model_450.pt"'
+# 'agent.load_run=2025-12-02_10-05-04' \
+# 'agent.load_checkpoint="model_300.pt"'
 
 
 gym.register(
