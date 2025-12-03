@@ -18,14 +18,14 @@ TARGET_JOINT = torch.tensor([
 
 def cartpole_reward_joint_pos(
     env: ManagerBasedRLEnv,
-    target: torch.Tensor = TARGET_JOINT_POS,
+    target: torch.Tensor = TARGET_JOINT,
     scale_pos: float = 5.0,
     scale_vel: float = 4.0
 )-> torch.Tensor:
     robot = env.scene['robot']
     joint_pos = robot.data.joint_pos      # shape: [batch, joints]
     joint_vel = robot.data.joint_vel
-):
+
     robot = env.scene['robot']
     joint_pos = robot.data.joint_pos
 
