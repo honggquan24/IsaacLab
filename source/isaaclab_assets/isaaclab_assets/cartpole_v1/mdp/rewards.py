@@ -11,40 +11,28 @@ if TYPE_CHECKING:
 
 # TARGET JOINT
 TARGET_JOINT = torch.tensor([
-    # index: joint_name                # comment
+    # index: joint_name       
     0.0, 2.0, 2.0 ,0.0 ,          
 ])
 
-
 def cartpole_reward_joint_pos(
     env: ManagerBasedRLEnv,
-    target: torch.Tensor = TARGET_JOINT_POS,
-    scale_pos: float = 5.0,
-    scale_vel: float = 4.0
+    target: torch.Tensor = TARGET_JOINT,
+    scale_pos: float = 0.6,
 )-> torch.Tensor:
     robot = env.scene['robot']
-    joint_pos = robot.data.joint_pos      # shape: [batch, joints]
-    joint_vel = robot.data.joint_vel
-):
+    joint_pos = robot.data.joint_pos      
+ 
     robot = env.scene['robot']
     joint_pos = robot.data.joint_pos
-
-    
+ 
     # Move tensors to correct device
     device = joint_pos.device
-
     if target.device != device: 
         target = target.to(device)
 
-        
-    err_pos = scale_pos * (joint_pos[:, 1] - target[0])
-    err_vel = scale_vel * (joint_vel[:, 1] - target[1])
-
-    total_err = err_pos + err_vel
-
-
-    reward = torch.exp(-(total_err ** 2))
-
+    err = (joint_pos[:, 1] - target[0])
+    reward = torch.exp(-scale_pos*(err ** 2))
     return reward
 
 
@@ -52,9 +40,9 @@ def cartpole_reward_joint_vel(
     env: ManagerBasedRLEnv,
     target: torch.Tensor = TARGET_JOINT,
     scale: float = 0.8
-):
+)-> torch.Tensor:
     robot = env.scene['robot']
-    joint_vel = robot.data.joint_vel  # shape [num_env, 2]
+    joint_vel = robot.data.joint_vel  
     
     device = joint_vel.device
     if target.device != device:
@@ -68,23 +56,17 @@ def cartpole_reward_joint_vel(
     err_pendulum = torch.clamp (err_pendulum , min= 0.0)
 
 
-    reward_cart = torch.exp(
-        -scale * (err_cart**2)
+    reward=1.0 - torch.exp(
+        -scale * (err_pendulum**2 + err_cart**2)
         )
-    reward_pedulum = torch.exp(
-        -scale * (err_pendulum**2)
-        )
-    
-    reward =1.0 -  reward_cart + reward_pedulum
-
 
     return reward
 
 def cartpole_reward_fall(
     env: ManagerBasedRLEnv,
     threshold_fall: float = 0.3, 
-    scale: float = 2.0,
-):
+    scale: float = 0.8,
+)-> torch.Tensor:
     robot = env.scene["robot"]
     joint_pos = robot.data.joint_pos 
 

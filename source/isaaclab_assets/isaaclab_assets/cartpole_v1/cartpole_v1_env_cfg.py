@@ -129,7 +129,7 @@ class RewardCfg:
     )
     rw_joint_pos = RewardTermCfg(
         func=cartpole_reward_joint_pos,
-        weight=2.0
+        weight=5.0
     )
 
     rw_joint_vel = RewardTermCfg(
