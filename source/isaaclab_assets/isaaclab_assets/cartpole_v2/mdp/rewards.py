@@ -11,18 +11,17 @@ if TYPE_CHECKING:
 # TARGET JOINT
 TARGET_JOINT = torch.tensor([
     # index: joint_name                # comment
-    3.14, 3.14, 0.0, 1.0 ,1.0, 1.0 , 0.0,        
+    0.0, 0.0, 0.0, 1.0 ,1.0, 1.0 , 0.0,        
 ])
 
 def cartpole_reward_joint_pos_rv1(
     env: ManagerBasedRLEnv,
     target: torch.Tensor = TARGET_JOINT,
     scale_pos: float = 0.6,
-    scale_vel: float = 0.3
 )-> torch.Tensor:
     robot = env.scene['robot']
     joint_pos = robot.data.joint_pos 
-    joint_vel = robot.data.joint_vel
+    # joint_vel = robot.data.joint_vel
 
 
     # Move tensors to correct device
@@ -32,9 +31,7 @@ def cartpole_reward_joint_pos_rv1(
 
         
     err_pos = scale_pos * (torch.abs(joint_pos[:, 1]) - target[0])
-    err_vel = scale_vel * (torch.abs(joint_vel[:, 1]) - target[2])
-
-    reward = torch.exp(-(err_pos ** 2 + err_vel**2))
+    reward = torch.exp(-(err_pos ** 2 ))
 
     return reward
 
@@ -42,11 +39,9 @@ def cartpole_reward_joint_pos_rv2(
     env: ManagerBasedRLEnv,
     target: torch.Tensor = TARGET_JOINT,
     scale_pos: float = 0.6,
-    scale_vel: float = 0.3
 )-> torch.Tensor:
     robot = env.scene['robot']
     joint_pos = robot.data.joint_pos
-    joint_vel = robot.data.joint_vel
 
     
     # Move tensors to correct device
@@ -54,10 +49,10 @@ def cartpole_reward_joint_pos_rv2(
 
     if target.device != device: 
         target = target.to(device)
-       
-    err_pos = scale_pos * (torch.abs(joint_pos[:, 2]) - target[1])
-    err_vel = scale_vel * (torch.abs(joint_vel[:, 2]) - target[2])
-    reward = torch.exp(-(err_pos ** 2 + err_vel ** 2 ))
+    theta1 = torch.abs(joint_pos[:,1])
+    theta2 = torch.abs(joint_pos[:,2])
+    err_pos = scale_pos * ((theta1 + theta2) - target[1])
+    reward = torch.exp(-(err_pos ** 2 ))
 
     return reward
 
@@ -67,7 +62,7 @@ def cartpole_reward_joint_vel(
     env: ManagerBasedRLEnv,
     target: torch.Tensor = TARGET_JOINT,
     scale: float = 0.002
-):
+)-> torch.Tensor:
     robot = env.scene['robot']
     joint_vel = robot.data.joint_vel  
     
@@ -89,45 +84,71 @@ def cartpole_reward_joint_vel(
     return reward
 
 
-def cartpole_reward_fall(
+
+def cartpole_reward_fall_p1(
     env: ManagerBasedRLEnv,
-    threshold_fall: float = 3.11, 
-    scale: float = 0.35,
-):
+    threshold_fall: float = 0.2, 
+    scale: float = 1.0,
+)-> torch.Tensor:
     robot = env.scene["robot"]
     joint_pos = robot.data.joint_pos 
 
-    theta1 = torch.abs(joint_pos[:, 1]) 
-    theta2 = torch.abs(joint_pos[:, 2])
-    
-    err1 =  threshold_fall - torch.abs(theta1)
-    err1 = torch.clamp (err1 , min = 0.0)
+    theta = joint_pos[:, 1]
 
-    err2 =  threshold_fall - torch.abs(theta2)
-    err2 =  torch.clamp (err2, min= 0.0)
+    err = torch.abs(theta) - threshold_fall
+    err = torch.clamp(err, min=0.0)
 
 
-    reward = 1.0 - torch.exp(-scale * (err1**2 + err2**2))
+    reward = 1.0 - torch.exp(-scale * err**2)
     return reward 
+
+
+# def cartpole_reward_fall_p1(
+#     env: ManagerBasedRLEnv,
+#     threshold_fall_p1: float = 0.2,
+#     scale: float = 0.35,
+# ):
+#     robot = env.scene["robot"]
+#     joint_pos = robot.data.joint_pos 
+
+#     theta1 = torch.abs(joint_pos[:, 1]) 
+    
+#     err1 = torch.clamp (theta1 , max = threshold_fall_p1 )
+#     reward = torch.exp(-scale* (err1**2))
+#     return reward 
+
+
+def cartpole_reward_fall_p2(
+    env: ManagerBasedRLEnv,
+    threshold_fall_p2: float = 0.2, 
+    scale: float = 0.35,
+)-> torch.Tensor:
+    robot = env.scene["robot"]
+    joint_pos = robot.data.joint_pos 
+ 
+    theta2 = torch.abs(joint_pos[:, 2])
+    err2 =  torch.clamp (theta2, min = threshold_fall_p2)
+
+    reward = 1.0 - torch.exp(-scale * (err2**2))
+    return reward 
+
+
 
 def cart_center_reward (
     env: ManagerBasedRLEnv,
     target: torch.Tensor = TARGET_JOINT,
-    scale: float = 8,
-):
+    scale: float = 2.5,
+)-> torch.Tensor:
     robot =env.scene["robot"]
     joint_pos = robot.data.joint_pos
-    joint_vel = robot.data.joint_pos
 
-    device = joint_vel.device
+    device = joint_pos.device
     if target.device != device:
         target = target.to(device)
  
-
     err_pos = scale * (torch.abs(joint_pos[:, 0]) - target[6])
-    err_vel = scale * (torch.abs(joint_vel[:, 0]) - target[6])
     
-    reward = torch.exp(-(err_pos ** 2 + err_vel ** 2 ))
+    reward = torch.exp(-(err_pos ** 2))
     return reward
 
 

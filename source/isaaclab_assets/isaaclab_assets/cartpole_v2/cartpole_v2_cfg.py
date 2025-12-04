@@ -10,7 +10,7 @@ from isaaclab.actuators import ImplicitActuatorCfg
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 CARTPOLE_ROBOT_USD_PATH = os.path.join(
-    CURRENT_DIR, "usd_file", "cartpole_v2_cfg.usd"
+    CURRENT_DIR, "usd_file", "cartpole_v2_cfg_up.usd"
 )
 
 # ROBOT CONFIG
@@ -52,7 +52,7 @@ CARTPOLE_V2_CFG = ArticulationCfg(
         ),
     },
     init_state= ArticulationCfg.InitialStateCfg(
-        pos= (0.0, 0.0 , 2.5 ) ,
+        pos= (0.0, 0.0 , 1.5 ) ,
         joint_vel = {"Slider_1": 0.1},
     ),
 )

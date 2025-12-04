@@ -13,3 +13,9 @@ gym.register(
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:CartPoleV1PPORunnerCfg"
     }
 )
+
+# ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
+# --task Isaac-Legged-Robot-V2-Pose \
+# --num_envs 4 \
+# 'agent.load_run=2025-12-04_00-19-21' \
+# 'agent.load_checkpoint="model_400.pt"'

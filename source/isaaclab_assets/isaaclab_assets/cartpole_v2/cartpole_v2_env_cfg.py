@@ -59,9 +59,9 @@ class ActionsCfg :
     # joint_effort = mdp.actions.actions_cfg.JointEffortActionCfg (joint_names=["Slider_1"],asset_name="robot",scale=1.0)
     joint_effort = actions.JointEffortActionCfg(
         asset_name="robot",
-        joint_names=[
+        joint_names=[TerminationsCfg
             "Slider_1",
-            # "Revolute_1",
+            # "Revolute_1"ManagerBasedRLEnvCfg,
             # "Revolute_2"
         ],
         scale={
@@ -137,8 +137,12 @@ class RewardCfg:
         func= cartpole_reward_joint_vel,
         weight=-15
     )
-    penalty_fall = RewardTermCfg(
-        func = cartpole_reward_fall,
+    penalty_fall_p1 = RewardTermCfg(
+        func = cartpole_reward_fall_p1,
+        weight= -6
+    )
+    penalty_fall_p2 = RewardTermCfg(
+        func = cartpole_reward_fall_p2,
         weight= -5
     )
     reward_cart = RewardTermCfg(
@@ -158,6 +162,8 @@ obot environment."""
         func=terminations.time_out,
         time_out=True,  # Mark as timeout (not failure)
     )
+
+
 
 @configclass
 class CartPoleV2EnvCfg(ManagerBasedRLEnvCfg):
