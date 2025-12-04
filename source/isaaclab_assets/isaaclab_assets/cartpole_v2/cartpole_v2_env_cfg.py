@@ -31,7 +31,7 @@ from isaaclab.sim import SimulationCfg, RenderCfg
 from icecream import ic
 import isaaclab.envs.mdp as mdp
 
-# from .mdp.rewards import *
+from .mdp.rewards import *
 
 @configclass
 class CartpoleRobotV2SceneConfig(InteractiveSceneCfg):
@@ -61,13 +61,13 @@ class ActionsCfg :
         asset_name="robot",
         joint_names=[
             "Slider_1",
-            "Revolute_1",
-            "Revolute_2"
+            # "Revolute_1",
+            # "Revolute_2"
         ],
         scale={
-            "Slider_1": 100.0, 
-            "Revolute_1": 0.0,
-            "Revolute_2": 0.0,
+            "Slider_1": 300.0, 
+            # "Revolute_1": 0.0,
+            # "Revolute_2": 0.0,
         },
         debug_vis=True,
     )
@@ -120,11 +120,30 @@ class RewardCfg:
         func=rewards.is_alive,
         weight=1.0
     )
-    
     # (2) Failure penalty - penalize termination0
     terminating = RewardTermCfg(
         func=rewards.is_terminated,
         weight=-2.0
+    )
+    rewards_rv1 = RewardTermCfg(
+        func= cartpole_reward_joint_pos_rv1,
+        weight= 3
+    )
+    rewards_rv2 = RewardTermCfg(
+        func= cartpole_reward_joint_pos_rv2,
+        weight= 3
+    )
+    penalty_vel = RewardTermCfg(
+        func= cartpole_reward_joint_vel,
+        weight=-15
+    )
+    penalty_fall = RewardTermCfg(
+        func = cartpole_reward_fall,
+        weight= -5
+    )
+    reward_cart = RewardTermCfg(
+        func= cart_center_reward,
+        weight= 2
     )
 
 @configclass

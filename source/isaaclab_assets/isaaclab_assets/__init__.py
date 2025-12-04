@@ -25,3 +25,4 @@ from .legged_v1 import *
 from .legged_v2 import *
 from .sensors import *
 from .cartpole_v1 import *
+from .cartpole_v2 import *
