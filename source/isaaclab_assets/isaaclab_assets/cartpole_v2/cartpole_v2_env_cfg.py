@@ -32,6 +32,7 @@ from icecream import ic
 import isaaclab.envs.mdp as mdp
 
 from .mdp.rewards import *
+from .mdp.terminations import *
 
 @configclass
 class CartpoleRobotV2SceneConfig(InteractiveSceneCfg):
@@ -59,7 +60,7 @@ class ActionsCfg :
     # joint_effort = mdp.actions.actions_cfg.JointEffortActionCfg (joint_names=["Slider_1"],asset_name="robot",scale=1.0)
     joint_effort = actions.JointEffortActionCfg(
         asset_name="robot",
-        joint_names=[TerminationsCfg
+        joint_names=[
             "Slider_1",
             # "Revolute_1"ManagerBasedRLEnvCfg,
             # "Revolute_2"
@@ -123,7 +124,7 @@ class RewardCfg:
     # (2) Failure penalty - penalize termination0
     terminating = RewardTermCfg(
         func=rewards.is_terminated,
-        weight=-2.0
+        weight=-20.0
     )
     rewards_rv1 = RewardTermCfg(
         func= cartpole_reward_joint_pos_rv1,
@@ -135,7 +136,7 @@ class RewardCfg:
     )
     penalty_vel = RewardTermCfg(
         func= cartpole_reward_joint_vel,
-        weight=-15
+        weight=-20
     )
     penalty_fall_p1 = RewardTermCfg(
         func = cartpole_reward_fall_p1,
@@ -148,6 +149,10 @@ class RewardCfg:
     reward_cart = RewardTermCfg(
         func= cart_center_reward,
         weight= 2
+    )
+    penalty_cart = RewardTermCfg(
+        func = cart_not_center_penalty,
+        weight= -3
     )
 
 @configclass
@@ -162,7 +167,13 @@ obot environment."""
         func=terminations.time_out,
         time_out=True,  # Mark as timeout (not failure)
     )
+    # reset_cartpole1 = TerminationTermCfg(
+    #     func = Cart_pole_angle_reset,
+    # )
 
+    reset_cartpole2 = TerminationTermCfg(
+        func = Cart_pole_vel_reset,
+    )
 
 
 @configclass

@@ -54,5 +54,6 @@ CARTPOLE_V2_CFG = ArticulationCfg(
     init_state= ArticulationCfg.InitialStateCfg(
         pos= (0.0, 0.0 , 1.5 ) ,
         joint_vel = {"Slider_1": 0.1},
+        joint_pos = {"Revolute_1": math.pi},
     ),
 )
