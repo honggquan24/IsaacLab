@@ -119,40 +119,40 @@ class RewardCfg:
     # (1) Constant running reward - encourage survival
     alive = RewardTermCfg(
         func=rewards.is_alive,
-        weight=1.0
+        weight= 0.60
     )
     # (2) Failure penalty - penalize termination0
     terminating = RewardTermCfg(
         func=rewards.is_terminated,
-        weight=-20.0
+        weight= -5.0
     )
     rewards_rv1 = RewardTermCfg(
         func= cartpole_reward_joint_pos_rv1,
-        weight= 3
+        weight= 1.5
     )
     rewards_rv2 = RewardTermCfg(
         func= cartpole_reward_joint_pos_rv2,
-        weight= 3
+        weight= 2.5
     )
     penalty_vel = RewardTermCfg(
-        func= cartpole_reward_joint_vel,
-        weight=-20
+        func= cartpole_penalty_joint_vel,
+        weight=-2.0
     )
     penalty_fall_p1 = RewardTermCfg(
-        func = cartpole_reward_fall_p1,
-        weight= -6
+        func = cartpole_penalty_fall_p1,
+        weight= -3.0
     )
     penalty_fall_p2 = RewardTermCfg(
-        func = cartpole_reward_fall_p2,
-        weight= -5
+        func = cartpole_penalty_fall,
+        weight= -3.0
     )
     reward_cart = RewardTermCfg(
         func= cart_center_reward,
-        weight= 2
+        weight= 2.0
     )
     penalty_cart = RewardTermCfg(
         func = cart_not_center_penalty,
-        weight= -3
+        weight= -3.0
     )
 
 @configclass
@@ -171,10 +171,13 @@ obot environment."""
     #     func = Cart_pole_angle_reset,
     # )
 
-    reset_cartpole2 = TerminationTermCfg(
-        func = Cart_pole_vel_reset,
-    )
+    # reset_cartpole1 = TerminationTermCfg(
+    #     func = Cart_pole_angle_reset_1,
+    # )
 
+    # reset_cartpole2 = TerminationTermCfg(
+    #     func = Cart_pole_pos_reset,
+    # )
 
 @configclass
 class CartPoleV2EnvCfg(ManagerBasedRLEnvCfg):

@@ -10,14 +10,14 @@ from isaaclab_rl.rsl_rl import (
 class CartPoleV2PPORunnerCfg(RslRlOnPolicyRunnerCfg):
     num_steps_per_env = 200
     max_iterations = 200
-    save_interval = 20
+    save_interval = 50
     experiment_name = "cartpole_v2_ppo"
     policy = RslRlPpoActorCriticCfg(
         init_noise_std=0.2,
         actor_obs_normalization=True,
         critic_obs_normalization=True,
-        actor_hidden_dims=[256, 256],
-        critic_hidden_dims=[256, 512, 256],
+        actor_hidden_dims=[256, 512, 256],
+        critic_hidden_dims=[256, 512, 512, 256],
         activation="relu",
     )
     algorithm = RslRlPpoAlgorithmCfg(

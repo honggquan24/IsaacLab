@@ -15,7 +15,7 @@ gym.register(
 )
 
 # ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
-# --task Isaac-Legged-Robot-V2-Pose \
+# --task Isaac-Cartpole-V1-Run \
 # --num_envs 4 \
-# 'agent.load_run=2025-12-04_00-19-21' \
-# 'agent.load_checkpoint="model_400.pt"'
+# 'agent.load_run=balance1' \
+# 'agent.load_checkpoint="model_60.pt"'

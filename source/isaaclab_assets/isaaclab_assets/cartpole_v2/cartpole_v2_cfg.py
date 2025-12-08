@@ -38,17 +38,24 @@ CARTPOLE_V2_CFG = ArticulationCfg(
     actuators={
         "slider": ImplicitActuatorCfg( 
             joint_names_expr=["Slider_1"],
-            effort_limit_sim=500.0,      
+            effort_limit_sim=100.0,      
             stiffness=0.0,
             damping=10.0,                 
-            velocity_limit_sim=100.0,     
+            velocity_limit_sim=10.0,     
         ),
-        "passive": ImplicitActuatorCfg( 
-            joint_names_expr=["Revolute_[1,2]"],
-            effort_limit_sim=500.0,      
+        "passive1": ImplicitActuatorCfg( 
+            joint_names_expr=["Revolute_1"],
+            effort_limit_sim=100.0,      
             stiffness=0.0,
             damping=0.0,                 
-            velocity_limit_sim=100.0,     
+            velocity_limit_sim=20.0,     
+        ),
+        "passive2": ImplicitActuatorCfg(
+            joint_names_expr=["Revolute_2"],
+            effort_limit_sim=100.0,      
+            stiffness=0.0,
+            damping=0.0,                 
+            velocity_limit_sim=25.0, 
         ),
     },
     init_state= ArticulationCfg.InitialStateCfg(

@@ -10,8 +10,15 @@ if TYPE_CHECKING:
 
 # TARGET JOINT
 TARGET_JOINT = torch.tensor([
-    # index: joint_name                # comment
-    0.0, 0.0, 0.0, 1.0 ,1.0, 1.0 , 0.0, 0.1,       
+
+    0.0,  # cartpole_reward_joint_pos_rv1
+    0.0,  
+    0.0,  # cartpole_reward_joint_pos_rv2
+    1.0,  # cartpole_reward_joint_vel 1
+    1.0,  # cartpole_reward_joint_vel 2
+    1.0,  # cartpole_reward_joint_vel 0
+    0.0,  # cart_center_reward
+    0.1,  # cart_not_center_penalty   
 ])
 
 def cartpole_reward_joint_pos_rv1(
@@ -21,47 +28,44 @@ def cartpole_reward_joint_pos_rv1(
 )-> torch.Tensor:
     robot = env.scene['robot']
     joint_pos = robot.data.joint_pos 
-    # joint_vel = robot.data.joint_vel
 
-
-    # Move tensors to correct device
     device = joint_pos.device
     if target.device != device: 
         target = target.to(device)
 
         
     err_pos = scale_pos * (torch.abs(joint_pos[:, 1]) - target[0])
+    err_pos1 = scale_pos * (torch.abs(joint_pos[:, 2]) - target[1])
     reward = torch.exp(-(err_pos ** 2 ))
 
-    return reward
+    reward1 = torch.where(
+    torch.abs(joint_pos[:, 1]) < 0.2,
+    torch.exp(-(err_pos1 ** 2)),
+    torch.tensor(0.0, device=joint_pos.device)
+    )
+    return reward + reward1
 
 def cartpole_reward_joint_pos_rv2(
     env: ManagerBasedRLEnv,
-    target: torch.Tensor = TARGET_JOINT,
     scale_pos: float = 0.6,
 )-> torch.Tensor:
     robot = env.scene['robot']
     joint_pos = robot.data.joint_pos
 
-    
-    # Move tensors to correct device
-    device = joint_pos.device
-
-    if target.device != device: 
-        target = target.to(device)
     theta1 = torch.abs(joint_pos[:,1])
     theta2 = torch.abs(joint_pos[:,2])
-    err_pos = scale_pos * ((theta1 + theta2) - target[1])
-    reward = torch.exp(-(err_pos ** 2 ))
+    theta_sum = theta1 + theta2 - TARGET_JOINT [2]
 
+    reward = torch.exp(-(scale_pos * theta_sum)**2)
     return reward
 
 
 
-def cartpole_reward_joint_vel(
+
+def cartpole_penalty_joint_vel(
     env: ManagerBasedRLEnv,
     target: torch.Tensor = TARGET_JOINT,
-    scale: float = 0.002
+    scale: float = 0.05
 )-> torch.Tensor:
     robot = env.scene['robot']
     joint_vel = robot.data.joint_vel  
@@ -80,12 +84,12 @@ def cartpole_reward_joint_vel(
     err_pendulum2 = torch.abs(joint_vel[:, 2]) - target[5]
     err_pendulum2 = torch.clamp (err_pendulum2 , min= 0.0)
 
-    reward = 1.0- torch.exp(-scale * (err_cart**2 + err_pendulum1**2 + err_pendulum2**2))
-    return reward
+    penalty = 1.0- torch.exp(-scale * (err_cart**2 + err_pendulum1**2 + err_pendulum2**2))
+    return penalty
 
 
 
-def cartpole_reward_fall_p1(
+def cartpole_penalty_fall_p1(
     env: ManagerBasedRLEnv,
     threshold_fall: float = 0.01, 
     scale: float = 1.0,
@@ -99,38 +103,26 @@ def cartpole_reward_fall_p1(
     err = torch.clamp(err, min=0.0)
 
 
-    reward = 1.0 - torch.exp(-scale * err**2)
-    return reward 
+    penalty = 1.0 - torch.exp(-scale * err**2)
+    return penalty 
+ 
 
-
-# def cartpole_reward_fall_p1(
-#     env: ManagerBasedRLEnv,
-#     threshold_fall_p1: float = 0.2,
-#     scale: float = 0.35,
-# ):
-#     robot = env.scene["robot"]
-#     joint_pos = robot.data.joint_pos 
-
-#     theta1 = torch.abs(joint_pos[:, 1]) 
-    
-#     err1 = torch.clamp (theta1 , max = threshold_fall_p1 )
-#     reward = torch.exp(-scale* (err1**2))
-#     return reward 
-
-
-def cartpole_reward_fall_p2(
+def cartpole_penalty_fall(
     env: ManagerBasedRLEnv,
-    threshold_fall_p2: float = 0.01, 
-    scale: float = 0.35,
+    threshold_fall: float = 0.01,
+    scale: float = 4.0,
 )-> torch.Tensor:
     robot = env.scene["robot"]
     joint_pos = robot.data.joint_pos 
- 
-    theta2 = torch.abs(joint_pos[:, 2])
-    err2 =  torch.clamp (theta2, min = threshold_fall_p2)
 
-    reward = 1.0 - torch.exp(-scale * (err2**2))
-    return reward 
+    theta1 = torch.abs(joint_pos[:, 1])
+    theta2 = torch.abs(joint_pos[:, 2])
+    theta_sum = theta1 + theta2
+
+    err = torch.clamp(theta_sum - threshold_fall, min=0.0)
+    penalty = 1.0 - torch.exp(-(scale * err)**2)
+    return penalty
+
 
 
 
@@ -147,8 +139,9 @@ def cart_center_reward (
         target = target.to(device)
  
     err_pos = scale * (torch.abs(joint_pos[:, 0]) - target[6])
-    
-    reward = torch.exp(-(err_pos ** 2))
+    cond = torch.abs(joint_pos[:, 0]) < 0.1
+    reward = torch.where(cond, torch.exp(-(err_pos ** 2)), torch.zeros_like(err_pos))
+
     return reward
 
 def cart_not_center_penalty(
@@ -166,7 +159,7 @@ def cart_not_center_penalty(
     err_pos = scale * (torch.abs(joint_pos[:, 0]) - target[7])
     err_pos = torch.clamp (err_pos, min = 0)
     
-    reward = 1 - torch.exp(-(err_pos ** 2))
-    return reward
+    penalty = 1 - torch.exp(-(err_pos ** 2))
+    return penalty
 
 
