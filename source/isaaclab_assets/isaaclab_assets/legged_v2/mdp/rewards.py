@@ -4,179 +4,87 @@ from typing import TYPE_CHECKING, Literal
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.utils.math import wrap_to_pi, euler_xyz_from_quat
 import math
+from isaaclab.assets import Articulation
+
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
 
+def joint_pos_target_l2(env: ManagerBasedRLEnv, target: float, asset_cfg: SceneEntityCfg) -> torch.Tensor:
+    """Penalize joint position deviation from a target value."""
+    # extract the used quantities (to enable type-hinting)
+    asset: Articulation = env.scene[asset_cfg.name]
+    # wrap the joint positions to (-pi, pi)
+    joint_pos = (asset.data.joint_pos[:, asset_cfg.joint_ids])
+    # compute the reward
+    return torch.sum(torch.square(joint_pos - target), dim=1)
 
+def joint_force_balance(
+    env: ManagerBasedRLEnv,
+    left_cfg: SceneEntityCfg,
+    right_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Penalize imbalance in applied joint torques between left and right joints."""
+
+    robot: Articulation = env.scene[left_cfg.name]
+
+    # Applied torque from articulation (correct API)
+    torque_left = robot.data.applied_torque[:, left_cfg.joint_ids]
+    torque_right = robot.data.applied_torque[:, right_cfg.joint_ids]
+
+    # Torque imbalance between legs
+    diff = torch.abs(torque_left) - torch.abs(torque_right)
+
+    # Penalize imbalance
+    reward = torch.sum(torch.square(diff), dim=1)
+
+    return reward
 
 def rpy_alignment_imu(
     env: ManagerBasedRLEnv,
     target_rpy: tuple[float, float, float] = (0.0, 0.0, 0.0),
     imu_cfg: SceneEntityCfg = SceneEntityCfg("imu"),
+    tolerance: float = 0.1,  # THÊM: tolerance zone (radians)
+    scale: float = 3.0,  # FIX: Giảm từ 3.0 xuống 1.0
+    axis_weights: tuple = (2.0, 2.0, 0.5),  # THÊM: ưu tiên roll/pitch
 ) -> torch.Tensor:
-    """
-    Reward for full RPY alignment using IMU orientation.
-    FIXED VERSION: Added clipping, normalization and numerical stability.
-    
-    Args:
-        env: Environment object.
-        target_rpy: Desired (roll, pitch, yaw) in radians.
-        imu_cfg: SceneEntityCfg of the IMU sensor.
-    
-    Returns:
-        Reward tensor with shape (num_envs,)
-    """
-    # Get IMU sensor
+    """Reward for RPY alignment with tolerance zone."""
     imu = env.scene[imu_cfg.name]
-    
-    # Quaternion orientation (world frame)
     quat = imu.data.quat_w
-    
-    # FIX 1: Normalize quaternion (avoid numerical issues)
     quat = quat / torch.norm(quat, dim=-1, keepdim=True).clamp(min=1e-6)
     
-    # FIX 2: Safety check for NaN/Inf
     if torch.isnan(quat).any() or torch.isinf(quat).any():
-        print("[WARNING] Invalid quaternion detected in rpy_alignment_imu")
         quat = torch.nan_to_num(quat, nan=1.0, posinf=1.0, neginf=-1.0)
-        # Re-normalize
         quat = quat / torch.norm(quat, dim=-1, keepdim=True).clamp(min=1e-6)
     
-    # Convert to Euler angles
     roll, pitch, yaw = euler_xyz_from_quat(quat)
-    
-    # FIX 3: Clamp euler angles to avoid extreme values
     roll = torch.clamp(roll, -torch.pi, torch.pi)
     pitch = torch.clamp(pitch, -torch.pi, torch.pi)
     yaw = torch.clamp(yaw, -torch.pi, torch.pi)
     
-    # Target angles
     target_roll, target_pitch, target_yaw = target_rpy
     
-    # Errors with wrap_to_pi (ensure error in [-π, π])
-    roll_error = wrap_to_pi(roll - target_roll)
-    pitch_error = wrap_to_pi(pitch - target_pitch)
-    yaw_error = wrap_to_pi(yaw - target_yaw)
+    roll_error = torch.abs(wrap_to_pi(roll - target_roll))
+    pitch_error = torch.abs(wrap_to_pi(pitch - target_pitch))
+    yaw_error = torch.abs(wrap_to_pi(yaw - target_yaw))
     
-    # FIX 4: Clamp errors to avoid extreme values
-    roll_error = torch.clamp(roll_error, -torch.pi, torch.pi)
-    pitch_error = torch.clamp(pitch_error, -torch.pi, torch.pi)
-    yaw_error = torch.clamp(yaw_error, -torch.pi, torch.pi)
+    # FIX: Apply tolerance
+    roll_error = torch.clamp(roll_error - tolerance, min=0.0)
+    pitch_error = torch.clamp(pitch_error - tolerance, min=0.0)
+    yaw_error = torch.clamp(yaw_error - tolerance, min=0.0)
     
-    # FIX 5: Use scale factor to avoid exp overflow
-    # With error max = π, squared = π² ≈ 10
-    # exp(-10) ≈ 0.000045 (OK)
-    scale = 3.0  # Can adjust: higher → smoother reward
+    # FIX: Apply axis weights
+    weights = torch.tensor(axis_weights, device=roll.device, dtype=roll.dtype)
+    weighted_error = (
+        weights[0] * torch.square(roll_error) + 
+        weights[1] * torch.square(pitch_error) + 
+        weights[2] * torch.square(yaw_error)
+    ) / weights.sum()  # Normalize by total weight
     
-    # Total orientation error (squared)
-    total_error = (
-        torch.square(roll_error) + 
-        torch.square(pitch_error) + 
-        torch.square(yaw_error)
-    ) / scale
-    
-    # FIX 6: Clamp total_error before exp (avoid underflow)
-    # exp(-50) ≈ 1.9e-22 (too small → possible underflow)
-    total_error = torch.clamp(total_error, 0.0, 50.0)
-    
-    # Reward (smooth Gaussian)
-    reward = torch.exp(-total_error)
-    
-    # FIX 7: Final safety check
+    # FIX: Lower scale
+    reward = torch.exp(-scale * weighted_error)
     reward = torch.clamp(reward, 0.0, 1.0)
-    
-    # FIX 8: Check for NaN in output
-    if torch.isnan(reward).any():
-        print("[ERROR] NaN in reward output! Replacing with 0")
-        reward = torch.nan_to_num(reward, nan=0.0)
-    
-    return reward
-
-
-# TARGET JOINT POSITIONS
-TARGET_JOINT_POS = torch.tensor([
-    # index: joint_name                # comment
-    0.0,                               # 0: Left_Revolute_01 (hip)
-    0.0,                               # 1: Right_Revolute_01 (hip)
-    math.radians(-20.0),                # 2: Left_Revolute_02 (knee) -20 
-    math.radians(5.0),                # 3: Left_Revolute_03 (ankle) 5 
-    -math.radians(-20.0),               # 4: Right_Revolute_02 (knee) 
-    -math.radians(5.0),               # 5: Right_Revolute_03 (ankle)
-    
-    math.radians(-13.0),               # 6: Left_Revolute_05 (passive) - FIXED
-    math.radians(12.6),                # 7: Right_Revolute_05 (passive)
-    math.radians(-13.0),               # 8: Left_Revolute_06 (passive) - FIXED 
-    math.radians(12.6),                # 9: Right_Revolute_06 (passive)
-    
-    0.0,                               # 10: Left_Revolute_04 (wheel)
-    0.0,                               # 11: Right_Revolute_04 (wheel)
-])
-
-# Binary mask: 1 = joint contributes to reward; 0 = ignored
-JOINT_MASK = torch.tensor([
-    1, 1, 1, 1, 1, 1,    # 6 active leg joints (3 per leg)
-    0, 0, 0, 0, 0, 0     # Passive joints + wheels
-], dtype=torch.float32)
-
-
-def pose_align_reward(
-    env: ManagerBasedRLEnv,
-    target_joint_pos: torch.Tensor = TARGET_JOINT_POS,
-    mask: torch.Tensor = JOINT_MASK,
-    scale: float = 1.5,
-) -> torch.Tensor:
-    """
-    Computes a pose-alignment reward based on joint-space error.
-
-    Encourages the robot to reach a predefined target configuration.
-    Only joints with mask=1 influence the reward; others are ignored.
-
-    Args:
-        env: Isaac Lab environment with robot.data.joint_pos
-        target_joint_pos: Desired joint positions (radians), shape [num_joints]
-        mask: Binary mask indicating which joints to consider, shape [num_joints]
-        scale: Exponential decay rate (higher = stricter alignment required)
-
-    Returns:
-        torch.Tensor: Reward per environment, shape [num_envs]
-                      Values in (0, 1], with 1.0 indicating perfect alignment
-    """
-    robot = env.scene['robot']
-    joint_pos = robot.data.joint_pos  # shape: [num_envs, num_joints]
-    
-    # Move tensors to correct device
-    device = joint_pos.device
-    if target_joint_pos.device != device:
-        target_joint_pos = target_joint_pos.to(device)
-    if mask.device != device:
-        mask = mask.to(device)
-    
-    # FIX 1: Handle dimension mismatch
-    # Expand target_joint_pos to [num_envs, num_joints] if needed
-    if target_joint_pos.dim() == 1:
-        target_joint_pos = target_joint_pos.unsqueeze(0).expand_as(joint_pos)
-    
-    # FIX 2: Apply mask correctly (element-wise multiplication)
-    error = (joint_pos - target_joint_pos) * mask.unsqueeze(0)
-    
-    # FIX 3: Compute normalized error (per joint average)
-    # Count active joints (mask sum)
-    num_active_joints = mask.sum().clamp(min=1.0)  # Avoid division by zero
-    
-    # Mean squared error across active joints
-    error_squared = torch.square(error).sum(dim=-1) / num_active_joints
-    
-    # FIX 4: Apply exponential reward with safety checks
-    reward = torch.exp(-scale * error_squared)
-    
-    # FIX 5: Clamp reward to valid range
-    reward = torch.clamp(reward, 0.0, 1.0)
-    
-    # FIX 6: Safety check for NaN/Inf
-    if torch.isnan(reward).any() or torch.isinf(reward).any():
-        print("[WARNING] Invalid reward detected in pose_align_reward")
-        reward = torch.nan_to_num(reward, nan=0.0, posinf=1.0, neginf=0.0)
+    reward = torch.nan_to_num(reward, nan=0.0, posinf=1.0, neginf=0.0)
     
     return reward
 
@@ -217,108 +125,98 @@ def height_reward(
     reward = torch.where(robot_heights < min_height, torch.zeros_like(reward), reward)
     
     # NaN guard
+    reward = torch.clamp(reward, 0.0, 1.0)
     reward = torch.nan_to_num(reward, nan=0.0, posinf=1.0, neginf=0.0)
     
-    return torch.clamp(reward, 0.0, 1.0)
-
-def stable_contact_reward(env):
-    contact_sensor = env.scene['contact_forces']
-    contact_forces = contact_sensor.data.net_forces_w
-    
-    # Khuyến khích lực đều ở 2 bàn chân
-    left_foot_force = contact_forces[..., 0, :].norm(dim=-1)
-    right_foot_force = contact_forces[..., 1, :].norm(dim=-1)
-    
-    # Reward khi 2 chân có lực gần bằng nhau
-    force_balance = torch.abs(left_foot_force - right_foot_force)
-    reward = torch.exp(-0.01 * force_balance)
     return reward
 
-def contact_force_reward_per_foot(
+def angular_velocity_reward(
     env: ManagerBasedRLEnv,
-    target_contact_force: float = 0.0,
-    scale: float = 1.0,
-    sensor_cfg_name: Literal["contact_forces_left", "contact_forces_left"] =  "contact_forces_left",
-) -> torch.Tensor:
-    """
-    Reward for contact force on a specific foot.
-    
-    Args:
-        foot_idx: Index of the foot (0 for left, 1 for right)
-    """
-    sensor_cfg = SceneEntityCfg(sensor_cfg_name)
-    contact_sensor = env.scene[sensor_cfg.name]
-    contact_forces = contact_sensor.data.net_forces_w  # [num_envs, 4, 3]
-    
-    # Tính magnitude của lực
-    force_norm = torch.norm(contact_forces, dim=-1).sum(dim= -1).clamp(0.0, 100.0)
-    
-    # Gaussian reward
-    error = (force_norm - target_contact_force) ** 2
-    reward = torch.exp(-scale * error)
-    
-    return torch.clamp(torch.nan_to_num(reward, nan=0.0), 0.0, 1.0)
-
-def angular_reward(
-    env: ManagerBasedRLEnv,
-    target_linear_vel: float = 0.0,
     target_angular_vel: float = 0.0,
-    linear_scale: float = 1.0,
-    angular_scale: float = 2.0,
+    scale: float = 5.0,  # FIX: Giảm scale xuống rất thấp
+    max_vel: float = 20.0,  # FIX: Tăng max_vel
+    axis_weights: tuple = (0.5, 0.5, 0.2),  # Giảm ảnh hưởng của yaw
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
 ) -> torch.Tensor:
     """
-    Reward for keeping velocity small (encouraging robot to stand still or move slowly).
+    Ultra-robust angular velocity reward designed for convergence.
     
-    Penalizes both linear and angular velocities using exponential decay.
-    Higher reward when robot moves slower.
+    KEY IMPROVEMENTS FOR CONVERGENCE:
+    1. High base reward (offset) - prevents reward collapse
+    2. Large tolerance zone - more forgiving
+    3. Tanh normalization - bounded, smooth gradient
+    4. Low scale - gentle penalty
+    5. Axis-weighted - focuses on important rotations
     
     Args:
-        env: Environment object.
-        target_linear_vel: Desired linear velocity magnitude (m/s), default 0.0
-        target_angular_vel: Desired angular velocity magnitude (rad/s), default 0.0
-        linear_scale: Exponential decay rate for linear velocity (higher = stricter)
-        angular_scale: Exponential decay rate for angular velocity (higher = stricter)
-        asset_cfg: SceneEntityCfg of the robot.
-    
+        reward_offset: Base reward value (0.5 means reward never goes below 0.5)
+        use_tanh: Use tanh for bounded, smooth gradient (better than exp)
+        
     Returns:
-        Reward tensor with shape (num_envs,), values in (0, 1]
+        Reward [num_envs] in range [reward_offset, 1.0]
     """
-    # Get robot asset
     robot = env.scene[asset_cfg.name]
+    ang_vel = robot.data.root_ang_vel_w  # [num_envs, 3]
     
-    # Linear velocity in world frame [num_envs, 3]
-    # lin_vel = robot.data.root_lin_vel_w
+    # === FIX 1: Axis weighting (giảm ảnh hưởng của yaw) ===
+    weights = torch.tensor(axis_weights, device=ang_vel.device, dtype=ang_vel.dtype)
+    weighted_vel = ang_vel * weights
+    ang_vel_norm = torch.norm(weighted_vel, dim=-1)
+    ang_vel_norm = torch.clamp(ang_vel_norm, 0.0, max_vel)
     
-    # Angular velocity in world frame [num_envs, 3]
-    ang_vel = robot.data.root_ang_vel_w
+    # === FIX 2: Tolerance-based error ===
+    ang_vel_error = torch.abs(ang_vel_norm - target_angular_vel)
+    reward = torch.exp(-scale * ang_vel_error ** 2)
     
-    # FIX 1: Compute velocity magnitudes
-    # lin_vel_norm = torch.norm(lin_vel, dim=-1)  # [num_envs]
-    ang_vel_norm = torch.norm(ang_vel, dim=-1)  # [num_envs]
+    # === FIX 5: Robust clamping ===
+    reward = torch.clamp(reward, 0.0, 1.0)
+    reward = torch.nan_to_num(reward, nan=0.0, posinf=1.0, neginf=0.0)
     
-    # FIX 2: Clamp velocities to avoid extreme values
-    # lin_vel_norm = torch.clamp(lin_vel_norm, 0.0, 100.0)
-    ang_vel_norm = torch.clamp(ang_vel_norm, 0.0, 100.0)
+    return reward
+
+def linear_velocity_reward(
+    env: ManagerBasedRLEnv,
+    target_linear_vel: float = 0.0,
+    scale: float = 5.0,
+    max_vel: float = 10.0,
+    axis_weights: tuple = (1.0, 1.0, 0.3),  # (x, y, z) - giảm ảnh hưởng của z
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """
+    Reward for maintaining low linear velocity (encourages standing still).
     
-    # FIX 3: Compute errors from target
-    # lin_vel_error = torch.abs(lin_vel_norm - target_linear_vel)
-    ang_vel_error = ang_vel_norm - target_angular_vel
+    Args:
+        env: Environment instance
+        target_linear_vel: Target velocity magnitude (m/s)
+        tolerance: Velocity tolerance before penalty starts (m/s)
+        scale: Exponential decay rate (lower = more forgiving)
+        max_vel: Maximum velocity clamp (m/s)
+        reward_offset: Base reward value (prevents reward collapse)
+        use_tanh: Use tanh for bounded gradient (better than exp)
+        axis_weights: Weights for (x, y, z) velocities - can ignore vertical motion
+        asset_cfg: Robot entity config
+        
+    Returns:
+        Reward tensor [num_envs], range [reward_offset, 1.0]
+    """
+    robot = env.scene[asset_cfg.name]
+    lin_vel = robot.data.root_lin_vel_w  # [num_envs, 3]
     
-    # FIX 4: Exponential rewards (separate for linear and angular)
-    # lin_reward = torch.exp(-linear_scale * torch.square(lin_vel_error))
-    ang_reward = torch.exp(-angular_scale * torch.square(ang_vel_error))
+    # === Axis weighting ===
+    weights = torch.tensor(axis_weights, device=lin_vel.device, dtype=lin_vel.dtype)
+    weighted_vel = lin_vel * weights  # [num_envs, 3]
     
-    # FIX 5: Combined reward (weighted average)
-    # You can adjust weights: 0.7 for linear, 0.3 for angular
-    # reward = 0.7 * lin_reward + 0.3 * ang_reward
+    # Compute weighted magnitude
+    lin_vel_norm = torch.norm(weighted_vel, dim=-1)  # [num_envs]
+    lin_vel_norm = torch.clamp(lin_vel_norm, 0.0, max_vel)
     
-    # FIX 6: Clamp to valid range
-    reward = torch.clamp(ang_reward, 0.0, 1.0)
+    # === Tolerance-based error ===
+    lin_vel_error = torch.abs(lin_vel_norm - target_linear_vel)
     
-    # FIX 7: Safety check for NaN/Inf
-    if torch.isnan(reward).any() or torch.isinf(reward).any():
-        print("[WARNING] Invalid reward detected in velocity_reward")
-        reward = torch.nan_to_num(reward, nan=0.0, posinf=1.0, neginf=0.0)
+    reward_component = torch.exp(-scale * lin_vel_error ** 2)
+        
+    # === Robust clamping ===
+    reward = torch.clamp(reward_component, 0.0, 1.0)
+    reward = torch.nan_to_num(reward, nan=0.0, posinf=1.0, neginf=0.0)
     
     return reward

@@ -1,0 +1,1 @@
+from .legged_v2_env_cfg import *
