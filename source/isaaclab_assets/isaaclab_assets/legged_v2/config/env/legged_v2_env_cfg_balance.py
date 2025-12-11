@@ -1,5 +1,4 @@
 import math
-import torch
 import isaaclab.sim as sim_utils
 from isaaclab.assets import Articulation, AssetBaseCfg
 from isaaclab.envs import ManagerBasedRLEnvCfg
@@ -14,7 +13,6 @@ from isaaclab.managers import (
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.utils import configclass
 from isaaclab.sensors import (
-    CameraCfg,
     ContactSensorCfg,
     RayCasterCfg,
     ImuCfg,
@@ -27,7 +25,7 @@ from ..robot.legged_v2_cfg import LEGGED_ROBOT_V2_CFG
 
 from isaaclab.envs.mdp import actions, observations, events, rewards, terminations
 from ... import mdp
-from isaaclab.envs.mdp import action_rate_l2, joint_acc_l2
+from isaaclab.envs.mdp import *
 
 
 
@@ -78,7 +76,7 @@ class LeggedRobotV2SceneConfig(InteractiveSceneCfg):
 
     height_scanner = RayCasterCfg(
         prim_path="{ENV_REGEX_NS}/Robot/.*/.*/Sensor",
-        update_period=0.02,
+        update_period=0.01,
         offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 0.0)),
         ray_alignment="yaw",
         pattern_cfg=patterns.GridPatternCfg(
@@ -91,13 +89,25 @@ class LeggedRobotV2SceneConfig(InteractiveSceneCfg):
     
     contact_forces_left = ContactSensorCfg(
         prim_path="{ENV_REGEX_NS}/Robot/.*/.*/Left_Leg", 
-        update_period=0.0, 
+        update_period=0.01, 
         # debug_vis=True
     )
 
     contact_forces_right = ContactSensorCfg(
         prim_path="{ENV_REGEX_NS}/Robot/.*/.*/Right_Leg", 
-        update_period=0.0, 
+        update_period=0.01, 
+        # debug_vis=True
+    )
+    
+    contact_forces_wheel_left = ContactSensorCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/.*/.*/Wheel", 
+        update_period=0.01, 
+        # debug_vis=True
+    )
+
+    contact_forces_wheel_right = ContactSensorCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/.*/.*/Wheel_01", 
+        update_period=0.01, 
         # debug_vis=True
     )
 
@@ -118,7 +128,7 @@ class ActionCfg:
             "Left_Revolute_04",   # wheel_left
             "Right_Revolute_04",  # wheel_right
         ],
-        scale=150.0,
+        scale=200.0,
         debug_vis=True,
     )
 
@@ -235,7 +245,7 @@ class RewardCfg:
     # (1) Survival reward
     alive = RewardTermCfg(
         func=rewards.is_alive,
-        weight=6.0,
+        weight=10.0,
     )
 
     # (2) Termination penalty
@@ -257,139 +267,138 @@ class RewardCfg:
 
     # (4) Joint target reward - đứng thẳng
     # Left Leg 
-    left_hip = RewardTermCfg(
-        func=mdp.rewards.joint_pos_target_l2,
-        weight=-1000.0,
-        params={
-            "target": 0.0,
-            "asset_cfg": SceneEntityCfg(
-                name="robot",
-                joint_names=["Left_Revolute_01"]
-            ),
-        },
-    )
+    # left_hip = RewardTermCfg(
+    #     func=mdp.rewards.joint_pos_target_l2,
+    #     weight=-1000.0,
+    #     params={
+    #         "target": 0.0,
+    #         "asset_cfg": SceneEntityCfg(
+    #             name="robot",
+    #             joint_names=["Left_Revolute_01"]
+    #         ),
+    #     },
+    # )
 
-    left_knee = RewardTermCfg(
-        func=mdp.rewards.joint_pos_target_l2,
-        weight=-12.0,
-        params={
-            "target": 0.0,
-            "asset_cfg": SceneEntityCfg(
-                name="robot",
-                joint_names=["Left_Revolute_02"]
-            ),
-        },
-    )
+    # left_knee = RewardTermCfg(
+    #     func=mdp.rewards.joint_pos_target_l2,
+    #     weight=-12.0,
+    #     params={
+    #         "target": 0.0,
+    #         "asset_cfg": SceneEntityCfg(
+    #             name="robot",
+    #             joint_names=["Left_Revolute_02"]
+    #         ),
+    #     },
+    # )
 
-    left_ankle = RewardTermCfg(
-        func=mdp.rewards.joint_pos_target_l2,
-        weight=-12.0,
-        params={
-            "target": 0.0,
-            "asset_cfg": SceneEntityCfg(
-                name="robot",
-                joint_names=["Left_Revolute_03"]
-            ),
-        },
-    )
+    # left_ankle = RewardTermCfg(
+    #     func=mdp.rewards.joint_pos_target_l2,
+    #     weight=-12.0,
+    #     params={
+    #         "target": 0.0,
+    #         "asset_cfg": SceneEntityCfg(
+    #             name="robot",
+    #             joint_names=["Left_Revolute_03"]
+    #         ),
+    #     },
+    # )
 
+    # # Right Leg 
+    # right_hip = RewardTermCfg(
+    #     func=mdp.rewards.joint_pos_target_l2,
+    #     weight=-1000.0,
+    #     params={
+    #         "target": 0.0,
+    #         "asset_cfg": SceneEntityCfg(
+    #             name="robot",
+    #             joint_names=["Right_Revolute_01"]
+    #         ),
+    #     },
+    # )
 
-    # Right Leg 
-    right_hip = RewardTermCfg(
-        func=mdp.rewards.joint_pos_target_l2,
-        weight=-200.0,
-        params={
-            "target": 0.0,
-            "asset_cfg": SceneEntityCfg(
-                name="robot",
-                joint_names=["Right_Revolute_01"]
-            ),
-        },
-    )
+    # right_knee = RewardTermCfg(
+    #     func=mdp.rewards.joint_pos_target_l2,
+    #     weight=-12.0,
+    #     params={
+    #         "target": 0.0,
+    #         "asset_cfg": SceneEntityCfg(
+    #             name="robot",
+    #             joint_names=["Right_Revolute_02"]
+    #         ),
+    #     },
+    # )
 
-    right_knee = RewardTermCfg(
-        func=mdp.rewards.joint_pos_target_l2,
-        weight=-12.0,
-        params={
-            "target": 0.0,
-            "asset_cfg": SceneEntityCfg(
-                name="robot",
-                joint_names=["Right_Revolute_02"]
-            ),
-        },
-    )
+    # right_ankle = RewardTermCfg(
+    #     func=mdp.rewards.joint_pos_target_l2,
+    #     weight=-12.0,
+    #     params={
+    #         "target": 0.0,
+    #         "asset_cfg": SceneEntityCfg(
+    #             name="robot",
+    #             joint_names=["Right_Revolute_03"]
+    #         ),
+    #     },
+    # )
 
-    right_ankle = RewardTermCfg(
-        func=mdp.rewards.joint_pos_target_l2,
-        weight=-12.0,
-        params={
-            "target": 0.0,
-            "asset_cfg": SceneEntityCfg(
-                name="robot",
-                joint_names=["Right_Revolute_03"]
-            ),
-        },
-    )
+    # # (5) Height reward
+    # height = RewardTermCfg(
+    #     func=mdp.rewards.height_reward,
+    #     weight=6.0,
+    #     params={
+    #         "target_height": 0.5,
+    #     },
+    # )
 
-    # (5) Height reward
-    height = RewardTermCfg(
-        func=mdp.rewards.height_reward,
-        weight=6.0,
-        params={
-            "target_height": 0.5,
-        },
-    )
+    # # (6) Angular velocity stability
+    # ang_vel = RewardTermCfg(
+    #     func=mdp.rewards.angular_velocity_reward,
+    #     weight=4.0,
+    #     params={
+    #         "target_angular_vel": 0.0,
+    #     },
+    # )
 
-    # (6) Angular velocity stability
-    ang_vel = RewardTermCfg(
-        func=mdp.rewards.angular_velocity_reward,
-        weight=4.0,
-        params={
-            "target_angular_vel": 0.0,
-        },
-    )
+    # # (7) Linear velocity stability (đứng yên)
+    # lin_vel = RewardTermCfg(
+    #     func=mdp.rewards.linear_velocity_reward,
+    #     weight=4.0,
+    #     params={
+    #         "target_linear_vel": 0.0,
+    #     },
+    # )
 
-    # (7) Linear velocity stability (đứng yên)
-    lin_vel = RewardTermCfg(
-        func=mdp.rewards.linear_velocity_reward,
-        weight=4.0,
-        params={
-            "target_linear_vel": 0.0,
-        },
-    )
+    # # (8) Balanced torque between legs
+    # # Hip balance
+    # balance_hip = RewardTermCfg(
+    #     func=mdp.rewards.joint_force_balance,
+    #     weight=-0.005,
+    #     params={
+    #         "left_cfg": SceneEntityCfg(name="robot", joint_names=["Left_Revolute_01"]),
+    #         "right_cfg": SceneEntityCfg(name="robot", joint_names=["Right_Revolute_01"]),
+    #     },
+    # )
 
-    # (8) Balanced torque between legs
-    # Hip balance
-    balance_hip = RewardTermCfg(
-        func=mdp.rewards.joint_force_balance,
-        weight=-0.005,
-        params={
-            "left_cfg": SceneEntityCfg(name="robot", joint_names=["Left_Revolute_01"]),
-            "right_cfg": SceneEntityCfg(name="robot", joint_names=["Right_Revolute_01"]),
-        },
-    )
+    # # Knee balance
+    # balance_knee = RewardTermCfg(
+    #     func=mdp.rewards.joint_force_balance,
+    #     weight=-0.005,
+    #     params={
+    #         "left_cfg": SceneEntityCfg(name="robot", joint_names=["Left_Revolute_02"]),
+    #         "right_cfg": SceneEntityCfg(name="robot", joint_names=["Right_Revolute_02"]),
+    #     },
+    # )
 
-    # Knee balance
-    balance_knee = RewardTermCfg(
-        func=mdp.rewards.joint_force_balance,
-        weight=-0.005,
-        params={
-            "left_cfg": SceneEntityCfg(name="robot", joint_names=["Left_Revolute_02"]),
-            "right_cfg": SceneEntityCfg(name="robot", joint_names=["Right_Revolute_02"]),
-        },
-    )
+    # # Ankle balance
+    # balance_ankle = RewardTermCfg(
+    #     func=mdp.rewards.joint_force_balance,
+    #     weight=-0.005,
+    #     params={
+    #         "left_cfg": SceneEntityCfg(name="robot", joint_names=["Left_Revolute_03"]),
+    #         "right_cfg": SceneEntityCfg(name="robot", joint_names=["Right_Revolute_03"]),
+    #     },
+    # )
 
-    # Ankle balance
-    balance_ankle = RewardTermCfg(
-        func=mdp.rewards.joint_force_balance,
-        weight=-0.005,
-        params={
-            "left_cfg": SceneEntityCfg(name="robot", joint_names=["Left_Revolute_03"]),
-            "right_cfg": SceneEntityCfg(name="robot", joint_names=["Right_Revolute_03"]),
-        },
-    )
-
-
+    
     # (9) Action smoothness penalty
     action_rate = RewardTermCfg(
         func=action_rate_l2,
@@ -399,12 +408,95 @@ class RewardCfg:
     # (10) Joint acceleration — very small penalty
     joint_accel = RewardTermCfg(
         func=joint_acc_l2,
-        weight=-0.00001,
+        weight=-1e-5,
         params={
             "asset_cfg": SceneEntityCfg(name="robot"),
         },
     )
+    
+    # (11) Joint velocity penalty
+    joint_vel = RewardTermCfg(
+        func=joint_vel_l2,
+        weight=-1e-5,
+        params={
+            "asset_cfg": SceneEntityCfg(name="robot"),
+        },
+    )
+    
+    # (12) Vertical linear velocity penalty
+    lin_vel_z = RewardTermCfg(
+        func=lin_vel_z_l2,
+        weight=-1e-5,
+        params={
+            "asset_cfg": SceneEntityCfg(name="robot"),
+        },
+    )
+    
+    # (13) Angular velocity XY penalty
+    ang_vel_xy = RewardTermCfg(
+        func=ang_vel_xy_l2,
+        weight=-1e-5,
+        params={
+            "asset_cfg": SceneEntityCfg(name="robot"),
+        },
+    )
+    
+    # (14) Flat orientation penalty
+    flat_orientation = RewardTermCfg(
+        func=flat_orientation_l2,
+        weight=-1e-5,
+        params={
+            "asset_cfg": SceneEntityCfg(name="robot"),
+        },
+    )
+    
+    # (15) Base height penalty
+    base_height = RewardTermCfg(
+        func=base_height_l2,
+        weight=-1e-5,
+        params={
+            "target_height": 0.5,
+            "asset_cfg": SceneEntityCfg(name="robot"),
+        },
+    )
+    
+    # (16) Body linear acceleration penalty
+    body_lin_acc = RewardTermCfg(
+        func=body_lin_acc_l2,
+        weight=-1e-5,
+        params={
+            "asset_cfg": SceneEntityCfg(name="robot"),
+        },
+    )
+    
+    # (17) Joint velocity limits soft penalty
+    joint_vel_limits = RewardTermCfg(
+        func=joint_vel_limits,
+        weight=-1e-5,
+        params={
+            "soft_ratio": 0.1,
+            "asset_cfg": SceneEntityCfg(name="robot"),
+        },
+    )
 
+    # (18) Torque limits soft penalty
+    applied_torque_limits = RewardTermCfg(
+        func=applied_torque_limits,
+        weight=-1e-5,
+        params={
+            "asset_cfg": SceneEntityCfg(name="robot"),
+        },
+    )
+    
+    # (19) Contact forces penalty
+    contact_forces = RewardTermCfg(
+        func=contact_forces,
+        weight=-1e-5,
+        params={
+            "threshold": 200.0,
+            "sensor_cfg": SceneEntityCfg(name="contact_forces_left"),
+        },
+    )
 
 @configclass
 class TerminationsCfg:
@@ -423,7 +515,7 @@ obot environment."""
     base_height = TerminationTermCfg(
         func=terminations.root_height_below_minimum,
         params={
-            "minimum_height": 0.3,  # 
+            "minimum_height": 0.25,  # 
             "asset_cfg": SceneEntityCfg(name="robot"),
         },
     )
@@ -441,16 +533,16 @@ obot environment."""
     joint_vel_limit = TerminationTermCfg(
         func=terminations.joint_vel_out_of_manual_limit,
         params={
-            "max_velocity": 150.0,  # FIX: Changed from 200.0 (too high for safety)
+            "max_velocity": 250.0,  # FIX: Changed from 200.0 (too high for safety)
             "asset_cfg": SceneEntityCfg(name="robot"),
         },
     )
     
-    # Contact effort 
+    # # Contact effort 
     contact_left = TerminationTermCfg( 
         func=terminations.illegal_contact, 
         params={ 
-            "threshold": 100.0, 
+            "threshold": 200.0, 
             "sensor_cfg": SceneEntityCfg(name="contact_forces_left") 
         }
     ) 
@@ -458,10 +550,11 @@ obot environment."""
     contact_right = TerminationTermCfg(
         func=terminations.illegal_contact,
         params={ 
-            "threshold": 100.0, 
+            "threshold": 200.0, 
             "sensor_cfg": SceneEntityCfg(name="contact_forces_right") 
         } 
     )
+    
     
 @configclass
 class LeggedRobotV2EnvCfgBalance(ManagerBasedRLEnvCfg):

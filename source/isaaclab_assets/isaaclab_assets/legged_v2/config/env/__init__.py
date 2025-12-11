@@ -1,1 +1,1 @@
-from .legged_v2_env_cfg import *
+from .legged_v2_env_cfg_balance import *

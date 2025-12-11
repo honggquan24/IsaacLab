@@ -220,3 +220,102 @@ def linear_velocity_reward(
     reward = torch.nan_to_num(reward, nan=0.0, posinf=1.0, neginf=0.0)
     
     return reward
+
+def feet_contact_force_symmetry(
+    env: ManagerBasedRLEnv,
+    threshold_force: float = 30.0,
+    max_ratio_diff: float = 0.7,
+):
+    # Force Z from contact sensors
+    fz_l = env.scene.sensors["contact_forces_wheel_left"].data.force_w[:, 2].clamp(min=0.0)
+    fz_r = env.scene.sensors["contact_forces_wheel_right"].data.force_w[:, 2].clamp(min=0.0)
+
+    total = fz_l + fz_r + 1e-6
+    diff = torch.abs(fz_l - fz_r) / total
+
+    symmetry = 1.0 - torch.clamp(diff / max_ratio_diff, 0.0, 1.0)
+
+    contact_ok = torch.minimum(
+        fz_l / threshold_force, fz_r / threshold_force
+    ).clamp(0.0, 1.0)
+
+    return symmetry * contact_ok
+
+# def zmp_in_support_polygon(
+#     env: ManagerBasedRLEnv,
+#     margin: float = 0.04,
+#     left_foot_cfg: SceneEntityCfg = SceneEntityCfg("robot", body_names=["Left_Foot"]),
+#     right_foot_cfg: SceneEntityCfg = SceneEntityCfg("robot", body_names=["Right_Foot"]),
+# ):
+#     robot = env.scene["robot"]
+
+#     # Body ID
+#     id_l = left_foot_cfg.body_ids[0]
+#     id_r = right_foot_cfg.body_ids[0]
+
+#     # Foot positions
+#     left_pos = robot.data.body_pos_w[:, id_l, :2]
+#     right_pos = robot.data.body_pos_w[:, id_r, :2]
+
+#     # Contact forces
+#     fz_l = env.scene.sensors["contact_forces_left"].data.force_w[:, 2].clamp(min=0.0)
+#     fz_r = env.scene.sensors["contact_forces_right"].data.force_w[:, 2].clamp(min=0.0)
+#     total = fz_l + fz_r + 1e-6
+
+#     zmp_x = (left_pos[:, 0] * fz_l + right_pos[:, 0] * fz_r) / total
+#     zmp_y = (left_pos[:, 1] * fz_l + right_pos[:, 1] * fz_r) / total
+
+#     center_x = (left_pos[:, 0] + right_pos[:, 0]) * 0.5
+#     center_y = (left_pos[:, 1] + right_pos[:, 1]) * 0.5
+
+#     dist = torch.sqrt((zmp_x - center_x)**2 + (zmp_y - center_y)**2)
+
+#     return torch.clamp(1.0 - dist / margin, 0.0, 1.0)
+
+# def zmp_in_support_polygon(
+#     env: ManagerBasedRLEnv,
+#     margin=0.04,
+#     left_foot_cfg=SceneEntityCfg("robot", body_names=["Left_Foot"]),
+#     right_foot_cfg=SceneEntityCfg("robot", body_names=["Right_Foot"]),
+# ):
+#     robot = env.scene["robot"]
+
+#     id_l = left_foot_cfg.body_ids[0]
+#     id_r = right_foot_cfg.body_ids[0]
+
+#     lp = robot.data.body_pos_w[:, id_l, :2]
+#     rp = robot.data.body_pos_w[:, id_r, :2]
+
+#     fz_l = env.scene.sensors["contact_forces_left"].data.force_w[:, 2].clamp(0.0)
+#     fz_r = env.scene.sensors["contact_forces_right"].data.force_w[:, 2].clamp(0.0)
+
+#     total = fz_l + fz_r + 1e-6
+
+#     zmp_x = (lp[:, 0] * fz_l + rp[:, 0] * fz_r) / total
+#     zmp_y = (lp[:, 1] * fz_l + rp[:, 1] * fz_r) / total
+
+#     cx = (lp[:, 0] + rp[:, 0]) * 0.5
+#     cy = (lp[:, 1] + rp[:, 1]) * 0.5
+
+#     dist = torch.sqrt((zmp_x - cx) ** 2 + (zmp_y - cy) ** 2)
+
+#     return torch.clamp(1.0 - dist / margin, 0.0, 1.0)
+
+# def foot_stillness(
+#     env: ManagerBasedRLEnv,
+#     scale=8.0,
+#     left_cfg=SceneEntityCfg("robot", body_names=["Left_Foot"]),
+#     right_cfg=SceneEntityCfg("robot", body_names=["Right_Foot"]),
+# ):
+#     robot = env.scene["robot"]
+
+#     id_l = left_cfg.body_ids[0]
+#     id_r = right_cfg.body_ids[0]
+
+#     vel_l = robot.data.body_lin_vel_w[:, id_l]
+#     vel_r = robot.data.body_lin_vel_w[:, id_r]
+
+#     vel = torch.cat([vel_l, vel_r], dim=-1)
+#     speed = torch.sum(vel * vel, dim=-1)
+
+#     return torch.exp(-scale * speed)
