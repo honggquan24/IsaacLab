@@ -30,7 +30,6 @@ import isaaclab.utils.math as math_utils
 from isaaclab.sim import SimulationCfg, RenderCfg
 from icecream import ic
 import isaaclab.envs.mdp as mdp
-
 from .mdp.rewards import *
 from .mdp.terminations import *
 
@@ -119,7 +118,7 @@ class RewardCfg:
     # (1) Constant running reward - encourage survival
     alive = RewardTermCfg(
         func=rewards.is_alive,
-        weight= 0.60
+        weight= 0.0
     )
     # (2) Failure penalty - penalize termination0
     terminating = RewardTermCfg(
@@ -132,7 +131,7 @@ class RewardCfg:
     )
     rewards_rv2 = RewardTermCfg(
         func= cartpole_reward_joint_pos_rv2,
-        weight= 2.5
+        weight= 3.5
     )
     penalty_vel = RewardTermCfg(
         func= cartpole_penalty_joint_vel,
@@ -140,11 +139,11 @@ class RewardCfg:
     )
     penalty_fall_p1 = RewardTermCfg(
         func = cartpole_penalty_fall_p1,
-        weight= -3.0
+        weight= -1.5
     )
     penalty_fall_p2 = RewardTermCfg(
-        func = cartpole_penalty_fall,
-        weight= -3.0
+        func = cartpole_penalty_fall_p2,
+        weight= -2.0
     )
     reward_cart = RewardTermCfg(
         func= cart_center_reward,
@@ -152,7 +151,7 @@ class RewardCfg:
     )
     penalty_cart = RewardTermCfg(
         func = cart_not_center_penalty,
-        weight= -3.0
+        weight= -1.0
     )
 
 @configclass
