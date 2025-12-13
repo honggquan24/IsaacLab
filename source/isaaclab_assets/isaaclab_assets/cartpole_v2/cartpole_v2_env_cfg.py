@@ -65,7 +65,7 @@ class ActionsCfg :
             # "Revolute_2"
         ],
         scale={
-            "Slider_1": 300.0, 
+            "Slider_1": 100.0, 
             # "Revolute_1": 0.0,
             # "Revolute_2": 0.0,
         },
@@ -113,46 +113,52 @@ class EventCfg:
 
 @configclass
 class RewardCfg:
-    """Reward terms for the MDP."""
+    alive = RewardTermCfg(func=rewards.is_alive, weight=0.2)
     
-    # (1) Constant running reward - encourage survival
-    alive = RewardTermCfg(
-        func=rewards.is_alive,
-        weight= 0.0
-    )
-    # (2) Failure penalty - penalize termination0
-    terminating = RewardTermCfg(
-        func=rewards.is_terminated,
-        weight= -5.0
-    )
-    rewards_rv1 = RewardTermCfg(
-        func= cartpole_reward_joint_pos_rv1,
-        weight= 1.5
-    )
+    terminating = RewardTermCfg(func=rewards.is_terminated, weight=-5.0)
+
+    # rewards_rv1 = RewardTermCfg(
+    #     func=cartpole_reward_joint_pos_rv1,
+    #     weight=2.0)
+    
     rewards_rv2 = RewardTermCfg(
-        func= cartpole_reward_joint_pos_rv2,
-        weight= 3.5
-    )
+        func=cartpole_reward_joint_pos_rv2_rv1, 
+        weight=5.0)
+    
     penalty_vel = RewardTermCfg(
-        func= cartpole_penalty_joint_vel,
-        weight=-2.0
-    )
-    penalty_fall_p1 = RewardTermCfg(
-        func = cartpole_penalty_fall_p1,
-        weight= -1.5
-    )
-    penalty_fall_p2 = RewardTermCfg(
-        func = cartpole_penalty_fall_p2,
-        weight= -2.0
-    )
+        func=cartpole_penalty_joint_vel, 
+        weight=-0.5)
+    
+    penalty_vel_p1 = RewardTermCfg(
+        func=cartpole_penalty_joint_vel_pe1, 
+        weight=-1.2)
+    
+    penalty_vel_p2 = RewardTermCfg(
+        func=cartpole_penalty_joint_vel_pe2, 
+        weight=-1.2)
+    
+    # penalty_fall_p1 = RewardTermCfg(
+    #     func=cartpole_penalty_fall_p1, 
+    #     weight=-2.5)
+      
+    # penalty_fall_p2 = RewardTermCfg(
+    #     func=cartpole_penalty_fall_p2, 
+    #     weight=-3.7)
+    
     reward_cart = RewardTermCfg(
-        func= cart_center_reward,
-        weight= 2.0
-    )
+        func=cart_center_reward, 
+        weight=0.2)
+    
     penalty_cart = RewardTermCfg(
-        func = cart_not_center_penalty,
-        weight= -1.0
-    )
+        func=cart_not_center_penalty, 
+        weight=-1.0)
+
+
+
+    
+
+
+
 
 @configclass
 class TerminationsCfg:
@@ -176,6 +182,10 @@ obot environment."""
 
     # reset_cartpole2 = TerminationTermCfg(
     #     func = Cart_pole_pos_reset,
+    # )
+    # cart_out = TerminationTermCfg(
+    #     func=cartpole_terminate_cart_out,
+    #     params={"x_limit": 0.99},
     # )
 
 @configclass

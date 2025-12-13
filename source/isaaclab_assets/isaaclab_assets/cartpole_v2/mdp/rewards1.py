@@ -1,124 +1,102 @@
 from __future__ import annotations
-
 import torch
 from typing import TYPE_CHECKING
-from isaaclab.managers import SceneEntityCfg
-from isaaclab.utils.math import wrap_to_pi
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
 
 
-# ============================================================
-# Helpers (resolve asset + joint ids)
-# ============================================================
-def _resolve_articulation_and_joint_ids(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg):
-    """Return (articulation, joint_ids) from SceneEntityCfg(name='robot', joint_names=[...])."""
-    art = env.scene[asset_cfg.name]
-
-    joint_ids = getattr(asset_cfg, "joint_ids", None)
-    if joint_ids is None:
-        # IsaacLab articulation usually provides find_joints()
-        if hasattr(art, "find_joints"):
-            ids, _ = art.find_joints(asset_cfg.joint_names)
-            joint_ids = ids
-        else:
-            raise RuntimeError("Asset does not support find_joints() and asset_cfg.joint_ids is None.")
-
-    if not torch.is_tensor(joint_ids):
-        joint_ids = torch.tensor(joint_ids, device=art.data.joint_pos.device, dtype=torch.long)
-    return art, joint_ids
-
-
-
-def joint_pos_target_l2(
+def cartpole_reward_joint_pos_rv1(
     env: ManagerBasedRLEnv,
-    asset_cfg: SceneEntityCfg,
-    target: float | torch.Tensor = 0.0,
-    use_angle_wrap: bool = True,
-) -> torch.Tensor:
-    """Cost = sum((q - target)^2) over selected joints. (Lower is better)"""
-    art, joint_ids = _resolve_articulation_and_joint_ids(env, asset_cfg)
-    q = art.data.joint_pos[:, joint_ids]  # (N, K)
+    scale_pos: float = 5.0,
+)-> torch.Tensor:
+    robot = env.scene['robot']
+    joint_pos = robot.data.joint_pos 
+    theta1 = joint_pos[:, 1]
+    reward = scale_pos * torch.cos(theta1)
+    return reward 
 
-    if not torch.is_tensor(target):
-        tgt = torch.tensor(target, device=q.device, dtype=q.dtype)
-    else:
-        tgt = target.to(device=q.device, dtype=q.dtype)
-
-    if tgt.ndim == 0:
-        tgt = tgt.view(1, 1)
-    elif tgt.ndim == 1:
-        tgt = tgt.view(1, -1)
-
-    err = q - tgt
-    if use_angle_wrap:
-        err = wrap_to_pi(err)
-    return torch.sum(err * err, dim=1)  # (N,)
-
-
-def joint_vel_l1(
+def cartpole_reward_joint_pos_rv2(
     env: ManagerBasedRLEnv,
-    asset_cfg: SceneEntityCfg,
+    scale_pos: float = 5.0,
+)-> torch.Tensor:
+    robot = env.scene['robot']
+    joint_pos = robot.data.joint_pos 
+    theta2 = joint_pos[:, 2]
+    reward = scale_pos * torch.cos(theta2)
+    return reward
+
+def cartpole_penalty_extreme_angle(
+    env: ManagerBasedRLEnv,
+    threshold_fail: float = 1.57,
+    scale: float = 10.0,
+)-> torch.Tensor:
+    robot = env.scene["robot"]
+    joint_pos = robot.data.joint_pos 
+
+    theta1 = torch.abs(joint_pos[:, 1])
+    theta2 = torch.abs(joint_pos[:, 2])
+    
+
+    err1 = torch.clamp(theta1 - threshold_fail, min=0.0) 
+    err2 = torch.clamp(theta2 - threshold_fail, min=0.0) 
+    
+    penalty = -scale * (err1**2 + err2**2)
+    return penalty
+
+
+
+def cartpole_penalty_joint_vel(
+    env: ManagerBasedRLEnv,
+    scale: float = 0.1
+)-> torch.Tensor:
+    robot = env.scene['robot']
+    joint_vel = robot.data.joint_vel  
+    penalty = -scale * (joint_vel[:, 0]**2 + joint_vel[:, 1]**2 + joint_vel[:, 2]**2)
+    return penalty
+
+def cartpole_penalty_action_effort(
+    env: ManagerBasedRLEnv,
+    scale: float = 0.001,
 ) -> torch.Tensor:
-    """Cost = sum(|qd|) over selected joints. (Lower is better)"""
-    art, joint_ids = _resolve_articulation_and_joint_ids(env, asset_cfg)
-    qd = art.data.joint_vel[:, joint_ids]  # (N, K)
-    return torch.sum(torch.abs(qd), dim=1)
+    actions = env.action_manager.action
+    penalty = -scale * torch.sum(actions**2, dim=-1)
+    return penalty
 
 
-# ============================================================
-# (B) Phi-based terms (chuẩn cho double pendulum góc tương đối)
-# ============================================================
 
-def _get_phi1_phi2_from_robot(env: ManagerBasedRLEnv) -> tuple[torch.Tensor, torch.Tensor]:
-    """phi1 = wrap(theta1), phi2 = wrap(theta1 + theta2) using joint_pos columns [1], [2]."""
+def cart_center_reward(
+    env: ManagerBasedRLEnv,
+    target: float = 0.6,
+    scale: float = 1.5,
+    x_limit: float = 0.8,
+) -> torch.Tensor:
     robot = env.scene["robot"]
     joint_pos = robot.data.joint_pos
-    theta1 = joint_pos[:, 1]
-    theta2 = joint_pos[:, 2]
-    phi1 = wrap_to_pi(theta1)
-    phi2 = wrap_to_pi(theta1 + theta2)
-    return phi1, phi2
+    device = joint_pos.device
+
+    x = joint_pos[:, 0] - target
+    reward = torch.exp(-((scale * x) ** 2))
+    reward = torch.where(
+        torch.abs(x) < x_limit,
+        reward,
+        torch.zeros_like(reward)
+    )
+    return reward
 
 
-def phi_upright_reward(
+
+def cart_not_center_penalty(
     env: ManagerBasedRLEnv,
+    target: float = 0.6,
+    tolerance: float = 0.05,
+    scale: float = 2.0,
 ) -> torch.Tensor:
-    """Reward in [0,1]: (cos(phi1)+cos(phi2) + 2)/4. Works for swing-up + balance."""
-    phi1, phi2 = _get_phi1_phi2_from_robot(env)
-    cos_sum = torch.cos(phi1) + torch.cos(phi2)  # [-2, 2]
-    return (cos_sum + 2.0) / 4.0                 # [0, 1]
-
-
-def phi_balance_bonus(
-    env: ManagerBasedRLEnv,
-    angle_thresh: float = 0.2,   # rad
-    vel_thresh: float = 1.0,     # rad/s
-) -> torch.Tensor:
-    """Bonus = 1 when both links are near upright AND angular velocities are small."""
     robot = env.scene["robot"]
-    joint_vel = robot.data.joint_vel
+    joint_pos = robot.data.joint_pos
 
-    phi1, phi2 = _get_phi1_phi2_from_robot(env)
+    x = torch.abs(joint_pos[:, 0] - target)
+    err = torch.clamp(x - tolerance, min=0.0)
 
-    cond_angle = (torch.abs(phi1) < angle_thresh) & (torch.abs(phi2) < angle_thresh)
-    cond_vel = (torch.abs(joint_vel[:, 1]) < vel_thresh) & (torch.abs(joint_vel[:, 2]) < vel_thresh)
-    return (cond_angle & cond_vel).float()
-
-
-def cart_pos_l2(
-    env: ManagerBasedRLEnv,
-    asset_cfg: SceneEntityCfg,
-    target: float = 0.0,
-) -> torch.Tensor:
-    """Cost cart position squared (for centering). Use the cart joint only."""
-    return joint_pos_target_l2(env, asset_cfg=asset_cfg, target=target, use_angle_wrap=False)
-
-
-# ============================================================
-# RewardCfg (đơn giản, giống mẫu ảnh)
-# - Nếu em muốn swing-up + giữ thăng bằng luôn:
-#   dùng phi_upright_reward + phi_balance_bonus
-# ============================================================
-
+    penalty = -(1.0 - torch.exp(-scale * err**2))
+    return penalty

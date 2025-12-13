@@ -57,3 +57,13 @@ def Cart_pole_pos_reset(
 
     return erminated 
 
+def cartpole_terminate_cart_out(
+    env: ManagerBasedRLEnv,
+    x_limit: float = 0.99,
+) -> torch.Tensor:
+    robot = env.scene["robot"]
+    joint_pos = robot.data.joint_pos
+    x = joint_pos[:, 0]
+    done = torch.abs(x) > x_limit
+    return done
+
