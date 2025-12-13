@@ -68,9 +68,8 @@ def cartpole_reward_joint_pos_rv2_rv1(
 
     theta1 = torch.abs(joint_pos[:,1])
     theta2 = torch.abs(joint_pos[:,2])
-    theta_sum = theta1 + theta2 - TARGET_JOINT [2]
 
-    reward = 0.3 - torch.cos(theta_sum)
+    reward = torch.cos(theta1) + torch.cos (theta2)
     return reward
 
 def cartpole_penalty_joint_vel(

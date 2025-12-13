@@ -117,13 +117,13 @@ class RewardCfg:
     
     terminating = RewardTermCfg(func=rewards.is_terminated, weight=-5.0)
 
-    rewards_rv1 = RewardTermCfg(
-        func=cartpole_reward_joint_pos_rv1,
-        weight=2.0)
+    # rewards_rv1 = RewardTermCfg(
+    #     func=cartpole_reward_joint_pos_rv1,
+    #     weight=2.0)
     
     rewards_rv2 = RewardTermCfg(
-        func=cartpole_reward_joint_pos_rv2, 
-        weight=5.0)
+        func=cartpole_reward_joint_pos_rv2_rv1, 
+        weight=3.0)
     
     penalty_vel = RewardTermCfg(
         func=cartpole_penalty_joint_vel, 
@@ -137,13 +137,13 @@ class RewardCfg:
         func=cartpole_penalty_joint_vel_pe2, 
         weight=-1.2)
     
-    # penalty_fall_p1 = RewardTermCfg(
-    #     func=cartpole_penalty_fall_p1, 
-    #     weight=-2.5)
+    penalty_fall_p1 = RewardTermCfg(
+        func=cartpole_penalty_fall_p1, 
+        weight=-5.5)
       
-    # penalty_fall_p2 = RewardTermCfg(
-    #     func=cartpole_penalty_fall_p2, 
-    #     weight=-3.7)
+    penalty_fall_p2 = RewardTermCfg(
+        func=cartpole_penalty_fall_p2, 
+        weight=-3.7)
     
     reward_cart = RewardTermCfg(
         func=cart_center_reward, 
