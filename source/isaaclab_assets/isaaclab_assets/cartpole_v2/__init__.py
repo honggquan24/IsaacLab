@@ -32,7 +32,7 @@ from . import agents
 # --task Isaac-Cartpole-V2-Run \
 # --num_envs 4 \
 # 'agent.load_run=2025-12-05_09-26-26' \
-# 'agent.load_checkpoint="model_50.pt"'
+# 'agent.load_checkpoint="model_250.pt"'
 
 # ./isaaclab.sh -p scripts/tutorials/03_envs/run_cartpole_rl_env.py --device cpu
 

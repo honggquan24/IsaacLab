@@ -197,3 +197,39 @@ def cart_not_center_penalty(
     return penalty
 
 
+
+    # # rewards_rv1 = RewardTermCfg(
+    # #     func=cartpole_reward_joint_pos_rv1,
+    # #     weight=2.0)
+    
+    # rewards_rv2 = RewardTermCfg(
+    #     func=cartpole_reward_joint_pos_rv2_rv1, 
+    #     weight=3.0)
+    
+    # penalty_vel = RewardTermCfg(
+    #     func=cartpole_penalty_joint_vel, 
+    #     weight=-0.5)
+    
+    # penalty_vel_p1 = RewardTermCfg(
+    #     func=cartpole_penalty_joint_vel_pe1, 
+    #     weight=-1.2)
+    
+    # penalty_vel_p2 = RewardTermCfg(
+    #     func=cartpole_penalty_joint_vel_pe2, 
+    #     weight=-1.2)
+    
+    # penalty_fall_p1 = RewardTermCfg(
+    #     func=cartpole_penalty_fall_p1, 
+    #     weight=-5.5)
+      
+    # penalty_fall_p2 = RewardTermCfg(
+    #     func=cartpole_penalty_fall_p2, 
+    #     weight=-3.7)
+    
+    # reward_cart = RewardTermCfg(
+    #     func=cart_center_reward, 
+    #     weight=0.2)
+    
+    # penalty_cart = RewardTermCfg(
+    #     func=cart_not_center_penalty, 
+    #     weight=-1.0)

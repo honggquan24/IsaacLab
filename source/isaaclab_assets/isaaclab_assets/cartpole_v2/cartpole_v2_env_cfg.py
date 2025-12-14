@@ -23,14 +23,15 @@ from isaaclab.sensors import (
 from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.terrains.config.rough import ROUGH_TERRAINS_CFG
 
-from .cartpole_v2_cfg import CARTPOLE_V2_CFG
+# from .cartpole_v2_cfg import CARTPOLE_V2_CFG
+from isaaclab_assets import CART_DOUBLE_PENDULUM_CFG
 
 from isaaclab.envs.mdp import actions, observations, events, rewards, terminations
 import isaaclab.utils.math as math_utils
 from isaaclab.sim import SimulationCfg, RenderCfg
 from icecream import ic
 import isaaclab.envs.mdp as mdp
-from .mdp.rewards import *
+from .mdp.rewards1 import *
 from .mdp.terminations import *
 
 @configclass
@@ -50,7 +51,7 @@ class CartpoleRobotV2SceneConfig(InteractiveSceneCfg):
     )
 
     # Add robot 
-    robot: Articulation = CARTPOLE_V2_CFG.replace(
+    robot: Articulation = CART_DOUBLE_PENDULUM_CFG.replace(
         prim_path="{ENV_REGEX_NS}/Robot",
     )
 
@@ -60,12 +61,12 @@ class ActionsCfg :
     joint_effort = actions.JointEffortActionCfg(
         asset_name="robot",
         joint_names=[
-            "Slider_1",
+            "slider_to_cart",
             # "Revolute_1"ManagerBasedRLEnvCfg,
             # "Revolute_2"
         ],
         scale={
-            "Slider_1": 100.0, 
+            "slider_to_cart": 120.0, 
             # "Revolute_1": 0.0,
             # "Revolute_2": 0.0,
         },
@@ -96,7 +97,7 @@ class EventCfg:
         func=mdp.events.reset_joints_by_offset,
         mode="reset",
         params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names=["Slider_1"]),
+            "asset_cfg": SceneEntityCfg("robot", joint_names=["slider_to_cart"]),
             "position_range": (-0.2, 0.2),
             "velocity_range": (-0.1, 0.1),
         },
@@ -105,7 +106,7 @@ class EventCfg:
         func=mdp.events.reset_joints_by_offset,
         mode="reset",
         params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names=["Revolute_[1,2]"]),
+            "asset_cfg": SceneEntityCfg("robot", joint_names=["cart_to_pole","pole_to_pendulum"]),
             "position_range": (-0.125 * math.pi, 0.125 * math.pi),
             "velocity_range": (-0.01 * math.pi, 0.01 * math.pi),
         },
@@ -113,57 +114,47 @@ class EventCfg:
 
 @configclass
 class RewardCfg:
-    alive = RewardTermCfg(func=rewards.is_alive, weight=0.2)
+    alive = RewardTermCfg(
+        func=rewards.is_alive, 
+        weight=1.0)
     
-    terminating = RewardTermCfg(func=rewards.is_terminated, weight=-5.0)
+    terminating = RewardTermCfg(
+        func=rewards.is_terminated, 
+        weight=-2.0)
+    
+    reward_sw1 = RewardTermCfg (
+        func = Reward_Swing_up_rv1,
+        weight= 0.5
+    )
+    reward_sw2 = RewardTermCfg (
+        func = Reward_Swing_up_rv2,
+        weight= 1.0
+    )
+    Penalty_vel_L2 = RewardTermCfg (
+        func = Penalty_vel,
+        weight = 1.0
+    )
+    Penalty_action = RewardTermCfg (
+        func = action_penalty,
+        weight = 1.0
+    )
+    Not_center = RewardTermCfg (
+        func = cart_not_center_penalty,
+        weight = 0.8
+    )
+    # balance_rv2 = RewardTermCfg(
+    #     func=Reward_balance_rv2,
+    #     weight=1.0,
+    # )
 
-    # rewards_rv1 = RewardTermCfg(
-    #     func=cartpole_reward_joint_pos_rv1,
-    #     weight=2.0)
-    
-    rewards_rv2 = RewardTermCfg(
-        func=cartpole_reward_joint_pos_rv2_rv1, 
-        weight=3.0)
-    
-    penalty_vel = RewardTermCfg(
-        func=cartpole_penalty_joint_vel, 
-        weight=-0.5)
-    
-    penalty_vel_p1 = RewardTermCfg(
-        func=cartpole_penalty_joint_vel_pe1, 
-        weight=-1.2)
-    
-    penalty_vel_p2 = RewardTermCfg(
-        func=cartpole_penalty_joint_vel_pe2, 
-        weight=-1.2)
-    
-    penalty_fall_p1 = RewardTermCfg(
-        func=cartpole_penalty_fall_p1, 
-        weight=-5.5)
-      
-    penalty_fall_p2 = RewardTermCfg(
-        func=cartpole_penalty_fall_p2, 
-        weight=-3.7)
-    
-    reward_cart = RewardTermCfg(
-        func=cart_center_reward, 
-        weight=0.2)
-    
-    penalty_cart = RewardTermCfg(
-        func=cart_not_center_penalty, 
-        weight=-1.0)
-
-
-
-    
-
-
-
+    bonus_near = RewardTermCfg(
+        func=Reward_bonus_near,
+        weight=1.5,
+    )
 
 @configclass
 class TerminationsCfg:
     """Termination configuration for legged r
-
 Có thể có trễ âm thanh khi chơi game hoặc xem video.
 obot environment."""
 
@@ -183,10 +174,10 @@ obot environment."""
     # reset_cartpole2 = TerminationTermCfg(
     #     func = Cart_pole_pos_reset,
     # )
-    # cart_out = TerminationTermCfg(
-    #     func=cartpole_terminate_cart_out,
-    #     params={"x_limit": 0.99},
-    # )
+    cart_out = TerminationTermCfg(
+        func=cartpole_terminate_cart_out,
+        params={"x_limit": 3.90},
+    )
 
 @configclass
 class CartPoleV2EnvCfg(ManagerBasedRLEnvCfg):

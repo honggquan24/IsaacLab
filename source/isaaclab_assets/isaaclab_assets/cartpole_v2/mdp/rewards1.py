@@ -1,102 +1,139 @@
 from __future__ import annotations
 import torch
 from typing import TYPE_CHECKING
+from isaaclab.managers import SceneEntityCfg
+from isaaclab.utils.math import wrap_to_pi
+import math
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
 
 
-def cartpole_reward_joint_pos_rv1(
-    env: ManagerBasedRLEnv,
-    scale_pos: float = 5.0,
-)-> torch.Tensor:
+
+def Reward_Swing_up_rv1 (
+        env : ManagerBasedRLEnv,
+        target: float = 0.0,
+        scale : float = 1.0,
+):
     robot = env.scene['robot']
-    joint_pos = robot.data.joint_pos 
-    theta1 = joint_pos[:, 1]
-    reward = scale_pos * torch.cos(theta1)
-    return reward 
-
-def cartpole_reward_joint_pos_rv2(
-    env: ManagerBasedRLEnv,
-    scale_pos: float = 5.0,
-)-> torch.Tensor:
-    robot = env.scene['robot']
-    joint_pos = robot.data.joint_pos 
-    theta2 = joint_pos[:, 2]
-    reward = scale_pos * torch.cos(theta2)
-    return reward
-
-def cartpole_penalty_extreme_angle(
-    env: ManagerBasedRLEnv,
-    threshold_fail: float = 1.57,
-    scale: float = 10.0,
-)-> torch.Tensor:
-    robot = env.scene["robot"]
-    joint_pos = robot.data.joint_pos 
-
-    theta1 = torch.abs(joint_pos[:, 1])
-    theta2 = torch.abs(joint_pos[:, 2])
-    
-
-    err1 = torch.clamp(theta1 - threshold_fail, min=0.0) 
-    err2 = torch.clamp(theta2 - threshold_fail, min=0.0) 
-    
-    penalty = -scale * (err1**2 + err2**2)
-    return penalty
-
-
-
-def cartpole_penalty_joint_vel(
-    env: ManagerBasedRLEnv,
-    scale: float = 0.1
-)-> torch.Tensor:
-    robot = env.scene['robot']
-    joint_vel = robot.data.joint_vel  
-    penalty = -scale * (joint_vel[:, 0]**2 + joint_vel[:, 1]**2 + joint_vel[:, 2]**2)
-    return penalty
-
-def cartpole_penalty_action_effort(
-    env: ManagerBasedRLEnv,
-    scale: float = 0.001,
-) -> torch.Tensor:
-    actions = env.action_manager.action
-    penalty = -scale * torch.sum(actions**2, dim=-1)
-    return penalty
-
-
-
-def cart_center_reward(
-    env: ManagerBasedRLEnv,
-    target: float = 0.6,
-    scale: float = 1.5,
-    x_limit: float = 0.8,
-) -> torch.Tensor:
-    robot = env.scene["robot"]
     joint_pos = robot.data.joint_pos
-    device = joint_pos.device
 
-    x = joint_pos[:, 0] - target
-    reward = torch.exp(-((scale * x) ** 2))
-    reward = torch.where(
-        torch.abs(x) < x_limit,
-        reward,
-        torch.zeros_like(reward)
-    )
+    theta1_ = joint_pos [:,1]
+    theta1  = wrap_to_pi(theta1_)
+
+    err = theta1 - target 
+
+    reward = scale * torch.cos(err)
     return reward
 
+def Reward_Swing_up_rv2 (
+        env : ManagerBasedRLEnv,
+        target: float = 0.0,
+        scale : float = 1.0,
+):
+    robot = env.scene['robot']
+    joint_pos = robot.data.joint_pos
 
+    theta1_ = joint_pos [:,1]
+    theta2_ = joint_pos [:,2]
+
+    theta1  =wrap_to_pi (theta1_)
+    theta2  = wrap_to_pi (theta1 + theta2_)
+
+    err = theta2 - target 
+
+    reward = scale * torch.cos(err)
+    return reward
+
+def Penalty_vel (
+    env : ManagerBasedRLEnv,
+    target: float = 0.0,
+    scale : float = 1.0,  
+):
+    robot = env.scene['robot']
+    joint_pos = robot.data.joint_pos
+    joint_vel = robot.data.joint_vel
+
+    theta1_ = joint_pos[:, 1]
+    theta2_ = joint_pos[:, 2]
+
+    theta1 = wrap_to_pi(theta1_)
+    theta2 = wrap_to_pi(theta1 + theta2_)
+
+    w1 = joint_vel[:, 1]
+    w2_rel = joint_vel[:, 2]
+    w2_abs = w1 + w2_rel
+
+    th = 15.0 * math.pi / 180.0
+    near = (theta1.abs() < th) & (theta2.abs() < th)
+
+    k_balance = 0.01 
+    k_swingup = 1.0e-4
+
+    penalty = torch.where(
+        near,
+        -k_balance * (w1**2 + w2_abs**2),
+        -k_swingup * (w1**2 + w2_abs**2),
+    )
+    return penalty
+
+def action_penalty(
+    env: ManagerBasedRLEnv,
+    scale: float = 1.0e-3,
+) -> torch.Tensor:
+    u = env.action_manager.action
+    return -scale * torch.sum(u**2, dim=-1)
 
 def cart_not_center_penalty(
     env: ManagerBasedRLEnv,
     target: float = 0.6,
-    tolerance: float = 0.05,
-    scale: float = 2.0,
-) -> torch.Tensor:
+    scale: float = 5,
+):
+    robot =env.scene["robot"]
+    joint_pos = robot.data.joint_pos
+    err_pos = scale * (torch.abs(joint_pos[:, 0]) - target)
+    err_pos = torch.clamp (err_pos, min = 0)
+    
+    penalty = -(1 - torch.exp(-(err_pos ** 2)))
+    return penalty
+
+def Reward_balance_rv2(
+    env: ManagerBasedRLEnv,
+    k: float = 20.0,
+    scale: float = 1.0,
+):
     robot = env.scene["robot"]
     joint_pos = robot.data.joint_pos
 
-    x = torch.abs(joint_pos[:, 0] - target)
-    err = torch.clamp(x - tolerance, min=0.0)
+    theta1_ = joint_pos[:, 1]
+    theta2_ = joint_pos[:, 2]
 
-    penalty = -(1.0 - torch.exp(-scale * err**2))
-    return penalty
+    theta1 = wrap_to_pi(theta1_)
+    theta2_abs = wrap_to_pi(theta1 + theta2_)
+
+    err2 = wrap_to_pi(theta2_abs - 0.0)
+    reward = scale * torch.exp(-k * (err2**2))
+    return reward
+
+def Reward_bonus_near(
+    env: ManagerBasedRLEnv,
+    th_deg: float = 15.0,
+    bonus: float = 1.0,
+):
+    robot = env.scene["robot"]
+    joint_pos = robot.data.joint_pos
+
+    theta1_ = joint_pos[:, 1]
+    theta2_ = joint_pos[:, 2]
+
+    theta1 = wrap_to_pi(theta1_)
+    theta2_abs = wrap_to_pi(theta1 + theta2_)
+
+    th = th_deg * math.pi / 180.0
+    near = (theta1.abs() < th) & (theta2_abs.abs() < th)
+
+    return torch.where(near, torch.full_like(theta1, bonus), torch.zeros_like(theta1))
+
+
+    
+
