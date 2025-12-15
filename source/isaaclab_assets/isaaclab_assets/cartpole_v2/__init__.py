@@ -31,8 +31,8 @@ from . import agents
 # ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
 # --task Isaac-Cartpole-V2-Run \
 # --num_envs 4 \
-# 'agent.load_run=2025-12-05_09-26-26' \
-# 'agent.load_checkpoint="model_250.pt"'
+# 'agent.load_run=complete2' \
+# 'agent.load_checkpoint="model_220.pt"'
 
 # ./isaaclab.sh -p scripts/tutorials/03_envs/run_cartpole_rl_env.py --device cpu
 

@@ -60,7 +60,7 @@ def rpy_alignment_imu(
     
     # FIX 4: Clamp errors to avoid extreme values
     roll_error = torch.clamp(roll_error, -torch.pi, torch.pi)
-    pitch_error = torch.clampto(pitch_error, -torch.pi, torch.pi)
+    pitch_error = torch.clamp (pitch_error, -torch.pi, torch.pi)
     yaw_error = torch.clamp(yaw_error, -torch.pi, torch.pi)
     
     # FIX 5: Use scale factor to avoid exp overflow

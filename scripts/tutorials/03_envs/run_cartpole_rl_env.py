@@ -39,13 +39,13 @@ from isaaclab.envs import ManagerBasedRLEnv
 
 from isaaclab_tasks.manager_based.classic.cartpole.cartpole_env_cfg import CartpoleEnvCfg
 from isaaclab_assets import CartPoleV1EnvCfg
-from isaaclab_assets import CartPoleV2EnvCfg
+from isaaclab_assets import CartPoleV3EnvCfg
 
 
 def main():
     """Main function."""
     # create environment configuration
-    env_cfg = CartPoleV2EnvCfg()
+    env_cfg = CartPoleV3EnvCfg()
     env_cfg.scene.num_envs = args_cli.num_envs
     env_cfg.sim.device = args_cli.device
     # setup RL environment

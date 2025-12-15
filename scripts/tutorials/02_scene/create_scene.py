@@ -40,7 +40,6 @@ from isaaclab.assets import ArticulationCfg, AssetBaseCfg
 from isaaclab.scene import InteractiveScene, InteractiveSceneCfg
 from isaaclab.sim import SimulationContext
 from isaaclab.utils import configclass
-
 from isaaclab_assets import CARTPOLE_ROBOT_CFG
 
 ##
