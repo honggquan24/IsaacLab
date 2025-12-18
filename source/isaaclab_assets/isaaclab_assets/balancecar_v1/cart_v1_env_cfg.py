@@ -54,6 +54,16 @@ class CartbalanceV1SceneConfig(InteractiveSceneCfg):
     robot: Articulation = CART_BALANCE_CFG.replace(
         prim_path="{ENV_REGEX_NS}/Robot",
     )
+    # Add robot
+    imu= ImuCfg(
+    prim_path="/World/envs/env_.*/Robot/balance_robot/balance_robot/balance_body",
+        offset=ImuCfg.OffsetCfg(
+        pos=(0.0, 0.0, -0.2),
+        rot=(0.0, 0.0, 0.0, 1.0),
+    ),
+    update_period=0.0,
+    debug_vis=True,
+    )
 
 @configclass
 class ActionsCfg :
@@ -65,8 +75,8 @@ class ActionsCfg :
             "Revolute_2"
         ],
         scale={
-            "Revolute_1": 200.0,
-            "Revolute_2": 200.0,
+            "Revolute_1": 100.0,
+            "Revolute_2": 100.0,
         },
         debug_vis=True,
     )
@@ -75,21 +85,39 @@ class ObservationsCfg:
 
     """Observation specifications for the environment."""
     @configclass
-
     class PolicyCfg(ObsGroup):
 
         """Observations for policy group."""
         # observation terms (order preserved)
         joint_pos = ObsTerm(func=mdp.joint_pos,params={"asset_cfg": SceneEntityCfg("robot")},)
         joint_vel = ObsTerm(func=mdp.joint_vel,params={"asset_cfg": SceneEntityCfg("robot")},)
-        pitch_angl_p = ObsTerm(func=obs_body_pitch,params={"asset_cfg": SceneEntityCfg("robot")},)
-        pitch_angl_r = ObsTerm(func=obs_body_roll,params={"asset_cfg": SceneEntityCfg("robot")},)
-        pitch_angl_y = ObsTerm(func=obs_body_yaw,params={"asset_cfg": SceneEntityCfg("robot")},)
+        pitch_angl_p = ObsTerm(func=obs_body_pitch,params={"asset_cfg": SceneEntityCfg("imu")},)
+        pitch_angl_r = ObsTerm(func=obs_body_roll,params={"asset_cfg": SceneEntityCfg("imu")},)
+        pitch_angl_y = ObsTerm(func=obs_body_yaw,params={"asset_cfg": SceneEntityCfg("imu")},)
+        l_vel = ObsTerm (func = lin_vel_b,params={"asset_cfg": SceneEntityCfg("imu")},)
+        a_vel = ObsTerm (func = angl_vel_b,params={"asset_cfg": SceneEntityCfg("imu")},)
+        obs_pos_w = ObsTerm (func = obs_pos_world,params={"asset_cfg": SceneEntityCfg("robot")},)
+        def __post_init__(self) -> None:
+            self.enable_corruption = False
+            self.concatenate_terms = True
+    # observation groups
+    @configclass  
+    class CriticCfg(ObsGroup):
+        """Observations for policy group."""
+        # observation terms (order preserved)
+        joint_pos = ObsTerm(func=mdp.joint_pos,params={"asset_cfg": SceneEntityCfg("robot")},)
+        joint_vel = ObsTerm(func=mdp.joint_vel,params={"asset_cfg": SceneEntityCfg("robot")},)
+        pitch_angl_p = ObsTerm(func=obs_body_pitch,params={"asset_cfg": SceneEntityCfg("imu")},)
+        pitch_angl_r = ObsTerm(func=obs_body_roll,params={"asset_cfg": SceneEntityCfg("imu")},)
+        pitch_angl_y = ObsTerm(func=obs_body_yaw,params={"asset_cfg": SceneEntityCfg("imu")},)
+        l_vel = ObsTerm (func = lin_vel_b,params={"asset_cfg": SceneEntityCfg("imu")},)
+        a_vel = ObsTerm (func = angl_vel_b,params={"asset_cfg": SceneEntityCfg("imu")},)
         def __post_init__(self) -> None:
             self.enable_corruption = False
             self.concatenate_terms = True
     # observation groups
     policy: PolicyCfg = PolicyCfg()
+    critic: CriticCfg = CriticCfg()
 
 @configclass
 class EventCfg:
@@ -108,16 +136,38 @@ class EventCfg:
 class RewardCfg:
     alive = RewardTermCfg(
         func=rewards.is_alive, 
-        weight=1.0)
-    
+        weight=1.0
+    )
     terminating = RewardTermCfg(
         func=rewards.is_terminated, 
-        weight=-2.0)
-    
-    reward_angl = RewardTermCfg (
-        func = reward_angle,
-        weight = 1.5
+        weight=-2.0
     )
+    reward_angl = RewardTermCfg (
+        func = reward_angle_r,
+        weight = 3.5
+    )
+    reward_angl1 = RewardTermCfg (
+        func = reward_angle_y,
+        weight = 0.4
+    )
+    reward_velo = RewardTermCfg (
+        func = reward_vel,
+        weight = 0.5
+    )
+    reward_bonus_when_up = RewardTermCfg (
+        func = bonus_reward,
+        weight = 2.0
+    )
+    reward_lvel = RewardTermCfg (
+        func = reward_li_vel,
+        weight = 0.2
+    )
+    reward_r_rate = RewardTermCfg (
+        func = reward_roll_rate,
+        weight = 0.4
+    )
+
+
 
 @configclass
 class TerminationsCfg:
@@ -125,6 +175,9 @@ class TerminationsCfg:
     time_out = TerminationTermCfg(
         func=terminations.time_out,
         time_out=True,  # Mark as timeout (not failure)
+    )
+    when_fall = TerminationTermCfg (
+        func = reset_when_fall,
     )
 @configclass
 class CartbalanceEnvCfg(ManagerBasedRLEnvCfg):
@@ -139,6 +192,7 @@ class CartbalanceEnvCfg(ManagerBasedRLEnvCfg):
     events: EventCfg = EventCfg()
     rewards: RewardCfg = RewardCfg()
     terminations: TerminationsCfg = TerminationsCfg()
+
 
     def __post_init__(self) -> None:
         """Post initialization."""

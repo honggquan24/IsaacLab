@@ -33,7 +33,7 @@ CART_BALANCE_CFG = ArticulationCfg(
         ),
     ),
     init_state=ArticulationCfg.InitialStateCfg(
-        pos=(0.0, 0.0, 2.0),
+        pos=(0.0, 0.0, 0.5),
     ),
     actuators={
         "wheel": ImplicitActuatorCfg(
@@ -41,7 +41,7 @@ CART_BALANCE_CFG = ArticulationCfg(
             effort_limit_sim=400.0, 
             stiffness=0.0, 
             damping=0.0,
-            velocity_limit_sim=30.0,
+            velocity_limit_sim=20.0,
         ),
     },
 )

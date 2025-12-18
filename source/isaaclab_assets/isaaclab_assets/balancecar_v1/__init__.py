@@ -1,5 +1,8 @@
 from .cart_v1_cfg import *
 from .cart_v1_env_cfg import *
+
+
+
 import gymnasium as gym
 from . import agents
 
@@ -7,8 +10,19 @@ from . import agents
 # ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
 # --task Isaac-Cartbalance-V1-Run \
 # --num_envs 4 \
-# 'agent.load_run=complete' \
-# 'agent.load_checkpoint="model_20.pt"'
+# 'agent.load_run=balance' \
+# 'agent.load_checkpoint="model_120.pt"'
+
+
+# Continue train
+# ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
+# --task=Isaac-Cartbalance-V1-Run \
+# --num_envs 1 \
+# --resume --load_run=balance \
+# --checkpoint=model_120.pt \
+# --video --rendering_mode performance
+
+
 
 gym.register(
     id="Isaac-Cartbalance-V1-Run",
