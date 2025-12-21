@@ -7,6 +7,8 @@ from .config import *
 
 # Train mode headless
 # ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
+# --task=Isaac-Navigation-Flat-Anymal-C-v0 \
+
 # --task=Isaac-Legged-Robot-V2-Balance \
 # --num_envs 1000 \
 # --headless --rendering_mode performance

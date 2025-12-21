@@ -580,7 +580,7 @@ class LeggedRobotV2EnvCfgBalance(ManagerBasedRLEnvCfg):
         self.sim.use_fabric = True
         
         self.decimation = 1  # Control freq = 60/1 = 60 Hz
-        self.episode_length_s = 100  # Episode duration
+        self.episode_length_s = 20  # Episode duration
         
         # Viewer settings
         self.viewer.eye = (5.0, 0.0, 2.0)  # Camera position

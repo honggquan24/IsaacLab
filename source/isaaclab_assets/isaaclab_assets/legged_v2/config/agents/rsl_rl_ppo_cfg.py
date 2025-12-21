@@ -1,4 +1,6 @@
 from isaaclab.utils import configclass
+# from legged_v2.config.env import
+
 
 from isaaclab_rl.rsl_rl import (
     RslRlOnPolicyRunnerCfg,
@@ -8,7 +10,8 @@ from isaaclab_rl.rsl_rl import (
 
 @configclass
 class LegV2PPORunnerCfgBalance(RslRlOnPolicyRunnerCfg):
-    num_steps_per_env = 100
+    # steps_per_episode = episode_length_s / (sim.dt × decimation)
+    num_steps_per_env = int(20 / (1/60 * 1))
     max_iterations = 1000
     save_interval = 10
     experiment_name = "leg_v2_ppo_balance"
