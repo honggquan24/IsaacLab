@@ -9,73 +9,18 @@ if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
 
 
-# TARGET JOINT
-TARGET_JOINT = torch.tensor([
-    # index: joint_name       
-    0.0, 2.0, 2.0 ,0.0 ,          
-])
+def joint_pos_target_l2(env: ManagerBasedRLEnv, target: float, asset_cfg: SceneEntityCfg) -> torch.Tensor:
+    """Penalize joint position deviation from a target value."""
+    # extract the used quantities (to enable type-hinting)
+    asset: Articulation = env.scene[asset_cfg.name]
+    # wrap the joint positions to (-pi, pi)
+    joint_pos = wrap_to_pi(asset.data.joint_pos[:, asset_cfg.joint_ids])
+    # compute the reward
+    return torch.sum(torch.square(joint_pos - target), dim=1)
 
-def cartpole_reward_joint_pos(
-    env: ManagerBasedRLEnv,
-    target: torch.Tensor = TARGET_JOINT,
-    scale_pos: float = 0.6,
-)-> torch.Tensor:
-    robot = env.scene['robot']
-    joint_pos = robot.data.joint_pos      
- 
-    robot = env.scene['robot']
-    joint_pos = robot.data.joint_pos
- 
-    # Move tensors to correct device
-    device = joint_pos.device
-    if target.device != device: 
-        target = target.to(device)
-
-    err = (joint_pos[:, 1] - target[0])
-    reward = torch.exp(-scale_pos*(err ** 2))
-    return reward
-
-
-def cartpole_reward_joint_vel(
-    env: ManagerBasedRLEnv,
-    target: torch.Tensor = TARGET_JOINT,
-    scale: float = 0.8
-)-> torch.Tensor:
-    robot = env.scene['robot']
-    joint_vel = robot.data.joint_vel  
-    
-    device = joint_vel.device
-    if target.device != device:
-        target = target.to(device)
-
-
-    err_cart = torch.abs(joint_vel[:, 0]) - target[1]
-    err_cart = torch.clamp (err_cart , min= 0.0 )
-
-    err_pendulum = torch.abs(joint_vel[:, 1]) - target[2]
-    err_pendulum = torch.clamp (err_pendulum , min= 0.0)
-
-
-    reward=1.0 - torch.exp(
-        -scale * (err_pendulum**2 + err_cart**2)
-        )
-
-    return reward
-
-def cartpole_reward_fall(
-    env: ManagerBasedRLEnv,
-    threshold_fall: float = 0.3, 
-    scale: float = 0.8,
-)-> torch.Tensor:
-    robot = env.scene["robot"]
-    joint_pos = robot.data.joint_pos 
-
-    theta = joint_pos[:, 1]
-
-    err = torch.abs(theta) - threshold_fall
-    err = torch.clamp(err, min=0.0)
-
-
-    reward = 1.0 - torch.exp(-scale * err**2)
-    return reward 
-
+def position_command_error_tanh(env: ManagerBasedRLEnv, std: float, command_name: str) -> torch.Tensor:
+    """Reward position tracking with tanh kernel."""
+    command = env.command_manager.get_command(command_name)
+    des_pos_b = command[:, :3]
+    distance = torch.norm(des_pos_b, dim=1)
+    return 1 - torch.tanh(distance / std)
