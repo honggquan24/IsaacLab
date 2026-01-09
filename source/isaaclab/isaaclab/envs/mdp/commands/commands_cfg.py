@@ -225,7 +225,7 @@ class UniformPose2dCommandCfg(CommandTermCfg):
     """The configuration for the goal pose visualization marker. Defaults to GREEN_ARROW_X_MARKER_CFG."""
 
     # Set the scale of the visualization markers to (0.2, 0.2, 0.8)
-    goal_pose_visualizer_cfg.markers["arrow"].scale = (0.2, 0.2, 0.8)
+    goal_pose_visualizer_cfg.markers["arrow"].scale = (0.1, 0.1, 0.1)
 
 
 @configclass

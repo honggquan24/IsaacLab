@@ -100,6 +100,7 @@ class ObservationsCfg:
         def __post_init__(self) -> None:
             self.enable_corruption = False
             self.concatenate_terms = True
+    
     # observation groups
     @configclass  
     class CriticCfg(ObsGroup):
@@ -179,6 +180,7 @@ class TerminationsCfg:
     when_fall = TerminationTermCfg (
         func = reset_when_fall,
     )
+    
 @configclass
 class CartbalanceEnvCfg(ManagerBasedRLEnvCfg):
     """Configuration for the legged robot environment."""  
