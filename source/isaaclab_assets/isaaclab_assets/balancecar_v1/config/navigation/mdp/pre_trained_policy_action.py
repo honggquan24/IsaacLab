@@ -170,9 +170,8 @@ class PreTrainedBalancePolicyAction(ActionTerm):
         zeros = torch.zeros_like(heading_angle)
         arrow_quat = math_utils.quat_from_euler_xyz(zeros, zeros, heading_angle)
 
-        # Use only yaw component to avoid arrow pointing down due to robot's roll/pitch
-        base_yaw_quat = math_utils.yaw_quat(self.robot.data.root_quat_w)
-        arrow_quat = math_utils.quat_mul(base_yaw_quat, arrow_quat)
+        base_quat_w = self.robot.data.root_quat_w
+        arrow_quat = math_utils.quat_mul(base_quat_w, arrow_quat)
 
         return arrow_scale, arrow_quat
 
@@ -199,10 +198,10 @@ class PreTrainedBalancePolicyActionCfg(ActionTermCfg):
     low_level_observations: ObservationGroupCfg = MISSING
     """Low level observation configuration for balance policy."""
 
-    velocity_scale: float = 10.0
+    velocity_scale: float = 1.0
     """Scale factor for forward velocity commands."""
 
-    turn_scale: float = 5.0
+    turn_scale: float = 1.0
     """Scale factor for turning commands."""
 
     debug_vis: bool = True
