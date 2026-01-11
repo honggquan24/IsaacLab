@@ -65,58 +65,66 @@ class EvobotV1SceneConfig(InteractiveSceneCfg):
         prim_path="{ENV_REGEX_NS}/Robot",
     )
 
-    # Add IMU sensor - mounted on base_link (main body)
+    # Add IMU sensor - mounted on top_link (upper body)
     imu = ImuCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/evobot/base_link",
-        update_period=0.02,  # Changed from 0.1 to match control frequency (50Hz)
+        prim_path="/World/envs/env_.*/Robot/evobot/evobot/top_link",
+        update_period=0.02,  # 50Hz to match control frequency
         gravity_bias=(0.0, 0.0, 0.0),
     )
 
-    # Height scanner - mounted on head_link for forward scanning
-    height_scanner = RayCasterCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/evobot/base_link",
-        update_period=0.01,
-        offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 0.0)),
-        ray_alignment="yaw",
-        pattern_cfg=patterns.GridPatternCfg(
-            resolution=0.1,
-            size=[0.3, 0.3], # type: ignore
-        ),
-        mesh_prim_paths=["/World/Ground"],
-    )
-
-    # Contact sensors for wheels
-    contact_forces_wheel_left = ContactSensorCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/evobot/left_wheel",
-        update_period=0.01,
-    )
-
-    contact_forces_wheel_right = ContactSensorCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/evobot/right_wheel",
+    # Contact sensor - mounted on head_link to detect illegal contacts
+    contact_forces_arm_link = ContactSensorCfg(
+        prim_path="/World/envs/env_.*/Robot/evobot/evobot/head_link",
         update_period=0.01,
     )
 
 
 @configclass
 class ActionCfg:
-    """Action configuration for joint effort control."""
+    """Action configuration for joint effort control.
 
-    joint_effort = actions.JointEffortActionCfg(
+    Available joints in USD (5 DOF total):
+    - left_wheel_joint (Revolute)
+    - right_wheel_joint (Revolute)
+    - arm_joint (Revolute)
+    - left_grabbing_joint (Prismatic)
+    - right_grabbing_joint (Prismatic)
+
+    All joints are at root level: /Robot/evobot/evobot/<joint_name>
+
+    Scale values are configured separately for each joint group:
+    - Wheels: High torque for locomotion (500.0)
+    - Arm: Medium torque for manipulation (300.0)
+    - Grabbers: Low force for grasping (50.0)
+    """
+
+    # Wheels - High torque for locomotion
+    wheel_effort = actions.JointEffortActionCfg(
         asset_name="robot",
         joint_names=[
-        'arm_joint', 
-        'left_wheel_joint',
-        'right_wheel_joint', 
-        'base_joint',
-        'left_grabbing_joint',
-        'right_grabbing_joint', 
-        'right_levers_2_joint',
-        'left_levers_2_joint', 
-        'left_turntable_joint', 
-        'left_levers_joint_1',
-        'right_turntable_joint',
-        'right_levers_joint_1'],
-        scale=500.0,
+            'left_wheel_joint',       # Revolute - Left wheel
+            'right_wheel_joint',      # Revolute - Right wheel
+        ],
+        scale=300.0,  # High torque for moving the robot
+    )
+
+    # Arm - Medium torque for manipulation
+    arm_effort = actions.JointEffortActionCfg(
+        asset_name="robot",
+        joint_names=[
+            'arm_joint',              # Revolute - Arm rotation
+        ],
+        scale=100.0,  # Medium torque for arm movement
+    )
+
+    # Grabbers - Low force for grasping
+    grabber_effort = actions.JointEffortActionCfg(
+        asset_name="robot",
+        joint_names=[
+            'left_grabbing_joint',    # Prismatic - Left gripper
+            'right_grabbing_joint',   # Prismatic - Right gripper
+        ],
+        scale=50.0,  # Low force to avoid damaging objects
     )
 
 
@@ -128,11 +136,14 @@ class ObservationsCfg:
     class PolicyCfg(ObservationGroupCfg):
         """Policy observation group."""
 
-        # IMU sensors
+        # # IMU sensors
         imu_lin_acc = ObservationTermCfg(func=observations.imu_lin_acc)
         imu_ang_vel = ObservationTermCfg(func=observations.imu_ang_vel)
         imu_orientation = ObservationTermCfg(func=observations.imu_orientation)
         imu_projected_gravity = ObservationTermCfg(func=observations.imu_projected_gravity)
+        
+        # Pose
+        body_pose_w = ObservationTermCfg(func=observations.body_pose_w)
 
         # Joint states
         joint_pos = ObservationTermCfg(func=observations.joint_pos)
@@ -148,7 +159,14 @@ class ObservationsCfg:
 
     @configclass
     class CriticCfg(ObservationGroupCfg):
-        """Critic observation group - more comprehensive information."""
+        """FIX MEMORY LEAK: Giảm critic observations từ 16 → 8 terms
+
+        Removed redundant observations:
+        - body_pose_w: duplicate of root_pos_w + root_quat_w
+        - base_lin_vel: duplicate of root_lin_vel_w
+        - imu_lin_acc: có thể suy ra từ root_lin_vel_w
+        - current_time/remaining_time: không cần cho balance task ngắn (5s)
+        """
 
         # Root state (privileged information)
         root_pos_w = ObservationTermCfg(func=observations.root_pos_w)
@@ -156,29 +174,17 @@ class ObservationsCfg:
         root_lin_vel_w = ObservationTermCfg(func=observations.root_lin_vel_w)
         root_ang_vel_w = ObservationTermCfg(func=observations.root_ang_vel_w)
 
-        # Base velocity (body frame)
-        base_lin_vel = ObservationTermCfg(func=observations.base_lin_vel)
-
-        # IMU data
-        imu_lin_acc = ObservationTermCfg(func=observations.imu_lin_acc)
-        imu_ang_vel = ObservationTermCfg(func=observations.imu_ang_vel)
+        # # IMU data (keep only essential)
         imu_orientation = ObservationTermCfg(func=observations.imu_orientation)
         imu_projected_gravity = ObservationTermCfg(func=observations.imu_projected_gravity)
-
-        # Pose
-        body_pose_w = ObservationTermCfg(func=observations.body_pose_w)
 
         # Joint states
         joint_pos = ObservationTermCfg(func=observations.joint_pos)
         joint_vel = ObservationTermCfg(func=observations.joint_vel)
         joint_effort = ObservationTermCfg(func=observations.joint_effort)
-
+        
         # Previous actions
         last_action = ObservationTermCfg(func=observations.last_action)
-
-        # Time information (for temporal learning)
-        current_time = ObservationTermCfg(func=observations.current_time_s)
-        remaining_time = ObservationTermCfg(func=observations.remaining_time_s)
 
         def __post_init__(self) -> None:
             self.enable_corruption = False
@@ -212,7 +218,7 @@ class EventCfg:
             "pose_range": {
                 "x": (-0.1, 0.1),
                 "y": (-0.1, 0.1),
-                "z": (0.72, 0.72),
+                "z": (0.12, 0.12),
                 "roll": (-0.05, 0.05),
                 "pitch": (-0.05, 0.05),
                 "yaw": (-0.1, 0.1),
@@ -261,27 +267,35 @@ class RewardCfg:
     # (5) Joint velocity penalty (combined, not per-joint)
     joint_vel = RewardTermCfg(
         func=joint_vel_l2,
-        weight=-0.5,
+        weight=-1e-4,
         params={
             "asset_cfg": SceneEntityCfg(name="robot"),
         },
     )
-
+    
     # (6) Angular velocity stability (roll/pitch rates)
     ang_vel_xy = RewardTermCfg(
         func=ang_vel_xy_l2,
-        weight=-0.5,
+        weight=-0.005,
         params={
             "asset_cfg": SceneEntityCfg(name="robot"),
         },
     )
-
-    # (7) Base height tracking
-    base_height = RewardTermCfg(
-        func=base_height_l2,
-        weight=-10.0,
+    
+    # (7) Joint velocity penalty (combined, not per-joint)
+    joint_acc_l2 = RewardTermCfg(
+        func=joint_acc_l2,
+        weight=-1e-8,
         params={
-            "target_height": 0.70,  # Target upright standing height
+            "asset_cfg": SceneEntityCfg(name="robot"),
+        },
+    )
+    
+    # (8) Angular velocity stability (roll/pitch rates)
+    body_lin_acc_l2 = RewardTermCfg(
+        func=body_lin_acc_l2,
+        weight=-0.005,
+        params={
             "asset_cfg": SceneEntityCfg(name="robot"),
         },
     )
@@ -298,22 +312,31 @@ class TerminationsCfg:
     )
 
     # ROOT HEIGHT BELOW MINIMUM
-    # base_height = TerminationTermCfg(
-    #     func=terminations.root_height_below_minimum,
-    #     params={
-    #         "minimum_height": 0.25,
-    #         "asset_cfg": SceneEntityCfg(name="robot"),
-    #     },
-    # )
+    base_height = TerminationTermCfg(
+        func=terminations.root_height_below_minimum,
+        params={
+            "minimum_height": 0.35,
+            "asset_cfg": SceneEntityCfg(name="robot"),
+        },
+    )
 
     # BAD ORIENTATION
-    # bad_orientation = TerminationTermCfg(
-    #     func=terminations.bad_orientation,
-    #     params={
-    #         "limit_angle": math.pi / 3,  # 60° tolerance
-    #         "asset_cfg": SceneEntityCfg(name="robot"),
-    #     },
-    # )
+    bad_orientation = TerminationTermCfg(
+        func=terminations.bad_orientation,
+        params={
+            "limit_angle": math.pi / 3,  # 60° tolerance
+            "asset_cfg": SceneEntityCfg(name="robot"),
+        },
+    )
+    
+    # Contact illegal 
+    contact_arm = TerminationTermCfg( 
+        func=terminations.illegal_contact, 
+        params={ 
+            "threshold": 30.0, 
+            "sensor_cfg": SceneEntityCfg(name="contact_forces_arm_link") 
+        }
+    ) 
 
 
 @configclass
@@ -339,8 +362,11 @@ class EvobotV1EnvCfgBalance(ManagerBasedRLEnvCfg):
         self.sim.device = "gpu"
         self.sim.use_fabric = True
 
+        # FIX MEMORY LEAK: Reduce episode length to match buffer size better
+        # Old: 5 sec × 60 Hz = 300 steps >> 48 buffer → 6.25 buffer fills per episode
+        # New: 2 sec × 60 Hz = 120 steps → 2.5 buffer fills per episode
         self.decimation = 1  # Control freq = 60/1 = 60 Hz
-        self.episode_length_s = 20  # Episode duration
+        self.episode_length_s = 5  # Episode duration (reduced from 5s)
 
         # Viewer settings
         self.viewer.eye = (5.0, 0.0, 2.0)  # Camera position

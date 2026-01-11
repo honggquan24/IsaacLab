@@ -1,127 +1,247 @@
+# Copyright (c) 2022-2025, The Isaac Lab Project Developers.
+# All rights reserved.
+#
+# SPDX-License-Identifier: BSD-3-Clause
+
 """Navigation-specific reward functions for Evobot V1."""
 
+from __future__ import annotations
+
 import torch
-from isaaclab.envs import ManagerBasedRLEnv
-from isaaclab.managers import SceneEntityCfg
+from typing import TYPE_CHECKING
+
+from isaaclab.utils.math import euler_xyz_from_quat
+
+if TYPE_CHECKING:
+    from isaaclab.envs import ManagerBasedRLEnv
+
+
+# =========================================================
+# BASIC POSITION / HEADING REWARDS
+# =========================================================
 
 
 def position_command_error_tanh(
     env: ManagerBasedRLEnv,
     std: float,
     command_name: str,
-    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
 ) -> torch.Tensor:
-    """Reward for tracking position command using tanh.
-
-    This reward uses tanh function to provide smooth, bounded rewards
-    for position tracking. The std parameter controls how quickly the
-    reward decays with distance error.
-
-    Args:
-        env: The RL environment.
-        std: Standard deviation for tanh scaling (larger = more forgiving).
-        command_name: Name of the command to track.
-        asset_cfg: Scene entity configuration for the robot.
-
-    Returns:
-        Tanh-based position tracking reward for each environment.
-    """
-    # Get target position from command
+    """Reward for tracking position command using tanh."""
     command = env.command_manager.get_command(command_name)
-    target_pos = command[:, :2]  # Extract [x, y] position
-
-    # Get current robot position
-    robot = env.scene[asset_cfg.name]
-    current_pos = robot.data.root_pos_w[:, :2]
-
-    # Compute L2 distance error
-    error = torch.norm(target_pos - current_pos, dim=1)
-
-    # Tanh-based reward (smooth, bounded in [-1, 1])
-    reward = torch.tanh(-error / std)
-    return reward
+    des_pos_b = command[:, :2]
+    distance = torch.norm(des_pos_b, dim=1)
+    return 1.0 - torch.tanh(distance / std)
 
 
 def heading_command_error_abs(
     env: ManagerBasedRLEnv,
     command_name: str,
-    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
 ) -> torch.Tensor:
-    """Penalty for heading error (absolute value).
-
-    Computes the absolute heading error between current robot heading
-    and target heading from command. Returns positive error values
-    (to be weighted negatively in reward config).
-
-    Args:
-        env: The RL environment.
-        command_name: Name of the command to track.
-        asset_cfg: Scene entity configuration for the robot.
-
-    Returns:
-        Absolute heading error for each environment.
-    """
-    # Get target heading from command
+    """Penalty for heading error (absolute value)."""
     command = env.command_manager.get_command(command_name)
-    target_heading = command[:, 2]  # Extract yaw angle
-
-    # Get current heading from robot orientation
-    robot = env.scene[asset_cfg.name]
-    current_quat = robot.data.root_quat_w
-
-    # Convert quaternion to euler angles
-    from isaaclab.utils.math import euler_xyz_from_quat
-    _, _, current_yaw = euler_xyz_from_quat(current_quat)
-
-    # Compute heading error (handle wrapping with wrap_to_pi)
-    error = torch.abs(wrap_to_pi(target_heading - current_yaw))
-    return error
+    heading = command[:, 3]
+    return torch.abs(heading)
 
 
 def position_reached_bonus(
     env: ManagerBasedRLEnv,
     threshold: float,
     command_name: str,
-    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
 ) -> torch.Tensor:
-    """Discrete bonus when robot reaches target position.
-
-    Provides a bonus reward (1.0) when the robot is within the specified
-    threshold distance from the target position.
-
-    Args:
-        env: The RL environment.
-        threshold: Distance threshold for considering target reached (meters).
-        command_name: Name of the command to track.
-        asset_cfg: Scene entity configuration for the robot.
-
-    Returns:
-        Bonus value (1.0 if reached, 0.0 otherwise) for each environment.
-    """
-    # Get target and current position
+    """Discrete bonus when robot reaches target position."""
     command = env.command_manager.get_command(command_name)
-    target_pos = command[:, :2]
-
-    robot = env.scene[asset_cfg.name]
-    current_pos = robot.data.root_pos_w[:, :2]
-
-    # Check if within threshold
-    distance = torch.norm(target_pos - current_pos, dim=1)
-    reached = distance < threshold
-
-    return reached.float()
+    des_pos = command[:, :2]
+    distance = torch.norm(des_pos, dim=1)
+    return (distance < threshold).float()
 
 
-def wrap_to_pi(angle: torch.Tensor) -> torch.Tensor:
-    """Wrap angle to [-pi, pi] range.
+# =========================================================
+# VELOCITY / ALIGNMENT
+# =========================================================
 
-    Utility function to handle angle wrapping, ensuring that angles
-    are always in the range [-π, π].
 
-    Args:
-        angle: Input angle tensor (radians).
+def navigation_velocity_reward(
+    env: ManagerBasedRLEnv,
+    command_name: str,
+    scale: float = 1.0,
+) -> torch.Tensor:
+    """Reward for moving towards goal."""
+    command = env.command_manager.get_command(command_name)
+    des_pos_b = command[:, :2]
 
-    Returns:
-        Wrapped angle in [-π, π] range.
+    vel_b = env.scene["robot"].data.root_lin_vel_b[:, :2]
+    direction = torch.nn.functional.normalize(des_pos_b, dim=1, eps=1e-6)
+
+    vel_towards_target = torch.sum(vel_b * direction, dim=1)
+    return scale * torch.clamp(vel_towards_target, min=0.0)
+
+
+def forward_velocity_tracking(
+    env: ManagerBasedRLEnv,
+) -> torch.Tensor:
+    """Reward for forward velocity."""
+    return env.scene["robot"].data.root_lin_vel_b[:, 0]
+
+
+def lateral_velocity_penalty(
+    env: ManagerBasedRLEnv,
+) -> torch.Tensor:
+    """Penalty for lateral velocity (y-axis in body frame).
+
+    Returns negative value, so use positive weight in RewardsCfg.
     """
-    return (angle + torch.pi) % (2 * torch.pi) - torch.pi
+    lat_vel = env.scene["robot"].data.root_lin_vel_b[:, 1]
+    return -torch.abs(lat_vel)
+
+
+def velocity_goal_alignment(
+    env: ManagerBasedRLEnv,
+    command_name: str = "pose_command",
+) -> torch.Tensor:
+    """Reward for velocity alignment towards goal."""
+    command = env.command_manager.get_command(command_name)
+    goal_pos = command[:, :2]
+
+    robot_pos = env.scene["robot"].data.root_pos_w[:, :2]
+    to_goal = torch.nn.functional.normalize(goal_pos - robot_pos, dim=1, eps=1e-6)
+
+    vel_w = env.scene["robot"].data.root_lin_vel_w[:, :2]
+    return torch.sum(vel_w * to_goal, dim=1)
+
+
+# =========================================================
+# NAVIGATION CORE REWARD
+# =========================================================
+
+
+def goal_progress_reward(
+    env: ManagerBasedRLEnv,
+    command_name: str,
+) -> torch.Tensor:
+    """Reward for making progress towards goal.
+
+    Note: UniformPose2dCommand format is [pos_x, pos_y, cos_heading, sin_heading] in body frame.
+    We use pos_x, pos_y (command[:, :2]) as relative position to goal.
+    """
+    command = env.command_manager.get_command(command_name)
+    # command[:, :2] is relative position to goal in body frame
+    # Distance to goal = norm of relative position
+    dist = torch.norm(command[:, :2], dim=1)
+
+    # Initialize prev_dist on first call
+    if "prev_dist" not in env.extras:
+        env.extras["prev_dist"] = dist.clone()
+        return torch.zeros_like(dist)
+
+    # Reset prev_dist for environments that just reset
+    reset_mask = env.episode_length_buf == 0
+    if reset_mask.any():
+        env.extras["prev_dist"][reset_mask] = dist[reset_mask]
+
+    # Progress = reduction in distance
+    progress = env.extras["prev_dist"] - dist
+    env.extras["prev_dist"] = dist.clone()
+    return progress
+
+
+def velocity_towards_goal(
+    env: ManagerBasedRLEnv,
+    command_name: str,
+    stop_radius: float = 0.4,
+) -> torch.Tensor:
+    """Reward for velocity towards goal.
+
+    Note: command[:, :2] is relative position to goal in body frame.
+    We reward forward velocity (positive x in body frame) when moving towards goal.
+    """
+    command = env.command_manager.get_command(command_name)
+    # command[:, :2] is relative position to goal in body frame
+    rel_pos = command[:, :2]
+    dist = torch.norm(rel_pos, dim=1)
+
+    # Get body-frame velocity
+    vel_b = env.scene["robot"].data.root_lin_vel_b[:, :2]
+
+    # Direction to goal in body frame
+    to_goal = torch.nn.functional.normalize(rel_pos, dim=1, eps=1e-6)
+
+    # Project velocity onto direction to goal
+    vel_proj = torch.sum(vel_b * to_goal, dim=1)
+
+    # Only reward when not too close to goal (avoid oscillation)
+    return torch.where(dist > stop_radius, vel_proj, torch.zeros_like(vel_proj))
+
+
+# =========================================================
+# HEADING / STABILITY
+# =========================================================
+
+
+def heading_alignment_reward(
+    env: ManagerBasedRLEnv,
+    command_name: str,
+) -> torch.Tensor:
+    """Reward for heading alignment.
+
+    Note: UniformPose2dCommand format is [pos_x, pos_y, cos_heading, sin_heading].
+    command[:, 2] = cos(heading_error), command[:, 3] = sin(heading_error).
+    When aligned, cos=1, sin=0.
+    """
+    command = env.command_manager.get_command(command_name)
+    # Heading error from command (already computed as cos/sin)
+    cos_heading = command[:, 2]
+    sin_heading = command[:, 3]
+
+    # Heading error = atan2(sin, cos)
+    heading_error = torch.atan2(sin_heading, cos_heading)
+
+    # Reward for small heading error (negative of abs error)
+    return -torch.abs(heading_error)
+
+
+def yaw_rate_penalty(
+    env: ManagerBasedRLEnv,
+) -> torch.Tensor:
+    """Penalty for yaw rate (rotation around z-axis).
+
+    Returns negative value, so use positive weight in RewardsCfg.
+    """
+    yaw_rate = env.scene["robot"].data.root_ang_vel_b[:, 2]
+    return -torch.abs(yaw_rate)
+
+
+def joint_velocity_penalty(
+    env: ManagerBasedRLEnv,
+) -> torch.Tensor:
+    """Penalty for joint velocity (L2 norm).
+
+    Returns negative value, so use positive weight in RewardsCfg.
+    """
+    joint_vel = env.scene["robot"].data.joint_vel
+    return -torch.sum(joint_vel ** 2, dim=1)
+
+
+def upright_reward(env: ManagerBasedRLEnv) -> torch.Tensor:
+    """Reward for upright orientation."""
+    quat = env.scene["robot"].data.root_quat_w
+    # body z-axis in world frame
+    z_axis = torch.stack([
+        2 * (quat[:, 1] * quat[:, 3] - quat[:, 0] * quat[:, 2]),
+        2 * (quat[:, 2] * quat[:, 3] + quat[:, 0] * quat[:, 1]),
+        1 - 2 * (quat[:, 1] ** 2 + quat[:, 2] ** 2),
+    ], dim=1)
+
+    # dot with world up (0,0,1)
+    upright = z_axis[:, 2]
+    return torch.clamp(upright, min=0.0)
+
+
+def tilt_penalty(env: ManagerBasedRLEnv) -> torch.Tensor:
+    """Penalty for tilting from upright."""
+    quat = env.scene["robot"].data.root_quat_w
+    pitch = torch.asin(2 * (quat[:, 0] * quat[:, 2] - quat[:, 3] * quat[:, 1]))
+    roll = torch.atan2(
+        2 * (quat[:, 0] * quat[:, 1] + quat[:, 2] * quat[:, 3]),
+        1 - 2 * (quat[:, 1] ** 2 + quat[:, 2] ** 2),
+    )
+    return -(pitch.abs() + roll.abs())

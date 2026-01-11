@@ -36,8 +36,15 @@ CART_BALANCE_CFG = ArticulationCfg(
         pos=(0.0, 0.0, 0.5),
     ),
     actuators={
-        "wheel": ImplicitActuatorCfg(
-            joint_names_expr=["Revolute_[1-2]"], 
+        "wheel_left": ImplicitActuatorCfg(
+            joint_names_expr=["Revolute_1"], 
+            effort_limit_sim=400.0, 
+            stiffness=0.0, 
+            damping=0.0,
+            velocity_limit_sim=20.0,
+        ),
+        "wheel_right": ImplicitActuatorCfg(
+            joint_names_expr=["Revolute_2"], 
             effort_limit_sim=400.0, 
             stiffness=0.0, 
             damping=0.0,

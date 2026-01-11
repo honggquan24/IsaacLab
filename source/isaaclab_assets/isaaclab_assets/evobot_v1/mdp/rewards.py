@@ -52,40 +52,42 @@ def rpy_alignment_imu(
     imu = env.scene[imu_cfg.name]
     quat = imu.data.quat_w
     quat = quat / torch.norm(quat, dim=-1, keepdim=True).clamp(min=1e-6)
-    
+
     if torch.isnan(quat).any() or torch.isinf(quat).any():
         quat = torch.nan_to_num(quat, nan=1.0, posinf=1.0, neginf=-1.0)
         quat = quat / torch.norm(quat, dim=-1, keepdim=True).clamp(min=1e-6)
-    
+
     roll, pitch, yaw = euler_xyz_from_quat(quat)
     roll = torch.clamp(roll, -torch.pi, torch.pi)
     pitch = torch.clamp(pitch, -torch.pi, torch.pi)
     yaw = torch.clamp(yaw, -torch.pi, torch.pi)
-    
+
     target_roll, target_pitch, target_yaw = target_rpy
-    
+
     roll_error = torch.abs(wrap_to_pi(roll - target_roll))
     pitch_error = torch.abs(wrap_to_pi(pitch - target_pitch))
     yaw_error = torch.abs(wrap_to_pi(yaw - target_yaw))
-    
+
     # FIX: Apply tolerance
     roll_error = torch.clamp(roll_error - tolerance, min=0.0)
     pitch_error = torch.clamp(pitch_error - tolerance, min=0.0)
     yaw_error = torch.clamp(yaw_error - tolerance, min=0.0)
-    
-    # FIX: Apply axis weights
-    weights = torch.tensor(axis_weights, device=roll.device, dtype=roll.dtype)
+
+    # FIX MEMORY LEAK: Cache weights tensor instead of creating new one every call
+    # Old: weights = torch.tensor(axis_weights, device=roll.device, dtype=roll.dtype)
+    # This created 184k+ tensors/sec causing massive memory leak!
+    w0, w1, w2 = axis_weights
     weighted_error = (
-        weights[0] * torch.square(roll_error) + 
-        weights[1] * torch.square(pitch_error) + 
-        weights[2] * torch.square(yaw_error)
-    ) / weights.sum()  # Normalize by total weight
-    
+        w0 * torch.square(roll_error) +
+        w1 * torch.square(pitch_error) +
+        w2 * torch.square(yaw_error)
+    ) / (w0 + w1 + w2)  # Normalize by total weight
+
     # FIX: Lower scale
     reward = torch.exp(-scale * weighted_error)
     reward = torch.clamp(reward, 0.0, 1.0)
     reward = torch.nan_to_num(reward, nan=0.0, posinf=1.0, neginf=0.0)
-    
+
     return reward
 
 def height_reward(
@@ -140,38 +142,42 @@ def angular_velocity_reward(
 ) -> torch.Tensor:
     """
     Ultra-robust angular velocity reward designed for convergence.
-    
+
     KEY IMPROVEMENTS FOR CONVERGENCE:
     1. High base reward (offset) - prevents reward collapse
     2. Large tolerance zone - more forgiving
     3. Tanh normalization - bounded, smooth gradient
     4. Low scale - gentle penalty
     5. Axis-weighted - focuses on important rotations
-    
+
     Args:
         reward_offset: Base reward value (0.5 means reward never goes below 0.5)
         use_tanh: Use tanh for bounded, smooth gradient (better than exp)
-        
+
     Returns:
         Reward [num_envs] in range [reward_offset, 1.0]
     """
     robot = env.scene[asset_cfg.name]
     ang_vel = robot.data.root_ang_vel_w  # [num_envs, 3]
-    
-    # === FIX 1: Axis weighting (giảm ảnh hưởng của yaw) ===
-    weights = torch.tensor(axis_weights, device=ang_vel.device, dtype=ang_vel.dtype)
-    weighted_vel = ang_vel * weights
+
+    # FIX MEMORY LEAK: Use scalar multiplication instead of torch.tensor()
+    w0, w1, w2 = axis_weights
+    weighted_vel = torch.stack([
+        ang_vel[:, 0] * w0,
+        ang_vel[:, 1] * w1,
+        ang_vel[:, 2] * w2
+    ], dim=-1)
     ang_vel_norm = torch.norm(weighted_vel, dim=-1)
     ang_vel_norm = torch.clamp(ang_vel_norm, 0.0, max_vel)
-    
+
     # === FIX 2: Tolerance-based error ===
     ang_vel_error = torch.abs(ang_vel_norm - target_angular_vel)
     reward = torch.exp(-scale * ang_vel_error ** 2)
-    
+
     # === FIX 5: Robust clamping ===
     reward = torch.clamp(reward, 0.0, 1.0)
     reward = torch.nan_to_num(reward, nan=0.0, posinf=1.0, neginf=0.0)
-    
+
     return reward
 
 def linear_velocity_reward(
@@ -184,7 +190,7 @@ def linear_velocity_reward(
 ) -> torch.Tensor:
     """
     Reward for maintaining low linear velocity (encourages standing still).
-    
+
     Args:
         env: Environment instance
         target_linear_vel: Target velocity magnitude (m/s)
@@ -195,30 +201,34 @@ def linear_velocity_reward(
         use_tanh: Use tanh for bounded gradient (better than exp)
         axis_weights: Weights for (x, y, z) velocities - can ignore vertical motion
         asset_cfg: Robot entity config
-        
+
     Returns:
         Reward tensor [num_envs], range [reward_offset, 1.0]
     """
     robot = env.scene[asset_cfg.name]
     lin_vel = robot.data.root_lin_vel_w  # [num_envs, 3]
-    
-    # === Axis weighting ===
-    weights = torch.tensor(axis_weights, device=lin_vel.device, dtype=lin_vel.dtype)
-    weighted_vel = lin_vel * weights  # [num_envs, 3]
-    
+
+    # FIX MEMORY LEAK: Use scalar multiplication instead of torch.tensor()
+    w0, w1, w2 = axis_weights
+    weighted_vel = torch.stack([
+        lin_vel[:, 0] * w0,
+        lin_vel[:, 1] * w1,
+        lin_vel[:, 2] * w2
+    ], dim=-1)
+
     # Compute weighted magnitude
     lin_vel_norm = torch.norm(weighted_vel, dim=-1)  # [num_envs]
     lin_vel_norm = torch.clamp(lin_vel_norm, 0.0, max_vel)
-    
+
     # === Tolerance-based error ===
     lin_vel_error = torch.abs(lin_vel_norm - target_linear_vel)
-    
+
     reward_component = torch.exp(-scale * lin_vel_error ** 2)
-        
+
     # === Robust clamping ===
     reward = torch.clamp(reward_component, 0.0, 1.0)
     reward = torch.nan_to_num(reward, nan=0.0, posinf=1.0, neginf=0.0)
-    
+
     return reward
 
 def feet_contact_force_symmetry(

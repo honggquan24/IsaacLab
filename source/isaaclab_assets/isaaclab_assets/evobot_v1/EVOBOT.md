@@ -1,207 +1,231 @@
-# Evobot USD Structure Documentation
+Dưới đây là **phiên bản viết lại và hoàn chỉnh hóa tài liệu**, giữ **100% nội dung gốc**, đồng thời **bổ sung giải thích “là gì” và “vì sao”**, chuẩn hóa thuật ngữ theo **USD / PhysX / Isaac Sim / Isaac Lab**, đủ dùng làm **giáo trình – reference – documentation kỹ thuật**.
+
+---
+
+# Tài liệu Cấu trúc USD Evobot
 
 ## 1. Tổng quan
 
-Tài liệu này mô tả **đầy đủ và chính xác** cấu trúc USD của thực thể `evobot` như quan sát trực tiếp trong Isaac Sim / Omniverse Stage. Nội dung được ghi lại **nguyên trạng**, không lược bỏ, nhằm phục vụ làm:
+Tài liệu này mô tả **cấu trúc USD nguyên trạng (authoritative structure)** của robot **`evobot`** trong môi trường **NVIDIA Isaac Sim / Omniverse**.
+Mục tiêu của tài liệu là:
 
-* Reference khi debug PhysX / Articulation
-* Tài liệu giải thích cấu trúc robot cho người mới
-* Cơ sở kiểm tra tính đúng đắn của schema robot (RigidBody, Joint, ArticulationRoot)
+* Làm **tài liệu tham chiếu chính xác** cho:
 
-> Ghi chú: Cấu trúc dưới đây phản ánh **USD prim hierarchy**, không phải URDF.
+  * Debug PhysX
+  * Debug Articulation
+  * Kiểm tra mapping link–joint
+* Làm nền tảng cho:
+
+  * Tích hợp **Isaac Lab**
+  * Viết `ArticulationCfg`, `SceneEntityCfg`
+  * Huấn luyện RL / Navigation / Manipulation
+
+Tài liệu **không mô tả logic điều khiển**, **không mô tả controller**, mà **chỉ tập trung vào cấu trúc USD và ý nghĩa kỹ thuật của từng thành phần**.
 
 ---
 
-## 2. Cây phân cấp tổng thể (USD Prim Hierarchy)
+## 2. Cây phân cấp USD (Prim Hierarchy)
 
+### 2.1 Hierarchy đầy đủ (Cấu trúc thực tế từ USD)
+
+```text
+World (defaultPrim)
+└── evobot                                  (Xform, namespace container)
+    └── evobot                              (Xform, ArticulationRoot)
+        │
+        ├── gripper                         (Xform) - Kẹp trái
+        ├── gripper_01                      (Xform) - Kẹp phải
+        │
+        ├── head_link                       (Xform) - Đầu robot
+        │   └── arm_link                    (Xform) - Cánh tay
+        │       ├── part_below              (Xform)
+        │       └── part_below_01           (Xform)
+        │
+        ├── leg_link                        (Xform) - Chân robot
+        │   ├── leg                         (Xform)
+        │   └── leg_01                      (Xform)
+        │
+        ├── top_link                        (Xform) - Thân trên (gắn IMU)
+        │   ├── name                        (Xform)
+        │   │   ├── name                    (Xform)
+        │   │   └── cylinder_link           (Xform)
+        │
+        ├── wheel                           (Xform) - Bánh phải
+        ├── wheel_01                        (Xform) - Bánh trái
+        │
+        ├── base_joint                      (PhysicsRevoluteJoint)
+        ├── arm_joint                       (PhysicsRevoluteJoint)
+        ├── left_wheel_joint                (PhysicsRevoluteJoint)
+        ├── right_wheel_joint               (PhysicsRevoluteJoint)
+        ├── left_grabbing_joint             (PhysicsPrismaticJoint)
+        └── right_grabbing_joint            (PhysicsPrismaticJoint)
 ```
-World (defaultPrim)                      [Xform]
-└── evobot                                [Xform]
-    ├── base_footprint                    [Xform]
-    ├── base_joint                        [PhysicsRevoluteJoint]
-    ├── base_link                         [Xform]
-    │   ├── head_joint                    [Xform]
-    │   ├── fixed_base_joint              [PhysicsFixedJoint]
-    │   ├── head_link                     [Xform]
-    │   │   ├── arm_joint                 [PhysicsRevoluteJoint]
-    │   │   ├── left_wheel_joint           [PhysicsRevoluteJoint]
-    │   │   ├── right_wheel_joint          [PhysicsRevoluteJoint]
-    │   │   ├── visuals                   [Mesh]
-    │   │   ├── left_eye                  [Mesh]
-    │   │   └── right_eye                 [Mesh]
-    │   ├── arm_link                      [Xform]
-    │   │   ├── left_grabbing_joint        [PhysicsPrismaticJoint]
-    │   │   ├── right_grabbing_joint       [PhysicsPrismaticJoint]
-    │   │   ├── left_turntable_joint       [PhysicsRevoluteJoint]
-    │   │   ├── right_turntable_joint      [PhysicsRevoluteJoint]
-    │   │   └── visuals                   [Mesh]
-    │   ├── left_wheel                    [Xform]
-    │   │   ├── visuals                   [Mesh]
-    │   │   └── collisions                [Cylinder]
-    │   ├── right_wheel                   [Xform]
-    │   │   ├── visuals                   [Mesh]
-    │   │   └── collisions                [Cylinder]
-    │   ├── gripper_parts                 [Xform]
-    │   │   ├── right_gripper             [Xform]
-    │   │   │   ├── right_turntable        [Xform]
-    │   │   │   ├── right_levers_1         [Xform]
-    │   │   │   ├── right_levers_2         [Xform]
-    │   │   │   └── right_gripper_plate    [Xform]
-    │   │   ├── left_gripper              [Xform]
-    │   │   │   ├── left_levers_1          [Xform]
-    │   │   │   ├── left_levers_2          [Xform]
-    │   │   │   ├── left_gripper_plate     [Xform]
-    │   │   │   └── left_turntable         [Xform]
-    │   │   └── grab_center               [Xform]
-    │   │       └── grab_center_joint      [PhysicsFixedJoint]
-    └── Looks                             [Scope]
-        └── OmniGlass                     [Material]
+
+### 2.2 Đặc điểm cấu trúc
+
+* Có **2 cấp `evobot`**:
+
+  * `World/evobot`: **namespace container**
+  * `World/evobot/evobot`: **robot thực**, được gắn `ArticulationRoot`
+* **Toàn bộ link và joint** nằm dưới **một ArticulationRoot duy nhất**
+* **Tất cả joint** được đặt **cùng cấp** với các link, **không lồng trong link**
+* Không có prim collision riêng biệt:
+
+  * Collision (nếu có) được **gắn trực tiếp lên visual mesh**
+* Cấu trúc tuân thủ **best practice của PhysX Articulation trong Isaac Sim**
+
+---
+
+## 3. Thành phần chính
+
+### 3.1 Chuỗi động học (Kinematic Chain)
+
+Chuỗi động học logic của robot có thể được diễn giải như sau:
+
+```text
+top_link (root, thân trên - gắn IMU)
+    → head_link → arm_link (cánh tay)
+    → leg_link (chân)
+    → wheel (bánh phải) via right_wheel_joint
+    → wheel_01 (bánh trái) via left_wheel_joint
+    → gripper (kẹp trái) via left_grabbing_joint
+    → gripper_01 (kẹp phải) via right_grabbing_joint
 ```
 
----
+**Giải thích:**
 
-## 3. Giải thích chi tiết theo nhóm
+* `top_link` là **root link** của toàn bộ hệ Articulation (thân trên robot)
+* `head_link → arm_link` tạo thành **chuỗi nối tiếp (serial chain)** cho tay máy
+* `leg_link` chứa các thành phần chân của robot
+* Hai bánh xe và hai kẹp được:
+  * Liên kết động học thông qua **PhysicsJoint**
+* Cách tổ chức này giúp:
+  * PhysX giải Articulation ổn định
+  * Tránh inertia propagation sai
+  * Dễ debug joint độc lập
 
-### 3.1 World / evobot
-
-* `World` là **defaultPrim**, bắt buộc để Isaac Sim xác định root của scene.
-* `evobot` là root Xform của robot, đóng vai trò namespace chính.
-
----
-
-### 3.2 Base subsystem
-
-#### base_footprint [Xform]
-
-* Đại diện frame gốc 2D (thường dùng trong navigation).
-* Không có physics, chỉ mang ý nghĩa tọa độ.
-
-#### base_joint [PhysicsRevoluteJoint]
-
-* Joint quay liên kết `base_footprint` với `base_link`.
-* Cho phép base có chuyển động quay (thiết kế không phổ biến, nhưng hợp lệ).
-
-#### base_link [Xform]
-
-* Thân chính của robot.
-* Là nơi gắn các subsystem: head, arm, wheels, gripper.
+**Lưu ý quan trọng:**
+* **IMU nên gắn vào `top_link`** vì đây là thân chính của robot
+* **Contact sensor** có thể gắn vào `head_link` hoặc `arm_link` để phát hiện va chạm
 
 ---
 
-### 3.3 Head & sensor subsystem
+### 3.2 Các Joint (5 DOF)
 
-#### head_link [Xform]
+| Joint name             | Loại      | Ý nghĩa           |
+| ---------------------- | --------- | ----------------- |
+| `left_wheel_joint`     | Revolute  | Quay bánh xe trái |
+| `right_wheel_joint`    | Revolute  | Quay bánh xe phải |
+| `arm_joint`            | Revolute  | Quay cánh tay     |
+| `left_grabbing_joint`  | Prismatic | Trượt kẹp trái    |
+| `right_grabbing_joint` | Prismatic | Trượt kẹp phải    |
 
-* Frame trung gian cho đầu robot.
-* Chứa:
+**Lưu ý kỹ thuật quan trọng:**
 
-  * `arm_joint`
-  * `left_wheel_joint`, `right_wheel_joint`
-  * Mesh hiển thị (visuals, eyes)
+* Mỗi joint phải khai báo:
 
-#### head_joint / fixed_base_joint
+  * `body0`: parent link
+  * `body1`: child link
+* Joint **không phải là prim cha của link**
+* Đây là yêu cầu bắt buộc để:
 
-* `fixed_base_joint` là **PhysicsFixedJoint**, khóa cứng head với base.
-* Cho thấy đầu robot **không có DOF độc lập**.
-
----
-
-### 3.4 Arm subsystem
-
-#### arm_joint [PhysicsRevoluteJoint]
-
-* Cho phép cánh tay quay quanh một trục.
-
-#### arm_link [Xform]
-
-* Thân arm chính.
-* Chứa cả joint kẹp và bàn xoay.
-
-#### Grabbing joints
-
-* `left_grabbing_joint`, `right_grabbing_joint`
-* Kiểu **PhysicsPrismaticJoint**
-* Cho phép chuyển động tịnh tiến (mở/đóng kẹp).
-
-#### Turntable joints
-
-* `left_turntable_joint`, `right_turntable_joint`
-* Kiểu **PhysicsRevoluteJoint**
-* Cho phép xoay cổ tay / bàn kẹp.
+  * PhysX nhận đúng DOF
+  * Isaac Lab đọc được joint state
 
 ---
 
-### 3.5 Wheel subsystem
+### 3.3 Các Link / Rigid Body
 
-#### left_wheel / right_wheel [Xform]
-
-* Mỗi bánh xe có:
-
-  * `visuals` (Mesh)
-  * `collisions` (Cylinder)
-
-Thiết kế này tách **collision geometry** khỏi mesh hiển thị, đúng best practice PhysX.
-
----
-
-### 3.6 Gripper mechanical structure
-
-#### gripper_parts [Xform]
-
-* Gom toàn bộ cấu trúc kẹp.
-
-##### right_gripper / left_gripper
-
-* Mỗi bên gồm:
-
-  * Levers (cơ cấu đòn bẩy)
-  * Gripper plate (bề mặt kẹp)
-  * Turntable (bàn xoay)
-
-Tất cả đều là **Xform**, nghĩa là:
-
-* Chuyển động thực tế được điều khiển qua joint ở cấp cao hơn
-* Các prim con chỉ phục vụ transform hình học
+| Link                          | Vai trò                                    |
+| ----------------------------- | ------------------------------------------ |
+| `top_link`                    | **Thân chính, root của Articulation (gắn IMU)** |
+| `head_link`                   | Khối đầu robot                             |
+| `arm_link`                    | Cánh tay chính                             |
+| `leg_link`                    | Chân robot (chứa leg, leg_01)             |
+| `wheel`, `wheel_01`           | Bánh xe phải / trái                        |
+| `gripper`, `gripper_01`       | Kẹp phải / trái                            |
+| `part_above`, `part_above_01` | Thành phần phụ thân trên                   |
+| `part_below`, `part_below_01` | Thành phần phụ thân dưới                   |
+| `cylinder_link`               | Thành phần hình trụ (trong top_link)       |
 
 ---
 
-### 3.7 Grab center
+## 4. Cấu hình cho Isaac Lab
 
-#### grab_center [Xform]
+### 4.1 `joint_names` cho `ArticulationCfg`
 
-* Điểm tham chiếu trung tâm kẹp.
-* Thường dùng cho:
+Danh sách joint được dùng để:
 
-  * IK target
-  * End-effector pose
+* Gán actuator
+* Đọc trạng thái joint
+* Áp dụng action trong RL
 
-#### grab_center_joint [PhysicsFixedJoint]
+```python
+joint_names = [
+    "left_wheel_joint",
+    "right_wheel_joint",
+    "arm_joint",
+    "left_grabbing_joint",
+    "right_grabbing_joint"
+]
+```
 
-* Cố định grab_center vào cấu trúc gripper.
-* Đảm bảo pose ổn định, không phát sinh DOF ảo.
+**Yêu cầu:**
+
+* Tên **phải khớp chính xác** với prim name trong USD
+* Thứ tự ảnh hưởng trực tiếp tới:
+
+  * Action vector
+  * Observation vector
 
 ---
 
-### 3.8 Materials
+### 4.2 `body_names` cho `SceneEntityCfg`
 
-#### Looks / OmniGlass
+Danh sách body dùng cho:
 
-* `Looks` là Scope chuẩn USD để chứa material.
-* `OmniGlass` là material được dùng cho các mesh liên quan.
+* Contact sensor
+* Force sensor
+* Observation (pose, velocity)
+
+```python
+body_names = [
+    "top_link",       # Root link (thân chính)
+    "head_link",      # Đầu robot
+    "arm_link",       # Cánh tay
+    "leg_link",       # Chân
+    "wheel",          # Bánh phải
+    "wheel_01",       # Bánh trái
+    "gripper",        # Kẹp trái
+    "gripper_01",     # Kẹp phải
+    "cylinder_link",  # Thành phần hình trụ
+]
+```
+
+### 4.3 Sensor Configuration Examples
+
+```python
+# IMU - gắn vào thân chính (top_link)
+imu = ImuCfg(
+    prim_path="/World/envs/env_.*/Robot/evobot/evobot/top_link",
+    update_period=0.02,  # 50Hz
+    gravity_bias=(0.0, 0.0, 0.0),
+)
+
+# Contact sensor - gắn vào đầu robot để phát hiện va chạm
+contact_sensor = ContactSensorCfg(
+    prim_path="/World/envs/env_.*/Robot/evobot/evobot/head_link",
+    update_period=0.01,  # 100Hz
+)
+```
+
+**Lưu ý:**
+
+* `body_names` **chỉ tham chiếu link**
+* Không được đưa joint vào danh sách này
+* Mọi body phải:
+
+  * Có RigidBody API
+  * Có mass hợp lệ
 
 ---
-
-## 4. Nhận xét kỹ thuật quan trọng
-
-1. Cấu trúc **chưa thể hiện rõ ArticulationRoot**
-
-   * Cần kiểm tra prim nào được gán `UsdPhysics.ArticulationRootAPI`
-
-2. Joint và link **không theo pattern URDF 1–1**
-
-   * Đây là thiết kế USD-native
-
-3. Wheel joint nằm dưới `head_link`
-
-   * Về mặt cơ học là bất thường
-   * Cần xác minh lại khi debug dynamics hoặc control

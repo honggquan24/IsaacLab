@@ -1,4 +1,10 @@
-"""Configuration for the Evobot V1 Robot imported from Onshape."""
+"""Configuration for the Evobot V1 Robot imported from Onshape.
+
+USD Structure (see EVOBOT.md for details):
+- 5 DOF: left_wheel_joint, right_wheel_joint, arm_joint, left_grabbing_joint, right_grabbing_joint
+- All joints at root level: /evobot/evobot/<joint_name>
+- Main bodies: base_link (root), head_link, arm_link, wheel, wheel_01, gripper, gripper_01
+"""
 import os
 import math
 from pathlib import Path
@@ -9,7 +15,7 @@ from isaaclab.assets import ArticulationCfg
 # PATH CONFIG
 CURRENT_DIR = Path(__file__).resolve().parents[2]
 
-usd_file_path = CURRENT_DIR / "usd_file" / "evobot_v1.usd"
+usd_file_path = CURRENT_DIR / "usd_file" / "evoBOT_cfg.usd"
 EVOBOT_USD_PATH = usd_file_path.resolve()
 
 if not EVOBOT_USD_PATH.exists():
@@ -28,8 +34,8 @@ EVOBOT_V1_CFG = ArticulationCfg(
         # ),
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             rigid_body_enabled=True,
-            # max_linear_velocity=25.0,
-            # max_angular_velocity=50.0,
+            # max_linear_velocity=10.0,
+            # max_angular_velocity=110.0,
             # linear_damping=0.002,
             # angular_damping=0.005,
             # max_depenetration_velocity=1.0,
@@ -37,11 +43,11 @@ EVOBOT_V1_CFG = ArticulationCfg(
             # max_contact_impulse=5000,
             retain_accelerations=True,
         ),
-        # articulation_props=sim_utils.ArticulationRootPropertiesCfg(
-        #     enabled_self_collisions=True,
+        articulation_props=sim_utils.ArticulationRootPropertiesCfg(
+            enabled_self_collisions=False,
         #     solver_position_iteration_count=20,
         #     solver_velocity_iteration_count=1,
-        # ),
+        ),
         # collision_props=sim_utils.schemas.CollisionPropertiesCfg(
         #     collision_enabled=True,
         # ),
@@ -50,36 +56,29 @@ EVOBOT_V1_CFG = ArticulationCfg(
 
     # INITIAL STATE - Must match reset_position in env config
     init_state=ArticulationCfg.InitialStateCfg(
-        pos=(0.0, 0.0, 0.1),  # Starting height above ground
+        pos=(0.0, 0.0, 0.75),  # Starting height above ground (upright position)
         joint_pos={
-            # --- Wheels ---
+            # --- Wheels (Revolute joints) ---
             "left_wheel_joint": 0.0,
             "right_wheel_joint": 0.0,
 
-            # --- Arm and grabbing mechanism ---
+            # --- Arm (Revolute joint) ---
             "arm_joint": 0.0,
-            "base_joint": 0.0,
+
+            # --- Grabbing mechanism (Prismatic joints) ---
             "left_grabbing_joint": 0.0,
             "right_grabbing_joint": 0.0,
-
-            # --- Levers and turntables (passive) ---
-            "left_levers_joint_1": 0.0,
-            "left_levers_2_joint": 0.0,
-            "left_turntable_joint": 0.0,
-            "right_levers_joint_1": 0.0,
-            "right_levers_2_joint": 0.0,
-            "right_turntable_joint": 0.0,
         },
     ),
 
     actuators = {
-        # ===== Wheels (main drive) =====
+        # ===== Wheels (Revolute joints) =====
         "wheels": DCMotorCfg(
-            joint_names_expr=[".*_wheel_joint"],
-            saturation_effort=400.0,
-            effort_limit=500.0,
+            joint_names_expr=[".*_wheel_joint"],  # Matches: left_wheel_joint, right_wheel_joint
+            saturation_effort=500.0,
+            effort_limit=2000.0,
             velocity_limit=20.0,
-            stiffness=0.0,
+            stiffness=1.0,
             damping=0.0,
             armature=0.01,
             friction=0.1,
@@ -87,11 +86,11 @@ EVOBOT_V1_CFG = ArticulationCfg(
             viscous_friction=0.02,
         ),
 
-        # ===== Arm =====
+        # ===== Arm (Revolute joint) =====
         "arm": DCMotorCfg(
             joint_names_expr=["arm_joint"],
-            saturation_effort=100.0,
-            effort_limit=150.0,
+            saturation_effort=500.0,
+            effort_limit=2000.0,
             velocity_limit=10.0,
             stiffness=1.0,
             damping=0.1,
@@ -101,44 +100,17 @@ EVOBOT_V1_CFG = ArticulationCfg(
             viscous_friction=0.05,
         ),
 
-        # ===== Base joint =====
-        "base": DCMotorCfg(
-            joint_names_expr=["base_joint"],
-            saturation_effort=100.0,
-            effort_limit=150.0,
-            velocity_limit=10.0,
-            stiffness=1.0,
-            damping=0.1,
-            armature=0.02,
-            friction=0.2,
-            dynamic_friction=0.1,
-            viscous_friction=0.05,
-        ),
-
-        # ===== Grabbing mechanism =====
+        # ===== Grabbing mechanism (Prismatic joints) =====
         "grabbers": DCMotorCfg(
-            joint_names_expr=[".*_grabbing_joint"],
+            joint_names_expr=[".*_grabbing_joint"],  # Matches: left_grabbing_joint, right_grabbing_joint
             saturation_effort=50.0,
-            effort_limit=100.0,
-            velocity_limit=5.0,
+            effort_limit=2000.0,
+            velocity_limit=1.0,
             stiffness=1.0,
             damping=0.1,
             armature=0.01,
             friction=0.2,
             dynamic_friction=0.1,
-            viscous_friction=0.05,
-        ),
-
-        # ===== Passive joints (levers, turntables) =====
-        "passive": DCMotorCfg(
-            joint_names_expr=[".*_levers.*|.*_turntable.*"],
-            saturation_effort=0.0,
-            effort_limit=10.0,
-            velocity_limit=10.0,
-            stiffness=0.0,
-            damping=0.1,
-            armature=0.01,
-            friction=0.1,
             viscous_friction=0.05,
         ),
     }

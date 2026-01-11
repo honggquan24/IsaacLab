@@ -33,7 +33,7 @@ from .config import *
 # 'agent.load_checkpoint="model_<num>.pt"'
 
 # Test environment loading
-# ./isaaclab.sh -p ./source/isaaclab_assets/isaaclab_assets/evobot_v1/tests/run_robot_rl_env.py
+# ./isaaclab.sh -p ./source/isaaclab_assets/isaaclab_assets/evobot_v1/tests/run_robot_rl_env.py --device cpu
 
 # ./isaaclab.sh -p -m tensorboard.main --logdir logs
 
