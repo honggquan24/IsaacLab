@@ -21,7 +21,7 @@ from isaaclab.managers import SceneEntityCfg
 from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.utils import configclass
 
-from ..env.evobot_v1_env_cfg_balance import EvobotV1EnvCfgBalance, ActionCfg as BalanceActionCfg
+from ..balance.evobot_v1_env_cfg_balance import EvobotV1EnvCfgBalance, ActionCfg as BalanceActionCfg
 from ...mdp import (
     obs_body_pitch,
     obs_body_roll,

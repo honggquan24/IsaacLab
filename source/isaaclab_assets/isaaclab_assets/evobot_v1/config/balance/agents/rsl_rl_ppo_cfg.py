@@ -11,7 +11,7 @@ class EvobotPPORunnerCfgBalance(RslRlOnPolicyRunnerCfg):
     # SPEED OPTIMIZATION: Giảm từ 300 xuống 24 steps
     # - Mỗi iteration chỉ cần chờ 24 steps thay vì 300 (12.5x faster!)
     # - Với 9999 envs: 24×9999 = ~240k samples mỗi iteration vẫn đủ lớn
-    num_steps_per_env = 5 * 30
+    num_steps_per_env = 10 * 60
     max_iterations = 1000  # Tăng vì mỗi iteration ít steps hơn
     save_interval = 100
     experiment_name = "evobot_v1_ppo_balance"
@@ -26,6 +26,7 @@ class EvobotPPORunnerCfgBalance(RslRlOnPolicyRunnerCfg):
         critic_hidden_dims=[128, 256, 128],
         activation="elu",  # ELU nhanh hơn ReLU một chút
     )
+    
     algorithm = RslRlPpoAlgorithmCfg(
         value_loss_coef=1.0,
         use_clipped_value_loss=True,

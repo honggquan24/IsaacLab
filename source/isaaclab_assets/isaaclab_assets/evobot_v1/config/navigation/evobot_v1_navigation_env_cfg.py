@@ -11,7 +11,7 @@ from isaaclab.utils import configclass
 import isaaclab.envs.mdp as mdp
 
 # Import balance config as base
-from ..env.evobot_v1_env_cfg_balance import (
+from ..balance.evobot_v1_env_cfg_balance import (
     EvobotV1EnvCfgBalance,
     EvobotV1SceneConfig,
     ObservationsCfg,

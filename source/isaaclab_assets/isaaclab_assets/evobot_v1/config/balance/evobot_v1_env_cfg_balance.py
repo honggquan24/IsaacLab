@@ -267,7 +267,7 @@ class RewardCfg:
     # (5) Joint velocity penalty (combined, not per-joint)
     joint_vel = RewardTermCfg(
         func=joint_vel_l2,
-        weight=-1e-4,
+        weight=-2e-4,
         params={
             "asset_cfg": SceneEntityCfg(name="robot"),
         },
@@ -366,7 +366,7 @@ class EvobotV1EnvCfgBalance(ManagerBasedRLEnvCfg):
         # Old: 5 sec × 60 Hz = 300 steps >> 48 buffer → 6.25 buffer fills per episode
         # New: 2 sec × 60 Hz = 120 steps → 2.5 buffer fills per episode
         self.decimation = 1  # Control freq = 60/1 = 60 Hz
-        self.episode_length_s = 5  # Episode duration (reduced from 5s)
+        self.episode_length_s = 10  # Episode duration (reduced from 5s)
 
         # Viewer settings
         self.viewer.eye = (5.0, 0.0, 2.0)  # Camera position

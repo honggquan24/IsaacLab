@@ -25,12 +25,21 @@ from .config import *
 # --checkpoint=model_<num>.pt \
 # --video --rendering_mode performance
 
+
+# ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
+# --task=Isaac-Evobot-V1-Balance \
+# --num_envs 10000 \
+# --resume --load_run=2026-01-12_14-45-12 \
+# --checkpoint=model_2000.pt \
+# --video --rendering_mode performance --headless
+
+
 # Play/evaluate trained model
 # ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
 # --task Isaac-Evobot-V1-Balance \
 # --num_envs 4 \
-# 'agent.load_run=<run_name>' \
-# 'agent.load_checkpoint="model_<num>.pt"'
+# 'agent.load_run=2026-01-12_14-45-12' \
+# 'agent.load_checkpoint="model_2000.pt"'
 
 # Test environment loading
 # ./isaaclab.sh -p ./source/isaaclab_assets/isaaclab_assets/evobot_v1/tests/run_robot_rl_env.py --device cpu
@@ -45,8 +54,8 @@ gym.register(
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
     disable_env_checker=True,
     kwargs={
-        "env_cfg_entry_point": f"{config.__name__}.env.evobot_v1_env_cfg_balance:EvobotV1EnvCfgBalance",
-        "rsl_rl_cfg_entry_point": f"{config.agents.__name__}.rsl_rl_ppo_cfg:EvobotPPORunnerCfgBalance"
+        "env_cfg_entry_point": f"{config.balance.__name__}.evobot_v1_env_cfg_balance:EvobotV1EnvCfgBalance",
+        "rsl_rl_cfg_entry_point": f"{config.balance.agents.__name__}.rsl_rl_ppo_cfg:EvobotPPORunnerCfgBalance"
     },
 )
 
@@ -72,7 +81,7 @@ gym.register(
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
     disable_env_checker=True,
     kwargs={
-        "env_cfg_entry_point": f"{config.navigation.__name__}:EvobotV1NavigationEnvCfg",
+        "env_cfg_entry_point": f"{config.navigation.__name__}.evobot_v1_navigation_env_cfg:EvobotV1NavigationEnvCfg",
         "rsl_rl_cfg_entry_point": f"{config.navigation.agents.__name__}.rsl_rl_ppo_cfg:EvobotNavigationPPORunnerCfg",
     },
 )
@@ -82,7 +91,7 @@ gym.register(
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
     disable_env_checker=True,
     kwargs={
-        "env_cfg_entry_point": f"{config.navigation.__name__}:EvobotV1NavigationEnvCfgPlay",
+        "env_cfg_entry_point": f"{config.navigation.__name__}.evobot_v1_navigation_env_cfg:EvobotV1NavigationEnvCfgPlay",
         "rsl_rl_cfg_entry_point": f"{config.navigation.agents.__name__}.rsl_rl_ppo_cfg:EvobotNavigationPPORunnerCfg",
     },
 )
