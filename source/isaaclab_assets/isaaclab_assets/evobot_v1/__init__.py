@@ -28,7 +28,7 @@ from .config import *
 
 # ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
 # --task=Isaac-Evobot-V1-Balance \
-# --num_envs 10000 \
+# --num_envs 7000 \
 # --resume --load_run=2026-01-12_14-45-12 \
 # --checkpoint=model_2000.pt \
 # --video --rendering_mode performance --headless
@@ -37,7 +37,7 @@ from .config import *
 # Play/evaluate trained model
 # ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
 # --task Isaac-Evobot-V1-Balance \
-# --num_envs 4 \
+# --num_envs 1 \
 # 'agent.load_run=2026-01-12_14-45-12' \
 # 'agent.load_checkpoint="model_2000.pt"'
 
@@ -60,38 +60,88 @@ gym.register(
 )
 
 ##
-# Navigation Task
+# Velocity Balance Task (Balance + Velocity Command Following)
 ##
 
-# Train navigation
+# Train velocity balance (balance with velocity commands)
 # ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
-# --task=Isaac-Evobot-V1-Navigation \
+# --task=Isaac-Evobot-V1-Velocity-Balance \
 # --num_envs 1024 \
 # --headless --rendering_mode performance
 
-# Play navigation
+# Train mode debug
+# ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
+# --task=Isaac-Evobot-V1-Velocity-Balance \
+# --num_envs 3 \
+# --rendering_mode performance
+
+# Continue train
+# ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
+# --task=Isaac-Evobot-V1-Velocity-Balance \
+# --num_envs 7000 \
+# --resume --load_run=2026-01-12_14-45-12 \
+# --checkpoint=model_2000.pt \
+# --headless --video --rendering_mode performance
+
+# Play/evaluate velocity balance
 # ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
-# --task Isaac-Evobot-V1-Navigation-Play \
-# --num_envs 16 \
-# 'agent.load_run=evobot_v1_navigation' \
+# --task Isaac-Evobot-V1-Velocity-Balance \
+# --num_envs 4 \
+# 'agent.load_run=<run_name>' \
 # 'agent.load_checkpoint="model_500.pt"'
 
 gym.register(
-    id="Isaac-Evobot-V1-Navigation",
+    id="Isaac-Evobot-V1-Velocity-Balance",
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
     disable_env_checker=True,
     kwargs={
-        "env_cfg_entry_point": f"{config.navigation.__name__}.evobot_v1_navigation_env_cfg:EvobotV1NavigationEnvCfg",
+        "env_cfg_entry_point": f"{config.navigation.__name__}.evobot_v1_velocity_env_cfg:EvobotV1VelocityBalanceEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{config.navigation.agents.__name__}.rsl_rl_ppo_cfg:EvobotVelocityPPORunnerCfg",
+    },
+)
+
+##
+# Navigation Task (Approach 2: Hierarchical - Using pre-trained balance policy)
+##
+
+# IMPORTANT: Update policy_path in evobot_v1_navigation_pretrained_env_cfg.py line 99
+# before training. Export balance policy first:
+# 1. Train balance task: --task=Isaac-Evobot-V1-Balance
+# 2. Export policy: ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
+#    --task Isaac-Evobot-V1-Balance --num_envs 1 \
+#    'agent.load_run=<balance_run_name>' 'agent.load_checkpoint="model_300.pt"'
+# 3. Update policy_path in evobot_v1_navigation_pretrained_env_cfg.py
+# 4. Train navigation: --task=Isaac-Evobot-V1-Navigation-Pretrained
+
+# Train hierarchical navigation (requires pre-trained balance policy)
+# ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
+# --task=Isaac-Evobot-V1-Navigation-Pretrained \
+# --num_envs 512 \
+# --headless --rendering_mode performance
+
+# Play hierarchical navigation
+# ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
+# --task Isaac-Evobot-V1-Navigation-Pretrained-Play \
+# --num_envs 16 \
+# 'agent.load_run=<nav_pretrained_run_name>' \
+# 'agent.load_checkpoint="model_500.pt"'
+
+gym.register(
+    id="Isaac-Evobot-V1-Navigation-Pretrained",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{config.navigation.__name__}.evobot_v1_navigation_pretrained_env_cfg:EvobotV1NavigationPretrainedEnvCfg",
         "rsl_rl_cfg_entry_point": f"{config.navigation.agents.__name__}.rsl_rl_ppo_cfg:EvobotNavigationPPORunnerCfg",
     },
 )
 
 gym.register(
-    id="Isaac-Evobot-V1-Navigation-Play",
+    id="Isaac-Evobot-V1-Navigation-Pretrained-Play",
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
     disable_env_checker=True,
     kwargs={
-        "env_cfg_entry_point": f"{config.navigation.__name__}.evobot_v1_navigation_env_cfg:EvobotV1NavigationEnvCfgPlay",
+        "env_cfg_entry_point": f"{config.navigation.__name__}.evobot_v1_navigation_pretrained_env_cfg:EvobotV1NavigationPretrainedEnvCfgPlay",
         "rsl_rl_cfg_entry_point": f"{config.navigation.agents.__name__}.rsl_rl_ppo_cfg:EvobotNavigationPPORunnerCfg",
     },
 )

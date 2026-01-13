@@ -21,6 +21,7 @@ from isaaclab.managers import SceneEntityCfg
 from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.utils import configclass
 
+# Import balance config for scene and action reference
 from ..balance.evobot_v1_env_cfg_balance import EvobotV1EnvCfgBalance, ActionCfg as BalanceActionCfg
 from ...mdp import (
     obs_body_pitch,
@@ -47,6 +48,8 @@ from .mdp.rewards import (
 
 # Load low-level balance environment config
 LOW_LEVEL_ENV_CFG = EvobotV1EnvCfgBalance()
+# Load balance action config for wheel control
+LOW_LEVEL_ACTION_CFG = BalanceActionCfg()
 
 
 @configclass
@@ -60,7 +63,7 @@ class LowLevelObservationsCfg(ObsGroup):
     1. IMU data: lin_acc (3), ang_vel (3), orientation (4), projected_gravity (3)
     2. Body pose (7)
     3. Joint states: pos (5), vel (5), effort (5)
-    4. Last action (5)
+    4. Previous actions (5)
     Total: 40 dimensions
     """
 
@@ -78,8 +81,11 @@ class LowLevelObservationsCfg(ObsGroup):
     joint_vel = ObsTerm(func=mdp.joint_vel)
     joint_effort = ObsTerm(func=mdp.joint_effort)
 
-    # Previous actions
-    last_action = ObsTerm(func=mdp.last_action)
+    # Previous actions - CRITICAL: Must be included for proper observation matching
+    # This is stored by the PreTrainedBalancePolicyAction wrapper and injected here
+    last_action = ObsTerm(
+        func=lambda env: env.action_manager["pre_trained_policy_action"].low_level_actions
+    )
 
     def __post_init__(self) -> None:
         self.enable_corruption = False
@@ -96,9 +102,9 @@ class ActionsCfg:
         # Run play.py first to export: ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
         #   --task Isaac-Evobot-V1-Balance --num_envs 1 'agent.load_run=<run_name>' 'agent.load_checkpoint="model_.pt"'
         # Then update this path to point to the exported policy.pt
-        policy_path="logs/rsl_rl/evobot_v1_balance/2026-01-09_08-48-26/exported/policy.pt",
+        policy_path="logs/rsl_rl/evobot_v1_ppo_balance/2026-01-12_14-45-12/exported/policy.pt",
         low_level_decimation=1,
-        low_level_actions=BalanceActionCfg.wheel_effort,
+        low_level_actions=LOW_LEVEL_ACTION_CFG.wheel_effort,
         low_level_observations=LowLevelObservationsCfg(),
         velocity_scale=0.5,
         turn_scale=0.5,
