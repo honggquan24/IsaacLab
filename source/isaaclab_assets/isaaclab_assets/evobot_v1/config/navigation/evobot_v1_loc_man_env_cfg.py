@@ -26,12 +26,15 @@ from isaaclab.sensors import (
 )
 from isaaclab.terrains import TerrainImporterCfg
 from ..robot.evobot_v1_cfg import EVOBOT_V1_CFG
+from isaaclab.terrains.config.rough import ROUGH_TERRAINS_CFG  # isort: skip
+from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR, ISAACLAB_NUCLEUS_DIR
 from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
 from isaaclab.envs.mdp import actions, observations, events, rewards, terminations, commands
+from ... import mdp
 from isaaclab.envs.mdp import *
 
 import isaaclab_tasks.manager_based.locomotion.velocity.mdp as mdp_v
-from .manipulation_mdp import reward_wheel_speed
+from .manipulation_mdp import *
 
 @configclass
 class EvobotV1SceneConfig(InteractiveSceneCfg):
@@ -83,54 +86,33 @@ class ActionCfg:
     """
 
     # Wheels - High torque for locomotion
-    wheel_effort = actions.JointVelocityActionCfg(
+    wheel_effort = actions.JointEffortActionCfg(
         asset_name="robot",
         joint_names=[
             'left_wheel_joint',       # Revolute - Left wheel
             'right_wheel_joint',      # Revolute - Right wheel
         ],
-        scale=300.0,  # High torque for moving the robot
+        scale=100.0,  # High torque for moving the robot
     )
 
     # Arm - Medium torque for manipulation
-    arm_effort = actions.JointVelocityActionCfg(
+    arm_effort = actions.JointEffortActionCfg(
         asset_name="robot",
         joint_names=[
             'arm_joint',              # Revolute - Arm rotation
         ],
-        scale=300.0,  # Medium torque for arm movement
+        scale=20.0,  # Medium torque for arm movement
     )
 
     # Grabbers - Low force for grasping (added to match balance checkpoint)
-    grabber_effort = actions.JointVelocityActionCfg(
+    grabber_effort = actions.JointEffortActionCfg(
         asset_name="robot",
         joint_names=[
             'left_grabbing_joint',    # Prismatic - Left gripper
             'right_grabbing_joint',   # Prismatic - Right gripper
         ],
-        scale=100.0,  # Low force to avoid damaging objects
+        scale=1.0,  # Low force to avoid damaging objects
     )
-
-@configclass
-class ActionCfgNavigation:
-    all_joints = actions.JointVelocityActionCfg(
-        asset_name="robot",
-        joint_names=[
-            "left_wheel_joint",
-            "right_wheel_joint",
-            "arm_joint",
-            "left_grabbing_joint",
-            "right_grabbing_joint",
-        ],
-        scale={
-            "left_wheel_joint": 30.0,
-            "right_wheel_joint": 30.0,
-            "arm_joint": 30.0,
-            "left_grabbing_joint": 10.0,
-            "right_grabbing_joint": 10.0,
-        },
-    )
-
 
 @configclass
 class CommandsCfg:
@@ -138,10 +120,10 @@ class CommandsCfg:
     
     base_velocity = commands.UniformVelocityCommandCfg(
         asset_name="robot",
-        resampling_time_range=(3.0, 5.0),  # Giữ command 8-12s (đủ để học)
+        resampling_time_range=(5.0, 5.0),  # Giữ command 8-12s (đủ để học)
         
         # QUAN TRỌNG: Tùy chỉnh cho balance
-        rel_standing_envs=0.1,     # 30% thời gian đứng yên (tập balance tại chỗ)
+        rel_standing_envs=0.3,     # 30% thời gian đứng yên (tập balance tại chỗ)
         
         heading_command=False,     # Dùng angular velocity (not heading)
         debug_vis=True,
@@ -149,25 +131,24 @@ class CommandsCfg:
         # RANGE AN TOÀN CHO BALANCE
         ranges=commands.UniformVelocityCommandCfg.Ranges(
             lin_vel_x=(-1.0, 1.0),      # TỐC ĐỘ CHẬM để giữ balance
-            lin_vel_y=(-1.0, 1.0),       # Không di chuyển ngang
+            lin_vel_y=(0.0, 0.0),       # Không di chuyển ngang
             ang_vel_z=(-1.0, 1.0),      # Xoay chậm
             heading=(0.0, 0.0),
         ),
     )
     
-        
     arm_ee_pose = commands.UniformPoseCommandCfg(
         asset_name="robot",
         body_name="head_link",   # đổi đúng link EE của evobot
         resampling_time_range=(1.0, 3.0),
-        # debug_vis=True,
+        debug_vis=True,
         ranges=commands.UniformPoseCommandCfg.Ranges(
             pos_x=(0.0, 0.0),
             pos_y=(0.0, 0.0),
             pos_z=(0.0, 0.0),
             roll=(0.0, 0.0),
             pitch=(0.0, 0.0),
-            yaw=(-3.14, 3.14),
+            yaw=(-math.pi, math.pi),
         ),
     )
     
@@ -175,7 +156,7 @@ class CommandsCfg:
         asset_name="robot",
         body_name="gripper",   # đổi đúng link EE của evobot
         resampling_time_range=(1.0, 3.0),
-        # debug_vis=True,
+        debug_vis=True,
         ranges=commands.UniformPoseCommandCfg.Ranges(
             pos_x=(0.0, 0.0),
             pos_y=(0.0, 0.0),
@@ -190,7 +171,7 @@ class CommandsCfg:
         asset_name="robot",
         body_name="gripper_01",   # đổi đúng link EE của evobot
         resampling_time_range=(1.0, 3.0),
-        # debug_vis=True,
+        debug_vis=True,
         ranges=commands.UniformPoseCommandCfg.Ranges(
             pos_x=(0.0, 0.0),
             pos_y=(0.0, 0.0),
@@ -200,6 +181,7 @@ class CommandsCfg:
             yaw=(0.0, 0.0),
         ),
     )
+
 
 @configclass
 class ObservationsCfg:
@@ -229,13 +211,13 @@ class ObservationsCfg:
 
         # Previous actions (for smoothness)
         last_action = ObservationTermCfg(func=observations.last_action)
-        
+            
         # Commands
         base_velocity_cmd = ObservationTermCfg(
             func=observations.generated_commands,
             params={"command_name": "base_velocity"},
         )
-
+        
         arm_ee_pose_cmd = ObservationTermCfg(
             func=observations.generated_commands,
             params={"command_name": "arm_ee_pose"},
@@ -250,14 +232,14 @@ class ObservationsCfg:
             func=observations.generated_commands,
             params={"command_name": "grip_ee_pose_right"},
         )
-        
+
+
         def __post_init__(self) -> None:
             self.enable_corruption = False
             self.concatenate_terms = True
 
     @configclass
     class CriticCfg(ObservationGroupCfg):
-        
         # observation terms (order preserved)
         base_lin_vel = ObservationTermCfg(func=mdp_v.base_lin_vel, noise=Unoise(n_min=-0.1, n_max=0.1))
         base_ang_vel = ObservationTermCfg(func=mdp_v.base_ang_vel, noise=Unoise(n_min=-0.2, n_max=0.2))
@@ -265,7 +247,6 @@ class ObservationsCfg:
             func=mdp_v.projected_gravity,
             noise=Unoise(n_min=-0.05, n_max=0.05),
         )
-        
         # Pose
         body_pose_w = ObservationTermCfg(func=observations.body_pose_w)
 
@@ -274,6 +255,10 @@ class ObservationsCfg:
         root_quat_w = ObservationTermCfg(func=observations.root_quat_w)
         root_lin_vel_w = ObservationTermCfg(func=observations.root_lin_vel_w)
         root_ang_vel_w = ObservationTermCfg(func=observations.root_ang_vel_w)
+
+        # # # IMU data (keep only essential)
+        # imu_orientation = ObservationTermCfg(func=observations.imu_orientation)
+        # imu_projected_gravity = ObservationTermCfg(func=observations.imu_projected_gravity)
 
         # Joint states
         joint_pos = ObservationTermCfg(func=observations.joint_pos)
@@ -341,46 +326,39 @@ class RewardCfg:
         weight=-500.0,
     )
     
-    wheel_speed = RewardTermCfg(
-        func=reward_wheel_speed,
-        weight=1.0,
+    # (2) Balance
+    rpy_alignment = RewardTermCfg(
+        func=mdp.rewards.rpy_alignment_imu,
+        weight=10.0,
+        params={
+            "target_rpy": (0.0, 0.0, 0.0),
+            "imu_cfg": SceneEntityCfg(name="imu"),
+            "tolerance": 0.05,
+        },
     )
     
-    # # (2) Balance
-    # rpy_alignment = RewardTermCfg(
-    #     func=manipulation_mdp.rpy_alignment_imu,
-    #     weight=5.0,
-    #     params={
-    #         "target_rpy": (0.0, 0.0, 0.0),
-    #         "imu_cfg": SceneEntityCfg(name="imu"),
-    #         "tolerance": 0.05,
-    #     },
-    # )
+    lin_vel_z_l2 = RewardTermCfg(
+        func=rewards.lin_vel_z_l2, 
+        weight=-2.0
+    )
     
-    # lin_vel_z_l2 = RewardTermCfg(
-    #     func=rewards.lin_vel_z_l2, 
-    #     weight=-1.1,
-    # )
+    ang_vel_xy = RewardTermCfg(
+        func=rewards.ang_vel_xy_l2,
+        weight=-0.01,
+        params={
+            "asset_cfg": SceneEntityCfg(name="robot"),
+        },
+    )
     
-    # ang_vel_xy = RewardTermCfg(
-    #     func=ang_vel_xy_l2,
-    #     weight=0.0001,
-    #     params={
-    #         "asset_cfg": SceneEntityCfg(name="robot"),
-    #     },
-    # )
-    
-    # dof_acc_l2 = RewardTermCfg(
-    #     func=joint_acc_l2,
-    #     weight=-2.5e-8
-    # )
-    
-    
+    dof_acc_l2 = RewardTermCfg(
+        func=joint_acc_l2,
+        weight=-2.5e-8
+    )
     
     # (3) Command task
     lin_vel_tracking = RewardTermCfg(
         func=rewards.track_lin_vel_xy_exp,
-        weight=20.0,
+        weight=5.0,
         params={
             "command_name": "base_velocity",
             "std": 0.05,
@@ -389,7 +367,7 @@ class RewardCfg:
 
     ang_vel_tracking = RewardTermCfg(
         func=rewards.track_ang_vel_z_exp,
-        weight=15,
+        weight=3.0,
         params={
             "command_name": "base_velocity",
             "std": 0.05,
@@ -398,60 +376,67 @@ class RewardCfg:
 
     # Smooth
     action_rate = RewardTermCfg(
-        func=rewards.action_rate_l2,
-        weight=-0.01,
+        func=action_rate_l2,
+        weight=-0.05,
     )
     
     undesired_contacts = RewardTermCfg(
-        func=rewards.undesired_contacts,
-        weight=-20.0,
+        func=undesired_contacts,
+        weight=-10.0,
         params={
-            "sensor_cfg": SceneEntityCfg("contact_forces", body_names="head_link|gripper.*"),
-            "threshold": 10.0},
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names="head_link"),
+            "threshold": 1.0},
     )
 
-    # # Manipualtion
-    # arm_ee_tracking = RewardTermCfg(
-    #     func=manipulation_mdp.rpy_command_error,
-    #     weight=1.0,
-    #     params={
-    #         "asset_cfg": SceneEntityCfg("robot", body_names="head_link"),
-    #         "command_name": "arm_ee_pose",
-    #     },
-    # )
     
-    # grip_ee_tracking_left = RewardTermCfg(
-    #     func=manipulation_mdp.position_command_error_man,
-    #     weight=0.5,
-    #     params={
-    #         "asset_cfg": SceneEntityCfg("robot", body_names="gripper"),
-    #         "command_name": "grip_ee_pose_left",
-    #     },
-    # )
+    # Manipualtion
+    arm_ee_tracking = RewardTermCfg(
+        func=position_command_error_tanh_man,
+        weight=2.0,
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names="head_link"),
+            "command_name": "arm_ee_pose",
+            "std": 0.05,
+        },
+    )
     
-    # grip_ee_tracking_right = RewardTermCfg(
-    #     func=manipulation_mdp.position_command_error_man,
-    #     weight=0.5,
-    #     params={
-    #         "asset_cfg": SceneEntityCfg("robot", body_names="gripper_01"),
-    #         "command_name": "grip_ee_pose_right",
-    #     },
-    # )
+    grip_ee_tracking_left = RewardTermCfg(
+        func=position_command_error_tanh_man,
+        weight=2.0,
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names="gripper"),
+            "command_name": "grip_ee_pose_left",
+            "std": 0.05,
+        },
+    )
+    
+    grip_ee_tracking_right = RewardTermCfg(
+        func=position_command_error_tanh_man,
+        weight=2.0,
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names="gripper_01"),
+            "command_name": "grip_ee_pose_right",
+            "std": 0.05,
+        },
+    )
+
     
 @configclass
 class TerminationsCfg:
     """Terminations: Strict cho balance, lenient cho velocity."""
+    
     # 1. TIME OUT (normal)
     time_out = TerminationTermCfg(
         func=terminations.time_out,
         time_out=True,
     )
     
-    # 2. FALL DOWN 
+    # 2. FALL DOWN (QUAN TRỌNG)
+    # Kết hợp nhiều điều kiện fall
     base_height = TerminationTermCfg(
         func=terminations.root_height_below_minimum,
         params={
-            "minimum_height": 0.15,  # 8cm (thấp hơn chút để cho recovery chance)
+            "minimum_height": 0.25,  # 8cm (thấp hơn chút để cho recovery chance)
             "asset_cfg": SceneEntityCfg(name="robot"),
         },
     )
@@ -460,11 +445,10 @@ class TerminationsCfg:
     bad_orientation = TerminationTermCfg(
         func=terminations.bad_orientation,
         params={
-            "limit_angle": math.pi / 1.2,  
+            "limit_angle": math.pi / 1.2,  # ~72° (strict hơn)
             "asset_cfg": SceneEntityCfg(name="robot"),
         },
     )
-    
     
     # Contact illegal 
     arm_contact = TerminationTermCfg( 
@@ -490,16 +474,7 @@ class TerminationsCfg:
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names="gripper_01") 
         }
     ) 
-    
-    joint_vel_limit = TerminationTermCfg(
-        func=terminations.joint_vel_out_of_manual_limit,
-        params={
-            "max_velocity": 1000.0,  # rad/s - Giới hạn vận tốc góc tối đa
-            "asset_cfg": SceneEntityCfg(name="robot"),
-        },
-    )
-    
-    
+
 # @configclass
 # class CurriculumCfg:
 #     """Curriculum terms for the MDP."""
@@ -507,7 +482,7 @@ class TerminationsCfg:
 #     terrain_levels = CurriculumTermCfg(func=mdp_v.terrain_levels_vel)
 
 @configclass
-class EvobotV1VelocityBalanceEnvCfg(ManagerBasedRLEnvCfg):
+class EvobotV1LocomotionManipulationBalanceEnvCfg(ManagerBasedRLEnvCfg):
     """Configuration cho velocity control với balance constraints."""
     
     # Scene
@@ -519,7 +494,6 @@ class EvobotV1VelocityBalanceEnvCfg(ManagerBasedRLEnvCfg):
     # MDP components
     observations: ObservationsCfg = ObservationsCfg()
     actions: ActionCfg = ActionCfg()
-    actions_nav: ActionCfgNavigation = ActionCfgNavigation()
     commands: CommandsCfg = CommandsCfg()
     events: EventCfg = EventCfg()
     rewards: RewardCfg = RewardCfg()

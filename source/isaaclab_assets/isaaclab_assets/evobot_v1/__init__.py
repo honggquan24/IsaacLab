@@ -63,10 +63,17 @@ gym.register(
 # Velocity Balance Task (Balance + Velocity Command Following)
 ##
 
+# ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
+# --task=Isaac-Evobot-V1-Velocity-Balance \
+# --num_envs 1 \
+# --resume --load_run=2026-01-14_11-14-00 \
+# --checkpoint=model_200.pt
+
+
 # Train velocity balance (balance with velocity commands)
 # ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
 # --task=Isaac-Evobot-V1-Velocity-Balance \
-# --num_envs 1024 \
+# --num_envs 7000 \
 # --headless --rendering_mode performance
 
 # Train mode debug
@@ -79,8 +86,8 @@ gym.register(
 # ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
 # --task=Isaac-Evobot-V1-Velocity-Balance \
 # --num_envs 7000 \
-# --resume --load_run=2026-01-12_14-45-12 \
-# --checkpoint=model_2000.pt \
+# --resume --load_run=2026-01-14_11-14-00 \
+# --checkpoint=model_200.pt \
 # --headless --video --rendering_mode performance
 
 # Play/evaluate velocity balance
@@ -99,6 +106,51 @@ gym.register(
         "rsl_rl_cfg_entry_point": f"{config.navigation.agents.__name__}.rsl_rl_ppo_cfg:EvobotVelocityPPORunnerCfg",
     },
 )
+
+
+##
+# Loc + Man / Balance Task (Balance + Velocity Command Following)
+##
+
+# Train velocity balance (balance with velocity commands)
+# ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
+# --task=Isaac-Evobot-V1-Locomotion-Manipulation \
+# --num_envs 1024 \
+# --headless --rendering_mode performance
+
+# Train mode debug
+# ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
+# --task=Isaac-Evobot-V1-Locomotion-Manipulation \
+# --num_envs 3 \
+# --rendering_mode performance
+
+# Continue train
+# ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
+# --task=Isaac-Evobot-V1-Locomotion-Manipulation \
+# --num_envs 7000 \
+# --resume --load_run=2026-01-12_14-45-12 \
+# --checkpoint=model_2000.pt \
+# --headless --video --rendering_mode performance
+
+# Play/evaluate velocity balance
+# ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
+# --task Isaac-Evobot-V1-Locomotion-Manipulation \
+# --num_envs 4 \
+# 'agent.load_run=<run_name>' \
+# 'agent.load_checkpoint="model_500.pt"'
+
+gym.register(
+    id="Isaac-Evobot-V1-Locomotion-Manipulation",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{config.navigation.__name__}.evobot_v1_loc_man_env_cfg:EvobotV1LocomotionManipulationBalanceEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{config.navigation.agents.__name__}.rsl_rl_ppo_cfg:EvobotLocomotionManipulationPPORunnerCfg",
+    },
+)
+
+
+
 
 ##
 # Navigation Task (Approach 2: Hierarchical - Using pre-trained balance policy)

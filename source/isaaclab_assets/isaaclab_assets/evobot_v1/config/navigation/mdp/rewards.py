@@ -245,3 +245,4 @@ def tilt_penalty(env: ManagerBasedRLEnv) -> torch.Tensor:
         1 - 2 * (quat[:, 1] ** 2 + quat[:, 2] ** 2),
     )
     return -(pitch.abs() + roll.abs())
+

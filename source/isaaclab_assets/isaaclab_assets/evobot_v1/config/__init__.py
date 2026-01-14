@@ -1,3 +1,3 @@
 from .robot import *
-from . import balance
-from . import navigation
+from .balance import *
+from .navigation import *

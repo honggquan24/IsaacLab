@@ -47,24 +47,38 @@ class PreTrainedBalancePolicyAction(ActionTerm):
 
         # Raw actions are velocity commands (vx, vy, omega) for navigation
         self._raw_actions = torch.zeros(self.num_envs, self.action_dim, device=self.device)
-
+        self._raw_actions_ = torch.zeros(self.num_envs, 7, device=self.device)
+        
         # Prepare low level actions (joint effort)
         self._low_level_action_term: ActionTerm = cfg.low_level_actions.class_type(cfg.low_level_actions, env)
-        self.low_level_actions = torch.zeros(self.num_envs, self._low_level_action_term.action_dim, device=self.device)
-
+        self.low_level_actions = torch.zeros(self.num_envs, 5, device=self.device)
+        
         # Store last low level actions for observation
         def last_action():
+            # reset the low level actions if the episode was reset
             if hasattr(env, "episode_length_buf"):
                 self.low_level_actions[env.episode_length_buf == 0, :] = 0
             return self.low_level_actions
 
+        print(f"cfg.low_level_observations: {cfg.low_level_observations}")
+        
         # Remap observations for low level policy
-        # The balance policy expects observations without velocity commands
-        # We need to provide: joint_pos, joint_vel, pitch, roll, yaw, lin_vel, ang_vel
-        # cfg.low_level_observations.actions.func = lambda dummy_env: last_action()
-        # cfg.low_level_observations.actions.params = dict()
+        cfg.low_level_observations.last_action.func = lambda _: last_action()
+        cfg.low_level_observations.last_action.params = {}
+        
+        cfg.low_level_observations.base_velocity_cmd.func = lambda dummy_env: self._raw_actions
+        cfg.low_level_observations.base_velocity_cmd.params = dict()
 
-        # Create observation manager for low level policy
+        cfg.low_level_observations.arm_ee_pose_cmd.func = lambda dummy_env: self._raw_actions_
+        cfg.low_level_observations.arm_ee_pose_cmd.params = dict()
+        
+        cfg.low_level_observations.grip_ee_pose_left_cmd.func = lambda dummy_env: self._raw_actions_
+        cfg.low_level_observations.grip_ee_pose_left_cmd.params = dict()
+        
+        cfg.low_level_observations.grip_ee_pose_right_cmd.func = lambda dummy_env: self._raw_actions_
+        cfg.low_level_observations.grip_ee_pose_right_cmd.params = dict()
+        
+   
         self._low_level_obs_manager = ObservationManager({"ll_policy": cfg.low_level_observations}, env)
 
         self._counter = 0
@@ -90,8 +104,8 @@ class PreTrainedBalancePolicyAction(ActionTerm):
         """Apply actions by running low-level balance policy with velocity modulation."""
         if self._counter % self.cfg.low_level_decimation == 0:
             # Get observations for low-level policy
+            
             low_level_obs = self._low_level_obs_manager.compute_group("ll_policy")
-
             # Run balance policy to get base wheel efforts
             balance_actions = self.policy(low_level_obs)
 

@@ -13,16 +13,17 @@ import math
 
 import isaaclab.envs.mdp as mdp
 from isaaclab.envs import ManagerBasedRLEnvCfg
-from isaaclab.managers import EventTermCfg as EventTerm
+from isaaclab.managers import EventTermCfg
 from isaaclab.managers import ObservationGroupCfg as ObsGroup
-from isaaclab.managers import ObservationTermCfg as ObsTerm
+from isaaclab.managers import ObservationTermCfg
 from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
-from isaaclab.managers import TerminationTermCfg as DoneTerm
+from isaaclab.managers import TerminationTermCfg
 from isaaclab.utils import configclass
+from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
 
-# Import balance config for scene and action reference
-from ..balance.evobot_v1_env_cfg_balance import EvobotV1EnvCfgBalance, ActionCfg as BalanceActionCfg
+from isaaclab.envs.mdp import actions, observations, events, rewards, terminations, commands
+
 from ...mdp import (
     obs_body_pitch,
     obs_body_roll,
@@ -32,6 +33,12 @@ from ...mdp import (
     obs_pos_world,
     reset_when_fall,
 )
+
+from .evobot_v1_velocity_env_cfg import EvobotV1VelocityBalanceEnvCfg
+from .evobot_v1_velocity_env_cfg import ActionCfg as VelocityBalanceActionCfg
+
+import isaaclab_tasks.manager_based.locomotion.velocity.mdp as mdp_v
+
 from .mdp.pre_trained_policy_action import PreTrainedBalancePolicyActionCfg
 from .mdp.rewards import (
     goal_progress_reward,
@@ -47,49 +54,7 @@ from .mdp.rewards import (
 
 
 # Load low-level balance environment config
-LOW_LEVEL_ENV_CFG = EvobotV1EnvCfgBalance()
-# Load balance action config for wheel control
-LOW_LEVEL_ACTION_CFG = BalanceActionCfg()
-
-
-@configclass
-class LowLevelObservationsCfg(ObsGroup):
-    """Observations for the low-level balance policy.
-
-    This must match the observation space that the balance policy was trained on.
-    Based on evobot_v1_env_cfg_balance.py ObservationsCfg.PolicyCfg.
-
-    The balance policy expects these observations in order:
-    1. IMU data: lin_acc (3), ang_vel (3), orientation (4), projected_gravity (3)
-    2. Body pose (7)
-    3. Joint states: pos (5), vel (5), effort (5)
-    4. Previous actions (5)
-    Total: 40 dimensions
-    """
-
-    # IMU observations (matching balance policy)
-    imu_lin_acc = ObsTerm(func=mdp.imu_lin_acc)
-    imu_ang_vel = ObsTerm(func=mdp.imu_ang_vel)
-    imu_orientation = ObsTerm(func=mdp.imu_orientation)
-    imu_projected_gravity = ObsTerm(func=mdp.imu_projected_gravity)
-
-    # Body pose
-    body_pose_w = ObsTerm(func=mdp.body_pose_w)
-
-    # Joint states
-    joint_pos = ObsTerm(func=mdp.joint_pos)
-    joint_vel = ObsTerm(func=mdp.joint_vel)
-    joint_effort = ObsTerm(func=mdp.joint_effort)
-
-    # Previous actions - CRITICAL: Must be included for proper observation matching
-    # This is stored by the PreTrainedBalancePolicyAction wrapper and injected here
-    last_action = ObsTerm(
-        func=lambda env: env.action_manager["pre_trained_policy_action"].low_level_actions
-    )
-
-    def __post_init__(self) -> None:
-        self.enable_corruption = False
-        self.concatenate_terms = True
+LOW_LEVEL_ENV_CFG = EvobotV1VelocityBalanceEnvCfg()
 
 
 @configclass
@@ -102,12 +67,12 @@ class ActionsCfg:
         # Run play.py first to export: ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
         #   --task Isaac-Evobot-V1-Balance --num_envs 1 'agent.load_run=<run_name>' 'agent.load_checkpoint="model_.pt"'
         # Then update this path to point to the exported policy.pt
-        policy_path="logs/rsl_rl/evobot_v1_ppo_balance/2026-01-12_14-45-12/exported/policy.pt",
+        policy_path="logs/rsl_rl/evobot_v1_velocity/2026-01-14_11-14-00/exported/policy.pt",
         low_level_decimation=1,
-        low_level_actions=LOW_LEVEL_ACTION_CFG.wheel_effort,
-        low_level_observations=LowLevelObservationsCfg(),
-        velocity_scale=0.5,
-        turn_scale=0.5,
+        low_level_actions=LOW_LEVEL_ENV_CFG.actions_nav.all_joints,
+        low_level_observations=LOW_LEVEL_ENV_CFG.observations.policy,
+        velocity_scale=0.1,
+        turn_scale=0.1,
     )
 
 
@@ -120,12 +85,31 @@ class ObservationsCfg:
         """High-level observations for navigation."""
 
         # Robot state
-        base_lin_vel = ObsTerm(func=mdp.base_lin_vel)
-        base_ang_vel = ObsTerm(func=mdp.base_ang_vel)
-        projected_gravity = ObsTerm(func=mdp.projected_gravity)
+        base_lin_vel = ObservationTermCfg(func=mdp.base_lin_vel)
+        base_ang_vel = ObservationTermCfg(func=mdp.base_ang_vel)
+        projected_gravity = ObservationTermCfg(func=mdp.projected_gravity)
 
         # Navigation command (target position)
-        pose_command = ObsTerm(
+        pose_command = ObservationTermCfg(
+            func=mdp.generated_commands,
+            params={"command_name": "pose_command"},
+        )
+
+        def __post_init__(self) -> None:
+            self.enable_corruption = False
+            self.concatenate_terms = True
+    
+    @configclass
+    class CriticCfg(ObsGroup):
+        """High-level observations for navigation."""
+
+        # Robot state
+        base_lin_vel = ObservationTermCfg(func=mdp.base_lin_vel)
+        base_ang_vel = ObservationTermCfg(func=mdp.base_ang_vel)
+        projected_gravity = ObservationTermCfg(func=mdp.projected_gravity)
+
+        # Navigation command (target position)
+        pose_command = ObservationTermCfg(
             func=mdp.generated_commands,
             params={"command_name": "pose_command"},
         )
@@ -135,19 +119,41 @@ class ObservationsCfg:
             self.concatenate_terms = True
 
     policy: PolicyCfg = PolicyCfg()
+    critic: CriticCfg = CriticCfg()
 
 
 @configclass
 class EventCfg:
     """Event configuration for navigation."""
 
-    reset_joints = EventTerm(
+    reset_joints = EventTermCfg(
         func=mdp.reset_joints_by_offset,
         mode="reset",
         params={
             "asset_cfg": SceneEntityCfg("robot"),
             "position_range": (-0.05, 0.05),
             "velocity_range": (-0.1, 0.1),
+        },
+    )
+    
+    # Reset base with small noise (increase robustness)
+    reset_position = EventTermCfg(
+        func=events.reset_root_state_uniform,
+        mode="reset",
+        params={
+            "asset_cfg": SceneEntityCfg(name="robot"),
+            "pose_range": {
+                "x": (-0.1, 0.1),
+                "y": (-0.1, 0.1),
+                "z": (0.12, 0.12),
+                "roll": (-0.05, 0.05),
+                "pitch": (-0.05, 0.05),
+                "yaw": (-0.1, 0.1),
+            },
+            "velocity_range": {
+                "linear": (-0.05, 0.05),
+                "angular": (-0.05, 0.05),
+            },
         },
     )
 
@@ -189,7 +195,7 @@ class RewardsCfg:
 
     velocity_to_goal = RewTerm(
         func=velocity_towards_goal,
-        weight=0.5,
+        weight=5,
         params={"command_name": "pose_command"},
     )
 
@@ -198,7 +204,7 @@ class RewardsCfg:
     # =====================================================
     heading_alignment = RewTerm(
         func=heading_alignment_reward,
-        weight=0.2,
+        weight=2.5,
         params={"command_name": "pose_command"},
     )
 
@@ -207,12 +213,12 @@ class RewardsCfg:
     # =====================================================
     lateral_drift = RewTerm(
         func=lateral_velocity_penalty,
-        weight=0.2,
+        weight=2,
     )
 
     yaw_rate = RewTerm(
         func=yaw_rate_penalty,
-        weight=0.2,
+        weight=2,
     )
 
     joint_vel = RewTerm(
@@ -225,7 +231,7 @@ class RewardsCfg:
     # =====================================================
     reached_bonus = RewTerm(
         func=position_reached_bonus,
-        weight=10.0,
+        weight=50.0,
         params={
             "threshold": 0.3,
             "command_name": "pose_command",
@@ -248,16 +254,65 @@ class RewardsCfg:
 
 @configclass
 class TerminationsCfg:
-    """Termination configuration for navigation."""
-
-    time_out = DoneTerm(func=mdp.time_out, time_out=True)
-    fall = DoneTerm(
-        func=reset_when_fall,
+    """Terminations: Strict cho balance, lenient cho velocity."""
+    # 1. TIME OUT (normal)
+    time_out = TerminationTermCfg(
+        func=terminations.time_out,
+        time_out=True,
+    )
+    
+    # 2. FALL DOWN 
+    base_height = TerminationTermCfg(
+        func=terminations.root_height_below_minimum,
         params={
-            "asset_cfg": SceneEntityCfg("robot"),
-            "max_tilt_angle": 1.0,  # ~57 degrees
+            "minimum_height": 0.15,  # 8cm (thấp hơn chút để cho recovery chance)
+            "asset_cfg": SceneEntityCfg(name="robot"),
         },
     )
+    
+    # 3. BAD ORIENTATION (khi nghiêng quá nhiều)
+    bad_orientation = TerminationTermCfg(
+        func=terminations.bad_orientation,
+        params={
+            "limit_angle": math.pi / 1.2,  
+            "asset_cfg": SceneEntityCfg(name="robot"),
+        },
+    )
+    
+    
+    # Contact illegal 
+    arm_contact = TerminationTermCfg( 
+        func=terminations.illegal_contact, 
+        params={ 
+            "threshold": 10.0, 
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names="head_link") 
+        }
+    ) 
+    
+    left_grip_contact = TerminationTermCfg( 
+        func=terminations.illegal_contact, 
+        params={ 
+            "threshold": 10.0, 
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names="gripper") 
+        }
+    ) 
+    
+    right_grip_contact = TerminationTermCfg( 
+        func=terminations.illegal_contact, 
+        params={ 
+            "threshold": 10.0, 
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names="gripper_01") 
+        }
+    ) 
+    
+    joint_vel_limit = TerminationTermCfg(
+        func=terminations.joint_vel_out_of_manual_limit,
+        params={
+            "max_velocity": 1000.0,  # rad/s - Giới hạn vận tốc góc tối đa
+            "asset_cfg": SceneEntityCfg(name="robot"),
+        },
+    )
+    
 
 
 @configclass

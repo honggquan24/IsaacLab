@@ -34,8 +34,8 @@ EVOBOT_V1_CFG = ArticulationCfg(
         # ),
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             rigid_body_enabled=True,
-            # max_linear_velocity=10.0,
-            # max_angular_velocity=110.0,
+            max_linear_velocity=500.0,
+            max_angular_velocity=500.0,
             # linear_damping=0.002,
             # angular_damping=0.005,
             # max_depenetration_velocity=1.0,
@@ -72,46 +72,47 @@ EVOBOT_V1_CFG = ArticulationCfg(
     ),
 
     actuators = {
-        # ===== Wheels (Revolute joints) =====
+        # ===== Wheels =====
         "wheels": DCMotorCfg(
-            joint_names_expr=[".*_wheel_joint"],  # Matches: left_wheel_joint, right_wheel_joint
-            saturation_effort=500.0,
-            effort_limit=2000.0,
-            velocity_limit=20.0,
-            stiffness=1.0,
-            damping=0.0,
-            armature=0.01,
-            friction=0.3,
-            dynamic_friction=0.05,
-            viscous_friction=0.02,
+            joint_names_expr=[".*_wheel_joint"],
+            saturation_effort=500.0,      # ↑ Tăng (từ 500)
+            effort_limit=5000.0,            # ↑ Tăng
+            velocity_limit=100.0,            # ↓ Giảm (từ 100)
+            stiffness=0.0,
+            damping=1.0,                    # ↓ Giảm (từ 100) - QUAN TRỌNG
+            armature=0.001,
+            friction=0.01,                   # ↓ Giảm
+            dynamic_friction=0.0,
+            viscous_friction=0.01,
         ),
-
-        # ===== Arm (Revolute joint) =====
+        
+        # ===== Arm =====
         "arm": DCMotorCfg(
             joint_names_expr=["arm_joint"],
-            saturation_effort=500.0,
-            effort_limit=2000.0,
-            velocity_limit=10.0,
-            stiffness=1.0,
-            damping=0.1,
-            armature=0.02,
-            friction=0.5,
-            dynamic_friction=0.1,
-            viscous_friction=0.05,
+            saturation_effort=500.0,       # ↓ Giảm (từ 500)
+            effort_limit=500.0,
+            velocity_limit=100.0,            # ↓ Giảm (từ 100)
+            stiffness=0.0,
+            damping=2.0,                    # ↓ Giảm (từ 100) - QUAN TRỌNG
+            armature=0.001,
+            friction=0.01,
+            dynamic_friction=0.01,
+            viscous_friction=0.01,
         ),
-
-        # ===== Grabbing mechanism (Prismatic joints) =====
+        
+        # ===== Grabbers =====
         "grabbers": DCMotorCfg(
-            joint_names_expr=[".*_grabbing_joint"],  # Matches: left_grabbing_joint, right_grabbing_joint
-            saturation_effort=50.0,
-            effort_limit=2000.0,
-            velocity_limit=1.0,
-            stiffness=1.0,
-            damping=0.1,
-            armature=0.01,
-            friction=0.2,
-            dynamic_friction=0.1,
-            viscous_friction=0.05,
+            joint_names_expr=[".*_grabbing_joint"],
+            saturation_effort=200.0,        # ↓ Giảm (từ 50)
+            effort_limit=200.0,
+            velocity_limit=100.0,             # ↓ Giảm (từ 10)
+            stiffness=0.0,
+            damping=1.0,                    # ↓ Giảm (từ 100) - QUAN TRỌNG
+            armature=0.001,
+            friction=0.01,
+            dynamic_friction=0.01,
+            viscous_friction=0.01,
         ),
+        
     }
 )
