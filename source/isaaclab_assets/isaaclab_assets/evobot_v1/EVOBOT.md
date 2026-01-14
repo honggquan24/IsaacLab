@@ -1,393 +1,174 @@
-Dưới đây là **phiên bản viết lại và hoàn chỉnh hóa tài liệu**, giữ **100% nội dung gốc**, đồng thời **bổ sung giải thích “là gì” và “vì sao”**, chuẩn hóa thuật ngữ theo **USD / PhysX / Isaac Sim / Isaac Lab**, đủ dùng làm **giáo trình – reference – documentation kỹ thuật**.
+# Evobot V1 - Robot Configuration & Tasks Documentation
+
+## Overview
+
+**Evobot V1** is a 5-DOF mobile manipulator robot designed for reinforcement learning research. It features:
+- **2 wheels** (differential drive for locomotion)
+- **1 arm** (articulated manipulator)
+- **2 grippers** (grasping mechanism)
+- **IMU sensor** (balance measurement)
+- **Contact sensors** (force feedback)
+
+This document covers both the USD (Universal Scene Description) structure and the Isaac Lab task implementations.
 
 ---
 
-# Tài liệu Cấu trúc USD Evobot
+## Part 1: USD Robot Structure
 
-## 1. Tổng quan
-
-Tài liệu này mô tả **cấu trúc USD nguyên trạng (authoritative structure)** của robot **`evobot`** trong môi trường **NVIDIA Isaac Sim / Omniverse**.
-Mục tiêu của tài liệu là:
-
-* Làm **tài liệu tham chiếu chính xác** cho:
-
-  * Debug PhysX
-  * Debug Articulation
-  * Kiểm tra mapping link–joint
-* Làm nền tảng cho:
-
-  * Tích hợp **Isaac Lab**
-  * Viết `ArticulationCfg`, `SceneEntityCfg`
-  * Huấn luyện RL / Navigation / Manipulation
-
-Tài liệu **không mô tả logic điều khiển**, **không mô tả controller**, mà **chỉ tập trung vào cấu trúc USD và ý nghĩa kỹ thuật của từng thành phần**.
-
----
-
-## 2. Cây phân cấp USD (Prim Hierarchy)
-
-### 2.1 Hierarchy đầy đủ (Cấu trúc thực tế từ USD)
+### 1.1 Prim Hierarchy
 
 ```text
 World (defaultPrim)
 └── evobot                                  (Xform, namespace container)
     └── evobot                              (Xform, ArticulationRoot)
         │
-        ├── gripper                         (Xform) - Kẹp trái
-        ├── gripper_01                      (Xform) - Kẹp phải
+        ├── top_link                        (Xform) - Main body (IMU mounted here)
+        ├── head_link                       (Xform) - Head
+        │   └── arm_link                    (Xform) - Arm
         │
-        ├── head_link                       (Xform) - Đầu robot
-        │   └── arm_link                    (Xform) - Cánh tay
-        │       ├── part_below              (Xform)
-        │       └── part_below_01           (Xform)
+        ├── leg_link                        (Xform) - Legs
+        ├── wheel                           (Xform) - Right wheel
+        ├── wheel_01                        (Xform) - Left wheel
+        ├── gripper                         (Xform) - Left gripper
+        ├── gripper_01                      (Xform) - Right gripper
         │
-        ├── leg_link                        (Xform) - Chân robot
-        │   ├── leg                         (Xform)
-        │   └── leg_01                      (Xform)
-        │
-        ├── top_link                        (Xform) - Thân trên (gắn IMU)
-        │   ├── name                        (Xform)
-        │   │   ├── name                    (Xform)
-        │   │   └── cylinder_link           (Xform)
-        │
-        ├── wheel                           (Xform) - Bánh phải
-        ├── wheel_01                        (Xform) - Bánh trái
-        │
-        ├── base_joint                      (PhysicsRevoluteJoint)
-        ├── arm_joint                       (PhysicsRevoluteJoint)
         ├── left_wheel_joint                (PhysicsRevoluteJoint)
         ├── right_wheel_joint               (PhysicsRevoluteJoint)
+        ├── arm_joint                       (PhysicsRevoluteJoint)
         ├── left_grabbing_joint             (PhysicsPrismaticJoint)
         └── right_grabbing_joint            (PhysicsPrismaticJoint)
 ```
 
-### 2.2 Đặc điểm cấu trúc
+### 1.2 Key Characteristics
 
-* Có **2 cấp `evobot`**:
+- **Single ArticulationRoot**: All links/joints under one root for stable physics solving
+- **Flat joint hierarchy**: Joints are siblings of links (not nested)
+- **5 DOF**: 2 wheels (rotation), 1 arm (rotation), 2 grippers (prismatic)
 
-  * `World/evobot`: **namespace container**
-  * `World/evobot/evobot`: **robot thực**, được gắn `ArticulationRoot`
-* **Toàn bộ link và joint** nằm dưới **một ArticulationRoot duy nhất**
-* **Tất cả joint** được đặt **cùng cấp** với các link, **không lồng trong link**
-* Không có prim collision riêng biệt:
+### 1.3 Joint Definitions
 
-  * Collision (nếu có) được **gắn trực tiếp lên visual mesh**
-* Cấu trúc tuân thủ **best practice của PhysX Articulation trong Isaac Sim**
+| Joint | Type | Purpose |
+|-------|------|---------|
+| `left_wheel_joint` | Revolute | Left wheel rotation |
+| `right_wheel_joint` | Revolute | Right wheel rotation |
+| `arm_joint` | Revolute | Arm rotation |
+| `left_grabbing_joint` | Prismatic | Left gripper actuation |
+| `right_grabbing_joint` | Prismatic | Right gripper actuation |
 
----
+### 1.4 Link Definitions
 
-## 3. Thành phần chính
-
-### 3.1 Chuỗi động học (Kinematic Chain)
-
-Chuỗi động học logic của robot có thể được diễn giải như sau:
-
-```text
-top_link (root, thân trên - gắn IMU)
-    → head_link → arm_link (cánh tay)
-    → leg_link (chân)
-    → wheel (bánh phải) via right_wheel_joint
-    → wheel_01 (bánh trái) via left_wheel_joint
-    → gripper (kẹp trái) via left_grabbing_joint
-    → gripper_01 (kẹp phải) via right_grabbing_joint
-```
-
-**Giải thích:**
-
-* `top_link` là **root link** của toàn bộ hệ Articulation (thân trên robot)
-* `head_link → arm_link` tạo thành **chuỗi nối tiếp (serial chain)** cho tay máy
-* `leg_link` chứa các thành phần chân của robot
-* Hai bánh xe và hai kẹp được:
-  * Liên kết động học thông qua **PhysicsJoint**
-* Cách tổ chức này giúp:
-  * PhysX giải Articulation ổn định
-  * Tránh inertia propagation sai
-  * Dễ debug joint độc lập
-
-**Lưu ý quan trọng:**
-* **IMU nên gắn vào `top_link`** vì đây là thân chính của robot
-* **Contact sensor** có thể gắn vào `head_link` hoặc `arm_link` để phát hiện va chạm
+| Link | Purpose |
+|------|---------|
+| `top_link` | Main body / root link (IMU mounted) |
+| `head_link` | Head assembly |
+| `arm_link` | Arm assembly |
+| `leg_link` | Leg assembly |
+| `wheel`, `wheel_01` | Wheels (right/left) |
+| `gripper`, `gripper_01` | Grippers (right/left) |
 
 ---
 
-### 3.2 Các Joint (5 DOF)
+## Part 2: Isaac Lab Directory Structure
 
-| Joint name             | Loại      | Ý nghĩa           |
-| ---------------------- | --------- | ----------------- |
-| `left_wheel_joint`     | Revolute  | Quay bánh xe trái |
-| `right_wheel_joint`    | Revolute  | Quay bánh xe phải |
-| `arm_joint`            | Revolute  | Quay cánh tay     |
-| `left_grabbing_joint`  | Prismatic | Trượt kẹp trái    |
-| `right_grabbing_joint` | Prismatic | Trượt kẹp phải    |
-
-**Lưu ý kỹ thuật quan trọng:**
-
-* Mỗi joint phải khai báo:
-
-  * `body0`: parent link
-  * `body1`: child link
-* Joint **không phải là prim cha của link**
-* Đây là yêu cầu bắt buộc để:
-
-  * PhysX nhận đúng DOF
-  * Isaac Lab đọc được joint state
-
----
-
-### 3.3 Các Link / Rigid Body
-
-| Link                          | Vai trò                                    |
-| ----------------------------- | ------------------------------------------ |
-| `top_link`                    | **Thân chính, root của Articulation (gắn IMU)** |
-| `head_link`                   | Khối đầu robot                             |
-| `arm_link`                    | Cánh tay chính                             |
-| `leg_link`                    | Chân robot (chứa leg, leg_01)             |
-| `wheel`, `wheel_01`           | Bánh xe phải / trái                        |
-| `gripper`, `gripper_01`       | Kẹp phải / trái                            |
-| `part_above`, `part_above_01` | Thành phần phụ thân trên                   |
-| `part_below`, `part_below_01` | Thành phần phụ thân dưới                   |
-| `cylinder_link`               | Thành phần hình trụ (trong top_link)       |
-
----
-
-## 4. Cấu hình cho Isaac Lab
-
-### 4.1 `joint_names` cho `ArticulationCfg`
-
-Danh sách joint được dùng để:
-
-* Gán actuator
-* Đọc trạng thái joint
-* Áp dụng action trong RL
-
-```python
-joint_names = [
-    "left_wheel_joint",
-    "right_wheel_joint",
-    "arm_joint",
-    "left_grabbing_joint",
-    "right_grabbing_joint"
-]
-```
-
-**Yêu cầu:**
-
-* Tên **phải khớp chính xác** với prim name trong USD
-* Thứ tự ảnh hưởng trực tiếp tới:
-
-  * Action vector
-  * Observation vector
-
----
-
-### 4.2 `body_names` cho `SceneEntityCfg`
-
-Danh sách body dùng cho:
-
-* Contact sensor
-* Force sensor
-* Observation (pose, velocity)
-
-```python
-body_names = [
-    "top_link",       # Root link (thân chính)
-    "head_link",      # Đầu robot
-    "arm_link",       # Cánh tay
-    "leg_link",       # Chân
-    "wheel",          # Bánh phải
-    "wheel_01",       # Bánh trái
-    "gripper",        # Kẹp trái
-    "gripper_01",     # Kẹp phải
-    "cylinder_link",  # Thành phần hình trụ
-]
-```
-
-### 4.3 Sensor Configuration Examples
-
-```python
-# IMU - gắn vào thân chính (top_link)
-imu = ImuCfg(
-    prim_path="/World/envs/env_.*/Robot/evobot/evobot/top_link",
-    update_period=0.02,  # 50Hz
-    gravity_bias=(0.0, 0.0, 0.0),
-)
-
-# Contact sensor - gắn vào đầu robot để phát hiện va chạm
-contact_sensor = ContactSensorCfg(
-    prim_path="/World/envs/env_.*/Robot/evobot/evobot/head_link",
-    update_period=0.01,  # 100Hz
-)
-```
-
-**Lưu ý:**
-
-* `body_names` **chỉ tham chiếu link**
-* Không được đưa joint vào danh sách này
-* Mọi body phải:
-
-  * Có RigidBody API
-  * Có mass hợp lệ
-
----
-
-# Tóm tắt Cấu trúc Thư mục Codebase Evobot
-
-## Tổng quan
-Codebase này triển khai môi trường RL cho robot **Evobot V1** trong Isaac Lab/Isaac Sim, bao gồm 2 task chính:
-- **Balance Task**: Giữ thăng bằng (self-balancing robot)
-- **Navigation Task**: Di chuyển đến mục tiêu (với 2 cách tiếp cận)
-
-## Cấu trúc thư mục chi tiết
+### 2.1 New Optimized Structure
 
 ```
 evobot_v1/
-├── .claude/                              # Cấu hình Claude AI
-│   └── settings.local.json              # Permissions cho Claude
+├── evobot_v1_cfg.py                      # ★ Robot configuration (root level)
 │
-├── config/                              # ═══ CẤU HÌNH CHÍNH ═══
-│   ├── __init__.py                      # Export tất cả config modules
-│   │
-│   ├── robot/                           # Robot configuration
-│   │   ├── __init__.py
-│   │   └── evobot_v1_cfg.py            # ★ Robot articulation config
-│   │                                    #   - USD file path
-│   │                                    #   - Actuators (wheels, arm, grabbers)
-│   │                                    #   - Initial joint positions
-│   │
-│   ├── balance/                         # ═══ BALANCE TASK ═══
-│   │   ├── __init__.py
-│   │   ├── evobot_v1_env_cfg_balance.py # ★ Balance environment config
-│   │   │                                #   - Scene: robot + ground + sensors
-│   │   │                                #   - Actions: 5 DOF joint effort
-│   │   │                                #   - Observations: IMU + joints + pose
-│   │   │                                #   - Rewards: rpy_alignment, alive, etc.
-│   │   │                                #   - Terminations: fall, bad orientation
-│   │   └── agents/                      # RL training config
-│   │       ├── __init__.py
-│   │       └── rsl_rl_ppo_cfg.py       # PPO hyperparameters for balance
-│   │
-│   └── navigation/                      # ═══ NAVIGATION TASK ═══
-│       ├── __init__.py
-│       │
-│       ├── evobot_v1_navigation_env_cfg.py  # ★ Approach 1: End-to-End
-│       │                                     #   - Train balance + navigation together
-│       │                                     #   - Direct wheel control from policy
-│       │                                     #   - Extends balance config with commands
-│       │
-│       ├── evobot_v1_navigation_pretrained_env_cfg.py  # ★ Approach 2: Hierarchical
-│       │                                               #   - Uses pre-trained balance policy
-│       │                                               #   - High-level: [vx, vy, omega]
-│       │                                               #   - Low-level: balance controller
-│       │
-│       ├── agents/                      # RL training config
-│       │   ├── __init__.py
-│       │   └── rsl_rl_ppo_cfg.py       # PPO hyperparameters for navigation
-│       │
-│       └── mdp/                         # Navigation-specific MDP components
-│           ├── __init__.py
-│           ├── pre_trained_policy_action.py  # ★ Hierarchical action wrapper
-│           │                                  #   - Loads balance policy checkpoint
-│           │                                  #   - Converts velocity commands → wheel torques
-│           └── rewards.py               # Navigation reward functions
-│                                        #   - position_command_error_tanh
-│                                        #   - heading_command_error_abs
-│                                        #   - position_reached_bonus
-│
-├── mdp/                                 # ═══ SHARED MDP COMPONENTS ═══
+├── balance/                              # ★ BALANCE TASK
 │   ├── __init__.py
-│   ├── observations.py                  # Custom observation functions
-│   │                                    #   - obs_body_roll/pitch/yaw
-│   │                                    #   - lin_vel_b, angl_vel_b
-│   │                                    #   - obs_pos_world
-│   ├── rewards.py                       # Custom reward functions (balance task)
-│   │                                    #   - rpy_alignment_imu
-│   │                                    #   - height_reward
-│   │                                    #   - angular_velocity_reward
-│   └── terminations.py                  # Custom termination conditions
-│                                        #   - reset_when_fall
+│   ├── evobot_v1_balance_env_cfg.py
+│   ├── agents/
+│   │   ├── __init__.py
+│   │   └── rsl_rl_ppo_cfg.py
+│   └── mdp/                              # Task-specific MDP terms
+│       ├── __init__.py
+│       ├── observations.py               # IMU, joint, pose observations
+│       ├── rewards.py                    # 7 balance reward functions
+│       └── terminations.py               # Fall detection
 │
-├── tests/                               # ═══ TEST SCRIPTS ═══
-│   └── run_robot_rl_env.py             # Test environment loading
+├── mdp/                                  # ★ CONSOLIDATED MDP COMPONENTS
+│   ├── __init__.py                       # Exports all MDP functions
+│   ├── observations_balance.py           # Balance observations
+│   ├── rewards_balance.py                # Balance rewards
+│   ├── terminations_balance.py           # Balance terminations
+│   ├── rewards_navigation.py             # Navigation shared rewards
+│   ├── rewards_hierarchical.py           # Hierarchical navigation rewards
+│   ├── rewards_manipulation.py           # Manipulation utilities
+│   ├── actions_hierarchical.py           # Pre-trained policy wrapper
+│   └── (other mdp files)
 │
-├── usd_file/                            # ═══ USD ROBOT FILES ═══
-│   ├── evobot_cfg.usd                   # USD variant 1 (5KB)
-│   ├── evoBOT_cfg.usd                   # USD variant 2 (7KB)
-│   └── evobot_v1_cfg.usd               # ★ Main USD file (41MB, with meshes)
+├── navigation/                           # ★ NAVIGATION TASKS (3 variants)
+│   ├── __init__.py
+│   │
+│   ├── velocity/                         # Task 1: Velocity Balance
+│   │   ├── __init__.py
+│   │   ├── velocity_env_cfg.py
+│   │   └── agents/
+│   │       ├── __init__.py
+│   │       └── rsl_rl_ppo_cfg.py         # EvobotVelocityPPORunnerCfg
+│   │
+│   ├── locomotion_manipulation/          # Task 2: Manipulation
+│   │   ├── __init__.py
+│   │   ├── loc_man_env_cfg.py
+│   │   └── agents/
+│   │       ├── __init__.py
+│   │       └── rsl_rl_ppo_cfg.py         # 
+│   │
+│   └── hierarchical/                     # Task 3: Hierarchical Navigation
+│       ├── __init__.py
+│       ├── hierarchical_env_cfg.py
+│       └── agents/
+│           ├── __init__.py
+│           └── rsl_rl_ppo_cfg.py         # EvobotNavigationPPORunnerCfg
 │
-├── __init__.py                          # ★ GYM ENVIRONMENT REGISTRATION
-│                                        #   - Isaac-Evobot-V1-Balance
-│                                        #   - Isaac-Evobot-V1-Navigation
-│                                        #   - Isaac-Evobot-V1-Navigation-Play
-│                                        #   - Isaac-Evobot-V1-Navigation-Pretrained
-│                                        #   - Isaac-Evobot-V1-Navigation-Pretrained-Play
+├── tests/
+│   └── run_robot_rl_env.py
+├── usd_file/
+│   └── evoBOT_cfg.usd
 │
-└── EVOBOT.md                           # ★★★ DOCUMENTATION (THIS FILE)
-                                        #   - USD structure reference
-                                        #   - Kinematic chain explanation
-                                        #   - Isaac Lab integration guide
+├── __init__.py                           # Gym environment registration
+└── EVOBOT.md                             # This file
 ```
+
+### 2.2 Why This Structure?
+
+1. **Robot config at root**: Used by all tasks → placed at root level
+2. **Consolidated MDP at root level**: All MDP components (observations, rewards, terminations, actions) in single `mdp/` directory
+   - `observations_balance.py` - Balance task observations
+   - `rewards_balance.py`, `rewards_navigation.py`, `rewards_hierarchical.py`, `rewards_manipulation.py` - Task-specific rewards
+   - `terminations_balance.py` - Balance task terminations
+   - `actions_hierarchical.py` - Pre-trained policy action wrapper
+3. **Balance task self-contained**: All balance files in `balance/` directory (uses root-level mdp)
+4. **Navigation tasks organized by variant**:
+   - `velocity/` - Simple velocity tracking
+   - `locomotion_manipulation/` - With arm control
+   - `hierarchical/` - Uses pre-trained balance policy
+   - Each has own config and agent files (uses root-level mdp)
+5. **No duplication**: Each function appears in exactly one place
+6. **Clean imports**: All tasks import from `..mdp` (parent mdp directory)
 
 ---
 
-## Mô tả chi tiết các thành phần quan trọng
+## Part 3: Task Configurations
 
-### 1. Robot Configuration ([config/robot/evobot_v1_cfg.py](config/robot/evobot_v1_cfg.py))
+### Task 1: Balance (Isaac-Evobot-V1-Balance)
 
-**Vai trò**: Định nghĩa cấu trúc vật lý và cơ học của robot
+**Objective**: Maintain upright standing position (self-balancing robot)
 
-**Nội dung chính**:
-```python
-EVOBOT_V1_CFG = ArticulationCfg(
-    prim_path="{ENV_REGEX_NS}/Robot",
-    spawn=UsdFileCfg(
-        usd_path="usd_file/evoBOT_cfg.usd",  # USD file path
-        ...
-    ),
-    actuators={
-        "wheels": ImplicitActuatorCfg(joint_names=["left_wheel_joint", "right_wheel_joint"], ...),
-        "arm": ImplicitActuatorCfg(joint_names=["arm_joint"], ...),
-        "grabbers": ImplicitActuatorCfg(joint_names=["left_grabbing_joint", "right_grabbing_joint"], ...),
-    },
-    init_state=ArticulationCfg.InitialStateCfg(
-        joint_pos={"left_wheel_joint": 0.0, "right_wheel_joint": 0.0, ...},
-    ),
-)
-```
+**Key Features**:
+- **Observations**: IMU (accel, gyro, orientation, gravity), joint states, pose
+- **Actions**: 5D joint effort (2 wheels + arm + 2 grippers)
+- **Rewards**:
+  - RPY alignment (upright orientation)
+  - Low angular velocity (stability)
+  - Low linear velocity (standing still)
+  - Survival bonus
+  - Contact force symmetry
+- **Terminations**: Falls, too low, bad orientation, excessive contact
 
-**5 DOF joints**:
-- `left_wheel_joint`, `right_wheel_joint`: Revolute (bánh xe)
-- `arm_joint`: Revolute (cánh tay)
-- `left_grabbing_joint`, `right_grabbing_joint`: Prismatic (kẹp)
-
----
-
-### 2. Balance Task ([config/balance/evobot_v1_env_cfg_balance.py](config/balance/evobot_v1_env_cfg_balance.py))
-
-**Mục tiêu**: Train robot giữ thăng bằng ở tư thế đứng thẳng
-
-**Components**:
-- **Scene**: Robot + ground plane + IMU sensor (gắn trên `top_link`)
-- **Actions**: Joint effort control cho 5 DOF (scale: wheels=300, arm=100, grabbers=50)
-- **Observations** (Policy):
-  - IMU: linear acceleration, angular velocity, orientation, projected gravity
-  - Body pose (7D: position + quaternion)
-  - Joint states: position, velocity, effort
-  - Previous actions
-- **Rewards** (7 terms):
-  - `alive` (+2.0): Survival bonus
-  - `terminating` (-100.0): Penalty for falling
-  - `rpy_alignment` (+10.0): Main balance reward (upright orientation)
-  - `action_rate` (-1.0): Action smoothness
-  - `joint_vel` (-2e-4): Joint velocity penalty
-  - `ang_vel_xy` (-0.005): Angular stability
-  - `joint_acc_l2` (-1e-8): Joint acceleration penalty
-- **Terminations**:
-  - Time out (10s)
-  - Root height < 0.35m
-  - Orientation > 60° from vertical
-  - Head contact force > 30N
-
-**Training command**:
+**Training**:
 ```bash
 ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
     --task=Isaac-Evobot-V1-Balance \
@@ -395,239 +176,172 @@ EVOBOT_V1_CFG = ArticulationCfg(
     --headless --rendering_mode performance
 ```
 
+**Files**:
+- Config: `balance/evobot_v1_balance_env_cfg.py`
+- MDP: `balance/mdp/{observations,rewards,terminations}.py`
+- PPO: `balance/agents/rsl_rl_ppo_cfg.py`
+
 ---
 
-### 3. Navigation Task - End-to-End ([config/navigation/evobot_v1_navigation_env_cfg.py](config/navigation/evobot_v1_navigation_env_cfg.py))
+### Task 2: Velocity Balance (Isaac-Evobot-V1-Velocity)
 
-**Approach**: Train trực tiếp từ observations → wheel actions (không cần pre-trained balance policy)
+**Objective**: Balance while following velocity commands
 
-**Extends Balance Config**:
-- Kế thừa tất cả balance observations + rewards
-- **Thêm command manager**: `UniformPose2dCommand` (target position x, y, heading)
-- **Thêm observations**: `pose_command` (3D: target_x, target_y, target_heading)
-- **Thêm navigation rewards**:
-  - `position_tracking` (+3.0): Coarse position tracking (std=1.5m)
-  - `position_tracking_fine` (+2.0): Fine position tracking (std=0.3m)
-  - `heading_tracking` (-0.3): Heading alignment penalty
-  - `position_reached` (+5.0): Bonus when within 0.3m of target
+**Key Features**:
+- Extends balance task with velocity command following
+- **New observations**: Velocity commands
+- **New rewards**: Position and heading tracking
 
-**Ưu điểm**: Đơn giản, không cần train 2 bước
-**Nhược điểm**: Phải học balance + navigation cùng lúc (khó hơn)
-
-**Training command**:
+**Training**:
 ```bash
 ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
-    --task=Isaac-Evobot-V1-Navigation \
+    --task=Isaac-Evobot-V1-Velocity \
     --num_envs 1024 \
     --headless --rendering_mode performance
 ```
 
+**Files**:
+- Config: `navigation/velocity/velocity_env_cfg.py`
+- PPO: `navigation/velocity/agents/rsl_rl_ppo_cfg.py` (EvobotVelocityPPORunnerCfg)
+- Shared rewards: `mdp/rewards_navigation.py`
+
 ---
 
-### 4. Navigation Task - Hierarchical ([config/navigation/evobot_v1_navigation_pretrained_env_cfg.py](config/navigation/evobot_v1_navigation_pretrained_env_cfg.py))
+### Task 3: Locomotion-Manipulation (Isaac-Evobot-V1-Locomotion-Manipulation)
 
-**Approach**: Dùng **pre-trained balance policy** làm low-level controller
+**Objective**: Balance, navigate, and control arm simultaneously
+
+**Key Features**:
+- Combines balance + velocity tracking + arm control
+- All 5 DOF active (wheels + arm + grippers)
+- **New observations**: Arm/gripper states
+- **New rewards**: Manipulation success metrics
+
+**Training**:
+```bash
+./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
+    --task=Isaac-Evobot-V1-Locomotion-Manipulation \
+    --num_envs 1024 \
+    --headless --rendering_mode performance
+```
+
+**Files**:
+- Config: `navigation/locomotion_manipulation/loc_man_env_cfg.py`
+- PPO: `navigation/locomotion_manipulation/agents/rsl_rl_ppo_cfg.py` (EvobotLocomotionManipulationPPORunnerCfg)
+- Rewards: `mdp/rewards_manipulation.py`, `mdp/rewards_navigation.py`
+
+---
+
+### Task 4: Hierarchical Navigation (Isaac-Evobot-V1-Navigation-Hierarchical)
+
+**Objective**: Navigate to target using pre-trained balance policy as low-level controller
 
 **Architecture**:
 ```
 High-level Policy (navigation)
-    ↓ [vx, vy, omega] (velocity commands)
+    ↓ outputs [vx, vy, omega]
 PreTrainedBalancePolicyAction wrapper
-    ↓ balance observations (40D)
+    ↓ runs balance policy on low-level observations
 Low-level Policy (balance checkpoint)
-    ↓ wheel torques
-Robot
+    ↓ outputs wheel torques
+Robot wheels
 ```
-
-**Action Space**:
-- **High-level input**: 3D [forward_velocity, lateral_velocity, turn_rate]
-- **Low-level processing**: `PreTrainedBalancePolicyAction`
-  - Loads balance policy from `logs/rsl_rl/evobot_v1_ppo_balance/.../exported/policy.pt`
-  - Computes balance observations (IMU, joints, pose, last_action)
-  - Runs balance policy → base wheel efforts
-  - Adds velocity modulation:
-    ```python
-    left_wheel = balance_effort + (vx * vel_scale - omega * turn_scale)
-    right_wheel = balance_effort + (vx * vel_scale + omega * turn_scale)
-    ```
-
-**Observations** (High-level policy only):
-- Base linear/angular velocity
-- Projected gravity
-- Pose command (target position)
-
-**Ưu điểm**:
-- Balance policy đã được train tốt → stable low-level control
-- High-level policy chỉ cần học navigation (đơn giản hơn)
-
-**Nhược điểm**:
-- Cần train balance task trước
-- Phải export balance policy (`.pt` file)
 
 **Workflow**:
-1. Train balance: `--task=Isaac-Evobot-V1-Balance`
-2. Export policy:
-   ```bash
-   ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
-       --task Isaac-Evobot-V1-Balance --num_envs 1 \
-       'agent.load_run=2026-01-12_14-45-12' \
-       'agent.load_checkpoint="model_2000.pt"'
-   ```
-   → Policy exported to `logs/rsl_rl/.../exported/policy.pt`
-3. Update `policy_path` in [evobot_v1_navigation_pretrained_env_cfg.py](config/navigation/evobot_v1_navigation_pretrained_env_cfg.py):105
-4. Train navigation: `--task=Isaac-Evobot-V1-Navigation-Pretrained`
+1. Train balance task first: `--task=Isaac-Evobot-V1-Balance`
+2. Export policy checkpoint
+3. Update `policy_path` in `hierarchical/hierarchical_env_cfg.py`
+4. Train navigation: `--task=Isaac-Evobot-V1-Navigation-Hierarchical`
 
----
-
-### 5. Pre-trained Policy Action Wrapper ([config/navigation/mdp/pre_trained_policy_action.py](config/navigation/mdp/pre_trained_policy_action.py))
-
-**Class**: `PreTrainedBalancePolicyAction(ActionTerm)`
-
-**Key responsibilities**:
-1. **Load balance policy**: `torch.jit.load(policy_path)` (TorchScript model)
-2. **Observation matching**:
-   - Creates `ObservationManager` for low-level policy
-   - Computes 40D balance observations (IMU, joints, pose, last_action)
-3. **Action conversion**:
-   - Receives high-level `[vx, vy, omega]` commands
-   - Runs balance policy with low-level observations
-   - Adds velocity modulation to balance actions
-4. **Debug visualization**: Arrow markers for velocity commands
-
-**Configuration**:
-```python
-PreTrainedBalancePolicyActionCfg(
-    asset_name="robot",
-    policy_path="logs/.../exported/policy.pt",  # ★ Must update this
-    low_level_decimation=1,
-    low_level_actions=BalanceActionCfg().wheel_effort,  # Wheel joint effort
-    low_level_observations=LowLevelObservationsCfg(),  # 40D balance obs
-    velocity_scale=0.5,  # Forward velocity scaling
-    turn_scale=0.5,      # Turn rate scaling
-)
+**Training Navigation**:
+```bash
+./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
+    --task=Isaac-Evobot-V1-Navigation-Hierarchical \
+    --num_envs 512 \
+    --headless --rendering_mode performance
 ```
 
----
-
-### 6. Gym Environment Registration ([__init__.py](__init__.py))
-
-**Đăng ký 5 environments**:
-
-1. **`Isaac-Evobot-V1-Balance`**
-   - Entry point: `EvobotV1EnvCfgBalance`
-   - PPO config: `EvobotPPORunnerCfgBalance`
-
-2. **`Isaac-Evobot-V1-Navigation`** (End-to-end)
-   - Entry point: `EvobotV1NavigationEnvCfg`
-   - PPO config: `EvobotNavigationPPORunnerCfg`
-
-3. **`Isaac-Evobot-V1-Navigation-Play`** (End-to-end evaluation)
-   - Entry point: `EvobotV1NavigationEnvCfgPlay`
-   - Resampling time: 2s (fixed for evaluation)
-
-4. **`Isaac-Evobot-V1-Navigation-Pretrained`** (Hierarchical)
-   - Entry point: `EvobotV1NavigationPretrainedEnvCfg`
-   - Uses pre-trained balance policy
-
-5. **`Isaac-Evobot-V1-Navigation-Pretrained-Play`** (Hierarchical evaluation)
-   - Entry point: `EvobotV1NavigationPretrainedEnvCfgPlay`
-   - 16 envs, 6m spacing
-
----
-
-## Luồng huấn luyện đầy đủ
-
-### Option 1: End-to-End Navigation (Đơn giản)
+**Evaluation**:
 ```bash
-# Train navigation trực tiếp (không cần balance policy)
-./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
-    --task=Isaac-Evobot-V1-Navigation \
-    --num_envs 1024 \
-    --headless --rendering_mode performance
-
-# Evaluate
 ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
-    --task Isaac-Evobot-V1-Navigation-Play \
+    --task=Isaac-Evobot-V1-Navigation-Hierarchical-Play \
     --num_envs 16 \
     'agent.load_run=<run_name>' \
     'agent.load_checkpoint="model_500.pt"'
 ```
 
-### Option 2: Hierarchical Navigation (Khuyến nghị)
-```bash
-# STEP 1: Train balance task
-./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
-    --task=Isaac-Evobot-V1-Balance \
-    --num_envs 1024 \
-    --headless --rendering_mode performance
-
-# STEP 2: Export balance policy
-./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
-    --task Isaac-Evobot-V1-Balance --num_envs 1 \
-    'agent.load_run=2026-01-12_14-45-12' \
-    'agent.load_checkpoint="model_2000.pt"'
-# → Policy saved to logs/rsl_rl/.../exported/policy.pt
-
-# STEP 3: Update policy_path in evobot_v1_navigation_pretrained_env_cfg.py:105
-
-# STEP 4: Train navigation with pre-trained balance
-./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
-    --task=Isaac-Evobot-V1-Navigation-Pretrained \
-    --num_envs 512 \
-    --headless --rendering_mode performance
-
-# STEP 5: Evaluate
-./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
-    --task Isaac-Evobot-V1-Navigation-Pretrained-Play \
-    --num_envs 16 \
-    'agent.load_run=<nav_run_name>' \
-    'agent.load_checkpoint="model_500.pt"'
-```
+**Files**:
+- Config: `navigation/hierarchical/hierarchical_env_cfg.py`
+- Action wrapper: `mdp/actions_hierarchical.py`
+- Rewards: `mdp/rewards_hierarchical.py`, `mdp/rewards_navigation.py`
+- PPO: `navigation/hierarchical/agents/rsl_rl_ppo_cfg.py` (EvobotNavigationPPORunnerCfg)
 
 ---
 
-## Key Technical Features
+## Part 4: MDP Components
 
-### 1. Memory Optimization
-- **Problem**: Memory leak trong critic observations (16 terms → excessive buffer usage)
-- **Solution**: Reduced to 8 essential terms in `ObservationsCfg.CriticCfg`
-- **Episode length**: 10s (600 steps @ 60Hz) để balance với buffer size
+### All MDP Components (Consolidated)
 
-### 2. Hierarchical RL Architecture
-- **Low-level**: Balance policy (giữ thăng bằng) - 5 DOF joint control
-- **High-level**: Navigation policy (di chuyển đến target) - 3D velocity commands
-- **Decoupling**: High-level không cần quan tâm low-level balance control
+**Location**: `mdp/` directory (root level)
 
-### 3. Custom MDP Components
-- **Shared MDP** ([mdp/](mdp/)): Observations, rewards, terminations dùng chung
-- **Navigation MDP** ([config/navigation/mdp/](config/navigation/mdp/)): Specialized cho navigation task
-- **Modular design**: Dễ dàng thêm task mới (e.g., manipulation, obstacle avoidance)
+**Observations** (in `observations_balance.py`):
+- `obs_body_roll/pitch/yaw()` - Euler angles from IMU
+- `lin_vel_b()` - Body frame linear velocity
+- `angl_vel_b()` - Body frame angular velocity
+- `obs_pos_world()` - Position relative to env origin
 
-### 4. USD Structure Best Practices
-- **Single ArticulationRoot**: Tất cả links/joints dưới một root
-- **Flat joint hierarchy**: Joints cùng cấp với links (không lồng nhau)
-- **Sensor placement**: IMU trên `top_link` (root body), contact sensor trên `head_link`
+**Balance Rewards** (in `rewards_balance.py`):
+1. `rpy_alignment_imu()` - Main balance reward
+2. `angular_velocity_reward()` - Stability
+3. `linear_velocity_reward()` - Standing still
+4. `height_reward()` - Maintain height
+5. `joint_pos_target_l2()` - Joint position tracking
+6. `joint_force_balance()` - Symmetric forces
+7. `feet_contact_force_symmetry()` - Contact balance
+
+**Navigation Rewards** (in `rewards_navigation.py`):
+- Position tracking: `position_command_error_tanh()`, `position_reached_bonus()`
+- Heading: `heading_command_error_abs()`, `heading_alignment_reward()`
+- Velocity: `navigation_velocity_reward()`, `forward_velocity_tracking()`
+- Progress: `goal_progress_reward()`, `velocity_goal_alignment()`
+- Stability: `upright_reward()`, `tilt_penalty()`, `yaw_rate_penalty()`
+- Penalties: `joint_velocity_penalty()`, `lateral_velocity_penalty()`
+
+**Hierarchical Rewards** (in `rewards_hierarchical.py`):
+- Same as navigation with alternative implementations
+
+**Manipulation Utilities** (in `rewards_manipulation.py`):
+- `reward_wheel_speed()`, `action_rate_l2()`, `joint_acc_l2()`
+- `undesired_contacts()`, `reward_man()`
+
+**Terminations** (in `terminations_balance.py`):
+- `reset_when_fall()` - Excessive tilt angle
+
+**Actions** (in `actions_hierarchical.py`):
+- `PreTrainedBalancePolicyAction` - Wrapper for pre-trained balance policy
 
 ---
 
-## Troubleshooting & Common Issues
+## Part 5: Gym Environment Registration
 
-### Issue 1: Policy file not found
-```
-FileNotFoundError: Policy file 'logs/.../exported/policy.pt' does not exist.
-```
-**Solution**: Export balance policy trước khi train navigation-pretrained
+Environments are registered in `evobot_v1/__init__.py`:
 
-### Issue 2: Observation dimension mismatch
+```python
+gym.register(
+    id="Isaac-Evobot-V1-Balance",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    kwargs={
+        "env_cfg_entry_point": "isaaclab_assets.evobot_v1.balance.evobot_v1_balance_env_cfg:EvobotV1BalanceEnvCfg",
+        "rsl_rl_cfg_entry_point": "isaaclab_assets.evobot_v1.balance.agents.rsl_rl_ppo_cfg:EvobotBalancePPORunnerCfg"
+    },
+)
 ```
-RuntimeError: Expected 40D observations, got 35D
-```
-**Solution**: Kiểm tra `LowLevelObservationsCfg` phải khớp với balance policy training observations
 
-### Issue 3: Robot falls immediately
-**Causes**:
-- Balance policy chưa train đủ (< 300 iterations)
-- `velocity_scale`/`turn_scale` quá lớn (default: 0.5)
-- Initial joint positions không khớp với reset positions
+**Available Tasks**:
+- `Isaac-Evobot-V1-Balance`
+- `Isaac-Evobot-V1-Velocity`
+- `Isaac-Evobot-V1-Locomotion-Manipulation`
+- `Isaac-Evobot-V1-Navigation-Hierarchical`
+- `Isaac-Evobot-V1-Navigation-Hierarchical-Play`
 
-**Solution**: Train balance task đến convergence (~2000 iterations) trước khi dùng cho navigation
+---
