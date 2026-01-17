@@ -59,6 +59,7 @@ from .rewards_navigation import (
     joint_velocity_penalty,
     upright_reward,
     tilt_penalty,
+    velocity_heading_alignment,
 )
 
 # Hierarchical rewards (initially same as navigation)
@@ -83,6 +84,12 @@ from .rewards_hierarchical import (
 from .actions_hierarchical import (
     PreTrainedBalancePolicyAction,
     PreTrainedBalancePolicyActionCfg,
+)
+
+# PID-based actions
+from .actions_pid import (
+    VelocityPIDActionTerm,
+    VelocityPIDActionTermCfg,
 )
 
 # Manipulation utilities
@@ -127,6 +134,7 @@ __all__ = [
     "joint_velocity_penalty",
     "upright_reward",
     "tilt_penalty",
+    "velocity_heading_alignment",
     # Hierarchical rewards (aliased)
     "position_command_error_tanh_hierarchical",
     "heading_command_error_abs_hierarchical",
@@ -145,6 +153,9 @@ __all__ = [
     # Hierarchical actions
     "PreTrainedBalancePolicyAction",
     "PreTrainedBalancePolicyActionCfg",
+    # PID actions
+    "VelocityPIDActionTerm",
+    "VelocityPIDActionTermCfg",
     # Manipulation utilities
     "reward_wheel_speed",
     "action_rate_l2",

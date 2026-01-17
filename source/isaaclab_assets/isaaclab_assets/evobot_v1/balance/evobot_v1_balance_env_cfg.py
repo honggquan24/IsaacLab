@@ -21,7 +21,7 @@ from isaaclab.sensors import (
 # from isaaclab.terrains import TerrainImporterCfg
 # from isaaclab.terrains.config.rough import ROUGH_TERRAINS_CFG
 
-from ..evobot_v1_cfg import EVOBOT_V1_CFG
+from .evobot_v1_balance_cfg import EVOBOT_V1_BALANCE_CFG
 
 from isaaclab.envs.mdp import actions, observations, events, rewards, terminations
 from isaaclab.envs.mdp import (
@@ -71,8 +71,8 @@ class EvobotV1SceneConfig(InteractiveSceneCfg):
         spawn=sim_utils.GroundPlaneCfg(),
     )
 
-    # Add robot
-    robot: Articulation = EVOBOT_V1_CFG.replace( # type: ignore
+    # Add robot (using balance-specific config that matches training)
+    robot: Articulation = EVOBOT_V1_BALANCE_CFG.replace( # type: ignore
         prim_path="{ENV_REGEX_NS}/Robot",
     )
 
@@ -351,7 +351,7 @@ class TerminationsCfg:
 
 
 @configclass
-class EvobotV1EnvCfgBalance(ManagerBasedRLEnvCfg):
+class EvobotV1BalanceEnvCfg(ManagerBasedRLEnvCfg):
     """Configuration for the Evobot V1 balance environment."""
 
     # Scene settings

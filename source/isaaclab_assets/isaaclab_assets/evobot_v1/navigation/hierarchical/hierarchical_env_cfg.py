@@ -71,7 +71,7 @@ class ActionsCfg:
         # Then update this path to point to the exported policy.pt
         policy_path="logs/rsl_rl/evobot_v1_velocity/2026-01-14_11-14-00/exported/policy.pt",
         low_level_decimation=1,
-        low_level_actions=LOW_LEVEL_ENV_CFG.actions_nav.all_joints,
+        low_level_actions=LOW_LEVEL_ENV_CFG.actions.all_joints,
         low_level_observations=LOW_LEVEL_ENV_CFG.observations.policy,
         velocity_scale=0.1,
         turn_scale=0.1,
@@ -338,7 +338,7 @@ class EvobotV1NavigationPretrainedEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.render_interval = LOW_LEVEL_ENV_CFG.decimation
 
         # Higher decimation for navigation (low-level runs faster)
-        self.decimation = LOW_LEVEL_ENV_CFG.decimation * 5
+        self.decimation = LOW_LEVEL_ENV_CFG.decimation * 4
 
         # Episode length matches command resampling
         self.episode_length_s = self.commands.pose_command.resampling_time_range[1]

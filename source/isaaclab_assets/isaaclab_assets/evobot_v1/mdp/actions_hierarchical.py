@@ -26,9 +26,12 @@ if TYPE_CHECKING:
 class PreTrainedBalancePolicyAction(ActionTerm):
     """Pre-trained balance policy action term for evobot_v1.
 
-    This action term uses a pre-trained balance policy and adds velocity commands
-    for navigation. The high-level actions are velocity commands (vx, vy, omega)
-    that are added to the balance policy's actions.
+    This action term uses a pre-trained balance policy trained with velocity commands.
+    The high-level policy outputs velocity commands (vx, vy, omega) which are passed
+    to the low-level policy via observation remapping.
+
+    IMPORTANT: Low-level policy output actions are in NORMALIZED range [-1, 1].
+    The ActionTerm.process_actions() will scale them by the configured scale factors.
     """
 
     cfg: PreTrainedBalancePolicyActionCfg
@@ -48,11 +51,14 @@ class PreTrainedBalancePolicyAction(ActionTerm):
         # Raw actions are velocity commands (vx, vy, omega) for navigation
         self._raw_actions = torch.zeros(self.num_envs, self.action_dim, device=self.device)
         self._raw_actions_ = torch.zeros(self.num_envs, 7, device=self.device)
-        
-        # Prepare low level actions (joint effort)
+
+        # Prepare low level actions (joint velocity)
         self._low_level_action_term: ActionTerm = cfg.low_level_actions.class_type(cfg.low_level_actions, env)
+
+        # IMPORTANT: Low-level policy outputs NORMALIZED actions [-1, 1]
+        # These will be scaled by low_level_action_term.process_actions()
         self.low_level_actions = torch.zeros(self.num_envs, 5, device=self.device)
-        
+
         # Store last low level actions for observation
         def last_action():
             # reset the low level actions if the episode was reset
@@ -61,24 +67,25 @@ class PreTrainedBalancePolicyAction(ActionTerm):
             return self.low_level_actions
 
         print(f"cfg.low_level_observations: {cfg.low_level_observations}")
-        
+
         # Remap observations for low level policy
+        # Low-level policy will receive high-level velocity commands as base_velocity_cmd
         cfg.low_level_observations.last_action.func = lambda _: last_action()
         cfg.low_level_observations.last_action.params = {}
-        
+
         cfg.low_level_observations.base_velocity_cmd.func = lambda dummy_env: self._raw_actions
         cfg.low_level_observations.base_velocity_cmd.params = dict()
 
         cfg.low_level_observations.arm_ee_pose_cmd.func = lambda dummy_env: self._raw_actions_
         cfg.low_level_observations.arm_ee_pose_cmd.params = dict()
-        
+
         cfg.low_level_observations.grip_ee_pose_left_cmd.func = lambda dummy_env: self._raw_actions_
         cfg.low_level_observations.grip_ee_pose_left_cmd.params = dict()
-        
+
         cfg.low_level_observations.grip_ee_pose_right_cmd.func = lambda dummy_env: self._raw_actions_
         cfg.low_level_observations.grip_ee_pose_right_cmd.params = dict()
-        
-   
+
+
         self._low_level_obs_manager = ObservationManager({"ll_policy": cfg.low_level_observations}, env)
 
         self._counter = 0
@@ -97,42 +104,62 @@ class PreTrainedBalancePolicyAction(ActionTerm):
         return self.raw_actions
 
     def process_actions(self, actions: torch.Tensor):
-        """Process high-level velocity command actions."""
-        self._raw_actions[:] = actions
+        """Process high-level velocity command actions.
+
+        High-level policy outputs velocity commands which should be in range [-1, 1].
+        We clip them to ensure they stay within bounds before passing to low-level policy.
+        """
+        # Clip high-level actions to normalized range [-1, 1]
+        # This prevents exploration noise from creating invalid velocity commands
+        self._raw_actions[:] = torch.clamp(actions, min=-1.0, max=1.0)
 
     def apply_actions(self):
-        """Apply actions by running low-level balance policy with velocity modulation."""
+        """Apply actions by running low-level policy with velocity commands.
+
+        Strategy:
+        - High-level policy outputs velocity commands [vx, vy, omega] in range [-1, 1]
+        - These are passed to low-level policy via base_velocity_cmd observation
+        - Low-level policy outputs NORMALIZED joint actions [-1, 1]
+        - Low-level ActionTerm scales these by configured scale factors (e.g., 200.0)
+        - Result: smooth velocity tracking with proper balance
+        """
         if self._counter % self.cfg.low_level_decimation == 0:
-            # Get observations for low-level policy
-            
+            # IMPORTANT: self._raw_actions is already remapped to low_level_observations.base_velocity_cmd
+            # via the lambda function in __init__ (line 78-79)
+            # So the low-level policy will see self._raw_actions as velocity command!
+
+            # Get observations for low-level policy (includes velocity commands from high-level)
             low_level_obs = self._low_level_obs_manager.compute_group("ll_policy")
-            # Run balance policy to get base wheel efforts
-            balance_actions = self.policy(low_level_obs)
 
-            # Modulate actions based on velocity commands
-            # raw_actions: [vx, vy, omega] where:
-            # - vx: forward velocity command
-            # - vy: lateral velocity (not used for diff drive)
-            # - omega: angular velocity (turning)
-            vx = self._raw_actions[:, 0:1]  # Forward velocity
-            omega = self._raw_actions[:, 2:3]  # Angular velocity
+            # Run low-level policy to get NORMALIZED joint actions
+            # Low-level policy sees:
+            # - IMU, joint states (actual robot state)
+            # - base_velocity_cmd = self._raw_actions (from high-level policy)
+            # - arm/gripper commands = zeros (not used)
+            # Output: NORMALIZED [left_wheel, right_wheel, arm, left_grip, right_grip] in [-1, 1]
+            low_level_actions = self.policy(low_level_obs)
 
-            # Differential drive: left wheel, right wheel
-            # Forward motion: both wheels same direction
-            # Turning: wheels opposite direction
-            vel_scale = self.cfg.velocity_scale
-            turn_scale = self.cfg.turn_scale
+            # Use low-level policy output directly (already normalized)
+            self.low_level_actions[:] = low_level_actions
 
-            # Add velocity commands to balance actions
-            # Left wheel: +forward, -turn (for positive omega = turn left)
-            # Right wheel: +forward, +turn
-            velocity_modulation = torch.zeros_like(balance_actions)
-            velocity_modulation[:, 0:1] = vx * vel_scale - omega * turn_scale  # Left wheel
-            velocity_modulation[:, 1:2] = vx * vel_scale + omega * turn_scale  # Right wheel
+            # Optional: Add velocity modulation on top if needed
+            # This is only necessary if low-level doesn't track velocity well
+            if self.cfg.velocity_scale != 0.0 or self.cfg.turn_scale != 0.0:
+                vx = self._raw_actions[:, 0:1]  # Forward velocity
+                omega = self._raw_actions[:, 2:3]  # Angular velocity
 
-            # Combine balance policy output with velocity modulation
-            self.low_level_actions[:] = balance_actions + velocity_modulation
+                vel_scale = self.cfg.velocity_scale
+                turn_scale = self.cfg.turn_scale
 
+                # Add velocity modulation to wheel actions (still in normalized range)
+                self.low_level_actions[:, 0:1] += vx * vel_scale - omega * turn_scale  # Left wheel
+                self.low_level_actions[:, 1:2] += vx * vel_scale + omega * turn_scale  # Right wheel
+
+                # Clip to normalized range [-1, 1]
+                self.low_level_actions[:] = torch.clamp(self.low_level_actions, min=-1.0, max=1.0)
+
+            # Low-level ActionTerm will scale these normalized actions by configured scale factors
+            # e.g., wheels: 200.0, arm: 30.0, grippers: 30.0
             self._low_level_action_term.process_actions(self.low_level_actions)
             self._counter = 0
 
@@ -207,16 +234,18 @@ class PreTrainedBalancePolicyActionCfg(ActionTermCfg):
     """Decimation factor for the low level action term."""
 
     low_level_actions: ActionTermCfg = MISSING
-    """Low level action configuration (joint effort)."""
+    """Low level action configuration (joint velocity)."""
 
     low_level_observations: ObservationGroupCfg = MISSING
     """Low level observation configuration for balance policy."""
 
-    velocity_scale: float = 1.0
-    """Scale factor for forward velocity commands."""
+    velocity_scale: float = 0.0
+    """Additional scale factor for forward velocity commands (on top of low-level policy output).
+    Set to 0.0 to trust low-level policy completely."""
 
-    turn_scale: float = 1.0
-    """Scale factor for turning commands."""
+    turn_scale: float = 0.0
+    """Additional scale factor for turning commands (on top of low-level policy output).
+    Set to 0.0 to trust low-level policy completely."""
 
     debug_vis: bool = True
     """Whether to visualize debug information."""

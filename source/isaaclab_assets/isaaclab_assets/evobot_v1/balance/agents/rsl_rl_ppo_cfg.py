@@ -7,7 +7,7 @@ from isaaclab_rl.rsl_rl import (
 )
 
 @configclass
-class EvobotPPORunnerCfgBalance(RslRlOnPolicyRunnerCfg):
+class EvobotBalancePPORunnerCfg(RslRlOnPolicyRunnerCfg):
     # SPEED OPTIMIZATION: Giảm từ 300 xuống 24 steps
     # - Mỗi iteration chỉ cần chờ 24 steps thay vì 300 (12.5x faster!)
     # - Với 9999 envs: 24×9999 = ~240k samples mỗi iteration vẫn đủ lớn

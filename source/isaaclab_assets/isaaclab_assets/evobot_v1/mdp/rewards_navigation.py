@@ -185,3 +185,57 @@ def tilt_penalty(env: ManagerBasedRLEnv) -> torch.Tensor:
         1 - 2 * (quat[:, 1] ** 2 + quat[:, 2] ** 2),
     )
     return -(pitch.abs() + roll.abs())
+
+
+def velocity_heading_alignment(
+    env: ManagerBasedRLEnv,
+    command_name: str = "base_velocity",
+    std: float = 0.5,
+) -> torch.Tensor:
+    """Reward robot khi heading (hướng mặt) align với velocity command direction.
+
+    Khuyến khích robot xoay về đúng hướng cần di chuyển trước khi đi.
+    Đặc biệt quan trọng cho differential drive robot.
+
+    Args:
+        env: Environment instance
+        command_name: Tên của velocity command
+        std: Standard deviation cho exponential reward (nhỏ hơn = strict hơn)
+
+    Returns:
+        Reward tensor (0 khi heading sai 180°, 1 khi heading đúng)
+    """
+    # Lấy velocity command (vx, vy, wz)
+    command = env.command_manager.get_command(command_name)
+    cmd_vx = command[:, 0]  # Linear velocity x
+    cmd_vy = command[:, 1]  # Linear velocity y (thường = 0 cho differential drive)
+
+    # Tính target heading từ velocity command
+    # Target heading = hướng của velocity vector
+    target_heading = torch.atan2(cmd_vy, cmd_vx)  # [-pi, pi]
+
+    # Lấy current heading của robot từ quaternion
+    quat = env.scene["robot"].data.root_quat_w
+    # Extract yaw từ quaternion
+    current_yaw = torch.atan2(
+        2 * (quat[:, 0] * quat[:, 3] + quat[:, 1] * quat[:, 2]),
+        1 - 2 * (quat[:, 2] ** 2 + quat[:, 3] ** 2),
+    )
+
+    # Tính heading error (wrapped to [-pi, pi])
+    heading_error = target_heading - current_yaw
+    heading_error = torch.atan2(torch.sin(heading_error), torch.cos(heading_error))
+
+    # Chỉ tính reward khi có velocity command (không tính khi đứng yên)
+    velocity_magnitude = torch.sqrt(cmd_vx**2 + cmd_vy**2)
+    moving_mask = velocity_magnitude > 0.1  # Threshold = 0.1 m/s
+
+    # Exponential reward: exp(-|error|/std)
+    # error = 0 → reward = 1.0
+    # error = pi → reward = exp(-pi/std) ≈ 0 (nếu std=0.5)
+    reward = torch.exp(-torch.abs(heading_error) / std)
+
+    # Chỉ apply reward khi đang di chuyển, không penalize khi đứng yên
+    reward = torch.where(moving_mask, reward, torch.ones_like(reward))
+
+    return reward
