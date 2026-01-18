@@ -399,7 +399,7 @@ class RewardCfg:
         weight=35.0,  # GIẢM từ 20 → 15 để cân bằng với angular
         params={
             "command_name": "base_velocity",
-            "std": 0.05,
+            "std": 0.5,
         },
     )
 
@@ -408,7 +408,7 @@ class RewardCfg:
         weight=20.0,  # TĂNG từ 15 → 20 để khuyến khích xoay
         params={
             "command_name": "base_velocity",
-            "std": 0.05,
+            "std": 0.5,
         },
     )
 
