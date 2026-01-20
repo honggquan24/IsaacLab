@@ -45,6 +45,7 @@ from .terminations_balance import reset_when_fall
 
 # Navigation rewards
 from .rewards_navigation import (
+    position_command_error,
     position_command_error_tanh,
     heading_command_error_abs,
     position_reached_bonus,
@@ -99,6 +100,9 @@ from .rewards_manipulation import (
     joint_acc_l2,
     undesired_contacts,
     reward_man,
+    gripper_height_tracking_l2,
+    binary_gripper_tracking,
+    joint_angle_command_l2,
 )
 
 __all__ = [
@@ -162,4 +166,7 @@ __all__ = [
     "joint_acc_l2",
     "undesired_contacts",
     "reward_man",
+    "gripper_height_tracking_l2",
+    "binary_gripper_tracking",
+    "joint_angle_command_l2",
 ]

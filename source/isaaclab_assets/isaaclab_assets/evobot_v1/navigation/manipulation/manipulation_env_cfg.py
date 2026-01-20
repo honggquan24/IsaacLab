@@ -16,7 +16,6 @@ from isaaclab.managers import (
     RewardTermCfg,
     SceneEntityCfg,
     TerminationTermCfg,
-    CurriculumTermCfg
 )
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.utils import configclass
@@ -24,22 +23,17 @@ from isaaclab.sensors import (
     ContactSensorCfg,
     ImuCfg,
 )
-from isaaclab.terrains import TerrainImporterCfg
 from ...evobot_v1_cfg import EVOBOT_V1_CFG
-from isaaclab.terrains.config.rough import ROUGH_TERRAINS_CFG  # isort: skip
-from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR, ISAACLAB_NUCLEUS_DIR
 from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
 from isaaclab.envs.mdp import actions, observations, events, rewards, terminations, commands
+from ...mdp import *
+
 from ...mdp import (
-    position_command_error_tanh,
-    heading_command_error_abs,
-    position_reached_bonus,
-    rpy_alignment_imu,
-    reset_when_fall,
-    action_rate_l2,
-    joint_acc_l2,
-    undesired_contacts,
+    joint_pos_target_l2,
+    velocity_heading_alignment,
     reward_man,
+    gripper_height_tracking_l2,
+    joint_angle_command_l2,
 )
 
 import isaaclab_tasks.manager_based.locomotion.velocity.mdp as mdp_v
@@ -145,45 +139,47 @@ class CommandsCfg:
         ),
     )
     
+    # Arm joint angle command (use yaw component as joint angle target)
     arm_ee_pose = commands.UniformPoseCommandCfg(
         asset_name="robot",
-        body_name="head_link",   # đổi đúng link EE của evobot
-        resampling_time_range=(1.0, 3.0),
+        body_name="arm_link",
+        resampling_time_range=(3.0, 5.0),
         debug_vis=True,
         ranges=commands.UniformPoseCommandCfg.Ranges(
-            pos_x=(0.0, 0.0),
-            pos_y=(0.0, 0.0),
-            pos_z=(0.0, 0.0),
-            roll=(0.0, 0.0),
-            pitch=(0.0, 0.0),
-            yaw=(-math.pi, math.pi),
+            pos_x=(0.0, 0.0),  # Not used
+            pos_y=(0.0, 0.0),  # Not used
+            pos_z=(0.0, 0.0),  # Not used
+            roll=(0.0, 0.0),   # Not used
+            pitch=(0.0, 0.0),  # Not used
+            yaw=(-math.pi, math.pi),  # Use yaw as joint angle target
         ),
     )
-    
+
+    # Gripper height commands (relative z-position)
     grip_ee_pose_left = commands.UniformPoseCommandCfg(
         asset_name="robot",
-        body_name="gripper",   # đổi đúng link EE của evobot
-        resampling_time_range=(1.0, 3.0),
+        body_name="gripper",
+        resampling_time_range=(3.0, 5.0),
         debug_vis=True,
         ranges=commands.UniformPoseCommandCfg.Ranges(
-            pos_x=(0.0, 0.0),
-            pos_y=(0.0, 0.0),
-            pos_z=(0.0, 0.1),
+            pos_x=(0.0, 0.0),  # Not used for height tracking
+            pos_y=(0.0, 0.0),  # Not used for height tracking
+            pos_z=(-0.15, 0.15),  # Target height range: ±15cm relative to base
             roll=(0.0, 0.0),
             pitch=(0.0, 0.0),
-            yaw=(0.0, 0),
+            yaw=(0.0, 0.0),
         ),
     )
-    
+
     grip_ee_pose_right = commands.UniformPoseCommandCfg(
         asset_name="robot",
-        body_name="gripper_01",   # đổi đúng link EE của evobot
-        resampling_time_range=(1.0, 3.0),
+        body_name="gripper_01",
+        resampling_time_range=(3.0, 5.0),
         debug_vis=True,
         ranges=commands.UniformPoseCommandCfg.Ranges(
-            pos_x=(0.0, 0.0),
-            pos_y=(0.0, 0.0),
-            pos_z=(0.0, 0.1),
+            pos_x=(0.0, 0.0),  # Not used for height tracking
+            pos_y=(0.0, 0.0),  # Not used for height tracking
+            pos_z=(-0.15, 0.15),  # Target height range: ±15cm relative to base
             roll=(0.0, 0.0),
             pitch=(0.0, 0.0),
             yaw=(0.0, 0.0),
@@ -397,34 +393,32 @@ class RewardCfg:
     )
 
     
-    # Manipualtion
+    # Manipulation - Joint angle tracking for arm
     arm_ee_tracking = RewardTermCfg(
-        func=reward_man,
-        weight=2.0,
+        func=joint_angle_command_l2,
+        weight=-2.0,
         params={
-            "asset_cfg": SceneEntityCfg("robot", body_names="head_link"),
+            "asset_cfg": SceneEntityCfg("robot", joint_names="arm_joint"),
             "command_name": "arm_ee_pose",
-            "std": 0.05,
         },
     )
-    
+
+    # Gripper height tracking
     grip_ee_tracking_left = RewardTermCfg(
-        func=reward_man,
-        weight=2.0,
+        func=gripper_height_tracking_l2,
+        weight=-5.0,
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="gripper"),
             "command_name": "grip_ee_pose_left",
-            "std": 0.05,
         },
     )
-    
+
     grip_ee_tracking_right = RewardTermCfg(
-        func=reward_man,
-        weight=2.0,
+        func=gripper_height_tracking_l2,
+        weight=-5.0,
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="gripper_01"),
             "command_name": "grip_ee_pose_right",
-            "std": 0.05,
         },
     )
 

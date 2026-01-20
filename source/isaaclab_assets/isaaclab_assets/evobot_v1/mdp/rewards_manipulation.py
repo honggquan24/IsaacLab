@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.assets import Articulation
+from isaaclab.utils.math import wrap_to_pi, euler_xyz_from_quat, subtract_frame_transforms
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
@@ -107,3 +108,111 @@ def joint_pos_target_l2(env: ManagerBasedRLEnv, target: float, asset_cfg: SceneE
     )
     # compute the reward
     return torch.sum(torch.square(joint_pos - target), dim=1)
+
+
+def gripper_height_tracking_l2(
+    env: ManagerBasedRLEnv,
+    command_name: str,
+    asset_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Penalize gripper height error from command (z-position tracking).
+
+    Tracks the relative z-position of the gripper in the robot's base frame.
+    Command z-component specifies target height relative to base.
+
+    Args:
+        env: Environment instance
+        command_name: Name of the pose command (we extract z from it)
+        asset_cfg: Asset configuration with body_ids pointing to gripper link
+
+    Returns:
+        L2 error between current gripper height and command z-target
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+    command = env.command_manager.get_command(command_name)
+
+    # Extract target z-position from command [x, y, z, qw, qx, qy, qz]
+    target_z = command[:, 2]  # Shape: (num_envs,)
+
+    joint_pos = asset.data.joint_pos[:, asset_cfg.joint_ids]
+    
+    return torch.sum(torch.square(joint_pos-target_z), dim=1)
+
+
+def binary_gripper_tracking(
+    env: ManagerBasedRLEnv,
+    command_name: str,
+    asset_cfg: SceneEntityCfg,
+    joint_limits: tuple[float, float] = (0.0, 0.04),
+) -> torch.Tensor:
+    """Reward for tracking binary gripper commands (0=close, 1=open).
+
+    Normalizes joint position to [0, 1] range and compares with binary command.
+    Uses exponential reward for smooth gradients.
+
+    Args:
+        env: Environment instance
+        command_name: Name of the binary gripper command
+        asset_cfg: Asset configuration with joint_ids pointing to gripper joint
+        joint_limits: (min, max) physical limits of gripper joint (default: 0.0 to 0.04m)
+
+    Returns:
+        Exponential reward based on tracking error (higher is better)
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+    command = env.command_manager.get_command(command_name)
+
+    # Extract binary target from command [x, y, z, qw, qx, qy, qz]
+    # Binary value is at index 2 (z position): 0.0 = close, 1.0 = open
+    binary_target = command[:, 2]  # Shape: (num_envs,)
+
+    # Get current joint position (prismatic joint, typically in meters)
+    joint_pos = asset.data.joint_pos[:, asset_cfg.joint_ids].squeeze(-1)  # Shape: (num_envs,)
+
+    # Normalize joint position to [0, 1] range
+    joint_min, joint_max = joint_limits
+    normalized_pos = (joint_pos - joint_min) / (joint_max - joint_min)
+    normalized_pos = torch.clamp(normalized_pos, 0.0, 1.0)
+
+    # Compute tracking error (how far from binary target)
+    error = torch.abs(normalized_pos - binary_target)
+
+    # Exponential reward: exp(-error/std) - higher when error is small
+    # std=0.2 means 90% reward at 20% error, which is reasonable for binary control
+    reward = torch.exp(-error / 0.2)
+
+    return reward
+
+
+def joint_angle_command_l2(env: ManagerBasedRLEnv, command_name: str, asset_cfg: SceneEntityCfg) -> torch.Tensor:
+    """Penalize joint position error from command (using yaw component as joint target).
+
+    This function extracts the 'yaw' component from a UniformPoseCommand and uses it
+    as the target joint angle for revolute joints.
+
+    Args:
+        env: Environment instance
+        command_name: Name of the pose command (we extract yaw from it)
+        asset_cfg: Asset configuration with joint_names or joint_ids
+
+    Returns:
+        L2 error between current joint position and command yaw
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+    command = env.command_manager.get_command(command_name)
+
+    # Extract quaternion from pose command [x, y, z, qw, qx, qy, qz]
+    target_quat = command[:, 3:7]  # Shape: (num_envs, 4)
+
+    # Convert quaternion to euler angles (returns tuple: roll, pitch, yaw)
+    _, _, yaw = euler_xyz_from_quat(target_quat)  # yaw: (num_envs,)
+
+    # Get current joint positions
+    joint_pos = wrap_to_pi(asset.data.joint_pos[:, asset_cfg.joint_ids])  # Shape: (num_envs, num_joints)
+
+    # Wrap target yaw to (-pi, pi)
+    target_yaw_wrapped = wrap_to_pi(yaw).unsqueeze(-1)  # Shape: (num_envs, 1)
+
+    # Compute L2 error
+    return torch.sum(torch.square(joint_pos - target_yaw_wrapped), dim=1)
+

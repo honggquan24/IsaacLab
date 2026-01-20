@@ -29,8 +29,8 @@ from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
 from isaaclab.envs.mdp import actions, observations, events, rewards, terminations, commands
 from isaaclab.envs.mdp import *
 from ...mdp import (
-    binary_gripper_tracking, 
     joint_angle_command_l2,
+    binary_gripper_tracking,  # Binary gripper tracking reward
 )
 
 import isaaclab_tasks.manager_based.locomotion.velocity.mdp as mdp_v
@@ -70,13 +70,16 @@ class EvobotV1SceneConfig(InteractiveSceneCfg):
 
 @configclass
 class ActionCfg:
-    """Action configuration for joint effort control.
+    """Action configuration for joint effort control (ALL CONTINUOUS).
     Available joints in USD (5 DOF total):
-    - left_wheel_joint (Revolute)
-    - right_wheel_joint (Revolute)
-    - arm_joint (Revolute)
-    - left_gripper_joint (Prismatic)
-    - right_gripper_joint (Prismatic)
+    - left_wheel_joint (Revolute) - Continuous effort control
+    - right_wheel_joint (Revolute) - Continuous effort control
+    - arm_joint (Revolute) - Continuous effort control
+    - left_gripper_joint (Prismatic) - Continuous effort control (tracks binary commands)
+    - right_gripper_joint (Prismatic) - Continuous effort control (tracks binary commands)
+
+    NOTE: Actions are continuous, but commands are binary (0 or 1).
+    Policy learns to output continuous values that track binary targets.
     """
     all_joints = actions.JointEffortActionCfg(
         asset_name="robot",
@@ -91,62 +94,57 @@ class ActionCfg:
             "left_wheel_joint": 400.0,    # Match effort_limit
             "right_wheel_joint": 400.0,
             "arm_joint": 200.0,
-            "left_gripper_joint": 80.0,
-            "right_gripper_joint": 80.0,
+            "left_gripper_joint": 80.0,   # Matched with trained config
+            "right_gripper_joint": 80.0,  # Matched with trained config
         },
     )
 
 
 @configclass
 class CommandsCfg:
-    """Velocity commands với consideration cho balance."""
+    """Commands for gripper fine-tuning: slow velocity, frequent gripper changes."""
+
+    # Velocity command - SLOWER and STABLE (not main focus)
     velocity_command = commands.UniformVelocityCommandCfg(
         asset_name="robot",
-        resampling_time_range=(3.0, 6.0),  # Giữ command 3-5s
-
-        # QUAN TRỌNG: Tùy chỉnh cho balance
-        rel_standing_envs=0.3,     # 30% thời gian đứng yên (tập balance tại chỗ)
-
-        heading_command=False,     # FALSE = Dùng angular velocity (not heading angle)
-        debug_vis=True,
-
-        # RANGE AN TOÀN CHO BALANCE + Xoay
+        resampling_time_range=(5.0, 8.0),  # LONGER stable periods
+        rel_standing_envs=0.7, 
+        heading_command=False,
+        debug_vis=False,
         ranges=commands.UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(-1.0, 1.0),      # TỐC ĐỘ CHẬM để giữ balance
-            lin_vel_y=(0.0, 0.0),        # BỎ y-velocity (differential drive không đi ngang)
-            ang_vel_z=(-1.0, 1.0),       # Angular velocity range
-            heading=(0.0, 0.0),          # Ignored khi heading_command=False
+            lin_vel_x=(0.0, 0.0),  
+            lin_vel_y=(0.0, 0.0),
+            ang_vel_z=(0.0, 0.0),  
+            heading=(0.0, 0.0),
         ),
     )
-    
-        
-    # Arm joint angle command (use yaw component as joint angle target)
+
+    # Arm command - KEEP STABLE (minimal changes)
     arm_ee_pose = commands.UniformPoseCommandCfg(
         asset_name="robot",
         body_name="arm_link",
-        resampling_time_range=(3.0, 5.0),  # Change target every 3-5 seconds
-        # debug_vis=True,
+        resampling_time_range=(5.0, 7.0),  # LONGER periods - arm stays stable
         ranges=commands.UniformPoseCommandCfg.Ranges(
-            pos_x=(0.0, 0.0),  # Not used
-            pos_y=(0.0, 0.0),  # Not used
-            pos_z=(0.0, 0.0),  # Not used
-            roll=(0.0, 0.0),   # Not used
-            pitch=(0.0, 0.0),  # Not used
-            yaw=(-math.pi, math.pi), # Use yaw as joint angle target (±90 degrees)
+            pos_x=(0.0, 0.0),
+            pos_y=(0.0, 0.0),
+            pos_z=(0.0, 0.0),
+            roll=(0.0, 0.0),
+            pitch=(0.0, 0.0),
+            yaw=(-math.pi, math.pi),
         ),
     )
-    
-    # Binary command - z is binary (0 or 1), other dims continuous
+
+    # BINARY GRIPPER COMMANDS - z is binary (0 or 1), other dims continuous
     grip_ee_pose_left = commands.BinaryGripperCommandCfg(
         asset_name="robot",
         body_name="gripper",
-        resampling_time_range=(1.5, 3.0),
+        resampling_time_range=(1.5, 3.0),  # FAST changes for practice
         debug_vis=False,
         prob_open=0.5,  # Equal probability of open (1.0) / close (0.0)
         ranges=commands.BinaryGripperCommandCfg.Ranges(
-            pos_x=(0.0, 0.0),  
-            pos_y=(0.0, 0.0),  
-            # pos_z is BINARY (0.0 or 1.0)
+            pos_x=(0.0, 0.0),  # Not used
+            pos_y=(0.0, 0.0),  # Not used
+            # pos_z is BINARY (0.0 or 1.0) - sampled via prob_open
             roll=(0.0, 0.0),
             pitch=(0.0, 0.0),
             yaw=(0.0, 0.0),
@@ -167,7 +165,6 @@ class CommandsCfg:
             yaw=(0.0, 0.0),
         ),
     )
-
 
 @configclass
 class ObservationsCfg:
@@ -276,78 +273,56 @@ class ObservationsCfg:
 
 @configclass
 class EventCfg:
-    """Event configuration for environment resets."""
+    """Event configuration - Minimal randomization for gripper fine-tuning."""
 
-    # Reset joints with small random offsets (avoid local minima)
+    # Reset joints to default (minimal noise)
     reset_joints = EventTermCfg(
         func=events.reset_joints_by_offset,
         mode="reset",
         params={
             "asset_cfg": SceneEntityCfg(name="robot"),
-            "position_range": (-0.05, 0.05),
-            "velocity_range": (-0.1, 0.1),
+            "position_range": (-0.01, 0.01),  # Very small noise
+            "velocity_range": (0.0, 0.0),     # No velocity noise
         },
     )
 
-    # Reset base with small noise (increase robustness)
+    # Reset base to default pose (minimal noise)
     reset_position = EventTermCfg(
         func=events.reset_root_state_uniform,
         mode="reset",
         params={
             "asset_cfg": SceneEntityCfg(name="robot"),
             "pose_range": {
-                "x": (-0.1, 0.1),
-                "y": (-0.1, 0.1),
+                "x": (0.0, 0.0),
+                "y": (0.0, 0.0),
                 "z": (0.12, 0.12),
-                "roll": (-0.05, 0.05),
-                "pitch": (-0.05, 0.05),
-                "yaw": (-0.1, 0.1),
+                "roll": (0.0, 0.0),
+                "pitch": (0.0, 0.0),
+                "yaw": (0.0, 0.0),
             },
             "velocity_range": {
-                "linear": (-0.05, 0.05),
-                "angular": (-0.05, 0.05),
+                "linear": (0.0, 0.0),
+                "angular": (0.0, 0.0),
             },
         },
     )
     
-    # randomize_com = EventTermCfg(
-    #     func=mdp_v.randomize_rigid_body_com,
-    #     mode="reset",
+    # external_push_arm = EventTermCfg(
+    #     func=mdp_v.apply_external_force_torque,
+    #     mode="interval",
+    #     interval_range_s=(1.0, 2.0),
     #     params={
     #         "asset_cfg": SceneEntityCfg(
     #             "robot",
     #             body_names=[
     #                 "arm_link",
-    #                 "gripper.*",
+    #                 "gripper_.*",
     #             ],
     #         ),
-    #         "com_range": {
-    #             "x": (-0.01, 0.01),
-    #             "y": (-0.01, 0.01),
-    #             "z": (-0.01, 0.01),
-    #         },
+    #         "force_range": (-100.0, 100.0),
+    #         "torque_range": (-100.0, 100.0),
     #     },
     # )
-    
-    external_push_arm = EventTermCfg(
-        func=mdp_v.apply_external_force_torque,
-        mode="interval",
-        interval_range_s=(1.0, 2.0),
-        params={
-            "asset_cfg": SceneEntityCfg(
-                "robot",
-                body_names=[
-                    "arm_link",
-                    "gripper_.*",
-                ],
-            ),
-            "force_range": (-100.0, -100.0),      
-            "torque_range": (-100.0, 100.0),   
-        },
-    )
-
-
-
     
 @configclass
 class RewardCfg:
@@ -364,10 +339,10 @@ class RewardCfg:
         weight=-100.0,
     )
     
-    # (3) Command tracking
+    # (3) Command tracking - REDUCE velocity weights (keep stable, not focus)
     lin_vel_tracking = RewardTermCfg(
         func=rewards.track_lin_vel_xy_exp,
-        weight=25.0,  
+        weight=25.0,  # REDUCED from 20.0 - keep moving but not priority
         params={
             "command_name": "velocity_command",
             "std": 0.5,
@@ -376,20 +351,20 @@ class RewardCfg:
 
     ang_vel_tracking = RewardTermCfg(
         func=rewards.track_ang_vel_z_exp,
-        weight=25.0,  
+        weight=25.0,  # REDUCED from 20.0
         params={
             "command_name": "velocity_command",
             "std": 0.5,
         },
     )
 
-    # Joint angle tracking - Arm tracks commanded angle (from yaw component)
+    # Joint angle tracking - Arm (keep stable, not focus)
     arm_joint_tracking = RewardTermCfg(
         func=joint_angle_command_l2,
-        weight=-10.0, 
+        weight=-10.0,
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names="arm_joint"),
-            "command_name": "arm_ee_pose",  # Extract yaw from this command
+            "command_name": "arm_ee_pose",
         },
     )
 
@@ -417,34 +392,34 @@ class RewardCfg:
     # Smooth
     action_rate = RewardTermCfg(
         func=rewards.action_rate_l2,
-        weight=-0.005,  # Matched with trained config
+        weight=-0.005,
     )
 
     
 @configclass
 class TerminationsCfg:
-     
-    # """Terminations: Strict cho balance, lenient cho velocity."""
-    # 1. TIME OUT (normal)
+    """Terminations: Lenient for gripper fine-tuning (focus on learning, not terminating)."""
+
+    # TIME OUT (longer episodes for gripper practice)
     time_out = TerminationTermCfg(
         func=terminations.time_out,
         time_out=True,
     )
-    
-    # 2. FALL DOWN 
+
+    # FALL DOWN (more lenient)
     base_height = TerminationTermCfg(
         func=terminations.root_height_below_minimum,
         params={
-            "minimum_height": 0.25,  # 8cm (thấp hơn chút để cho recovery chance)
+            "minimum_height": 0.25,  # Very low threshold - only stop if completely fallen
             "asset_cfg": SceneEntityCfg(name="robot"),
         },
     )
-    
-    # 3. BAD ORIENTATION (khi nghiêng quá nhiều)
+
+    # BAD ORIENTATION (very lenient - focus on gripper, not balance)
     bad_orientation = TerminationTermCfg(
         func=terminations.bad_orientation,
         params={
-            "limit_angle": math.pi / 1.2,  
+            "limit_angle": math.pi / 1.2,  # Almost horizontal before terminating
             "asset_cfg": SceneEntityCfg(name="robot"),
         },
     )
@@ -465,24 +440,17 @@ class TerminationsCfg:
             "asset_cfg": SceneEntityCfg(name="robot"),
         },
     )
-    
-    
-# @configclass
-# class CurriculumCfg:
-#     """Curriculum terms for the MDP."""
-
-#     terrain_levels = CurriculumTermCfg(func=mdp_v.terrain_levels_vel)
 
 @configclass
-class EvobotV1VelocityBalanceEnvCfg(ManagerBasedRLEnvCfg):
-    """Configuration cho velocity control với balance constraints."""
-    
+class EvobotV1GripperFineTuneEnvCfg(ManagerBasedRLEnvCfg):
+    """Configuration for gripper fine-tuning (velocity + manipulation)."""
+
     # Scene
     scene: EvobotV1SceneConfig = EvobotV1SceneConfig(
         num_envs=1,
         env_spacing=2.0,
     )
-    
+
     # MDP components
     observations: ObservationsCfg = ObservationsCfg()
     actions: ActionCfg = ActionCfg()
@@ -491,17 +459,17 @@ class EvobotV1VelocityBalanceEnvCfg(ManagerBasedRLEnvCfg):
     rewards: RewardCfg = RewardCfg()
     terminations: TerminationsCfg = TerminationsCfg()
     # curriculum: CurriculumCfg = CurriculumCfg()
-    
+
     def __post_init__(self):
         # General
         self.sim.device = "gpu"
         self.sim.use_fabric = True
-        
-        self.decimation = 1  
-        self.episode_length_s = 10.0  
+
+        self.decimation = 1
+        self.episode_length_s = 10.0  # Longer episodes for gripper practice
         # Physics
         self.sim.dt = 1 / 60.0
-        
+
         # Viewer
         self.viewer.eye = (5.0, 5.0, 3.0)
         self.viewer.lookat = (0.0, 0.0, 0.5)

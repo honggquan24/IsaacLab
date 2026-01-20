@@ -31,12 +31,12 @@ from isaaclab.envs.mdp import (
     joint_acc_l2,
     body_lin_acc_l2,
 )
-from ..mdp import (
+from ...mdp import (
     rpy_alignment_imu,
     reset_when_fall,
 )
 
-from .. import mdp
+from ... import mdp
 
 
 

@@ -12,8 +12,11 @@ import isaaclab.sim as sim_utils
 from isaaclab.actuators import DCMotorCfg
 from isaaclab.assets import ArticulationCfg
 
-# PATH CONFIG - Use parent directory's USD file
-CURRENT_DIR = Path(__file__).resolve().parent.parent
+# PATH CONFIG - Use evobot_v1 root directory's USD file
+# File is at: evobot_v1/navigation/balance/evobot_v1_balance_cfg.py
+# USD is at:  evobot_v1/usd_file/evoBOT_cfg.usd
+# Need to go up 2 levels: balance/ -> navigation/ -> evobot_v1/
+CURRENT_DIR = Path(__file__).resolve().parent.parent.parent
 usd_file_path = CURRENT_DIR / "usd_file" / "evoBOT_cfg.usd"
 EVOBOT_USD_PATH = usd_file_path.resolve()
 

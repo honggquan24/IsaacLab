@@ -10,7 +10,7 @@ from __future__ import annotations
 import torch
 from typing import TYPE_CHECKING
 
-from isaaclab.utils.math import euler_xyz_from_quat
+from isaaclab.utils.math import combine_frame_transforms, quat_error_magnitude, quat_mul
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
@@ -37,6 +37,22 @@ def heading_command_error_abs(
     heading = command[:, 3]
     return torch.abs(heading)
 
+
+def position_command_error(env: ManagerBasedRLEnv, command_name: str, asset_cfg: SceneEntityCfg) -> torch.Tensor:
+    """Penalize tracking of the position error using L2-norm.
+
+    The function computes the position error between the desired position (from the command) and the
+    current position of the asset's body (in world frame). The position error is computed as the L2-norm
+    of the difference between the desired and current positions.
+    """
+    # extract the asset (to enable type hinting)
+    asset: RigidObject = env.scene[asset_cfg.name]
+    command = env.command_manager.get_command(command_name)
+    # obtain the desired and current positions
+    des_pos_b = command[:, :3]
+    des_pos_w, _ = combine_frame_transforms(asset.data.root_pos_w, asset.data.root_quat_w, des_pos_b)
+    curr_pos_w = asset.data.body_pos_w[:, asset_cfg.body_ids[0]]  # type: ignore
+    return torch.norm(curr_pos_w - des_pos_w, dim=1)
 
 def position_reached_bonus(
     env: ManagerBasedRLEnv,
@@ -209,6 +225,7 @@ def velocity_heading_alignment(
     command = env.command_manager.get_command(command_name)
     cmd_vx = command[:, 0]  # Linear velocity x
     cmd_vy = command[:, 1]  # Linear velocity y (thường = 0 cho differential drive)
+    cmd_wz = command[:, 2]  # Angular velocity z
 
     # Tính target heading từ velocity command
     # Target heading = hướng của velocity vector
@@ -226,16 +243,24 @@ def velocity_heading_alignment(
     heading_error = target_heading - current_yaw
     heading_error = torch.atan2(torch.sin(heading_error), torch.cos(heading_error))
 
-    # Chỉ tính reward khi có velocity command (không tính khi đứng yên)
+    # Xác định khi nào cần check alignment:
+    # - Khi có linear velocity command HOẶC
+    # - Khi đang xoay để align (wz ≠ 0 và error lớn)
     velocity_magnitude = torch.sqrt(cmd_vx**2 + cmd_vy**2)
-    moving_mask = velocity_magnitude > 0.1  # Threshold = 0.1 m/s
+    has_linear_cmd = velocity_magnitude > 0.1  # Có command đi thẳng
+    is_rotating = torch.abs(cmd_wz) > 0.1      # Đang có command xoay
+
+    # Apply reward khi:
+    # 1. Có linear command → check alignment
+    # 2. Đang xoay VÀ heading error lớn → đang trong quá trình align
+    should_check = has_linear_cmd | (is_rotating & (torch.abs(heading_error) > 0.3))
 
     # Exponential reward: exp(-|error|/std)
     # error = 0 → reward = 1.0
     # error = pi → reward = exp(-pi/std) ≈ 0 (nếu std=0.5)
     reward = torch.exp(-torch.abs(heading_error) / std)
 
-    # Chỉ apply reward khi đang di chuyển, không penalize khi đứng yên
-    reward = torch.where(moving_mask, reward, torch.ones_like(reward))
+    # Apply reward khi cần, otherwise return 1.0 (neutral)
+    reward = torch.where(should_check, reward, torch.ones_like(reward))
 
     return reward

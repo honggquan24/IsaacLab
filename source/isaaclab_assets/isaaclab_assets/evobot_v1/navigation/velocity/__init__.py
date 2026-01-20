@@ -7,4 +7,3 @@
 
 from . import agents  # noqa: F401
 from .velocity_env_cfg import *  # noqa: F401, F403
-from .hierarchical_vel_env_cfg import *  # noqa: F401, F403

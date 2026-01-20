@@ -11,6 +11,7 @@ from isaaclab.markers import VisualizationMarkersCfg
 from isaaclab.markers.config import BLUE_ARROW_X_MARKER_CFG, FRAME_MARKER_CFG, GREEN_ARROW_X_MARKER_CFG
 from isaaclab.utils import configclass
 
+from .binary_command import BinaryGripperCommand
 from .null_command import NullCommand
 from .pose_2d_command import TerrainBasedPose2dCommand, UniformPose2dCommand
 from .pose_command import UniformPoseCommand
@@ -312,3 +313,63 @@ class TerrainBasedPose2dCommandCfg(UniformPose2dCommandCfg):
 
     ranges: Ranges = MISSING
     """Distribution ranges for the sampled commands."""
+
+@configclass
+class BinaryGripperCommandCfg(CommandTermCfg):
+    """Configuration for binary gripper command generator.
+
+    Similar to UniformPoseCommandCfg, but pos_z is binary (0.0 or 1.0) instead of continuous.
+    All other pose components (x, y, roll, pitch, yaw) are sampled uniformly like UniformPoseCommand.
+    """
+
+    class_type: type = BinaryGripperCommand
+
+    asset_name: str = MISSING
+    """Name of the asset in the environment for which the commands are generated."""
+
+    body_name: str = MISSING
+    """Name of the body in the asset for which the commands are generated."""
+
+    make_quat_unique: bool = False
+    """Whether to make the quaternion unique or not. Defaults to False."""
+
+    @configclass
+    class Ranges:
+        """Distribution ranges for the pose commands (same as UniformPoseCommand)."""
+
+        pos_x: tuple[float, float] = MISSING
+        """Range for the x position (in m)."""
+
+        pos_y: tuple[float, float] = MISSING
+        """Range for the y position (in m)."""
+
+        # NOTE: pos_z is IGNORED for binary command - always outputs 0.0 or 1.0
+
+        roll: tuple[float, float] = MISSING
+        """Range for the roll angle (in rad)."""
+
+        pitch: tuple[float, float] = MISSING
+        """Range for the pitch angle (in rad)."""
+
+        yaw: tuple[float, float] = MISSING
+        """Range for the yaw angle (in rad)."""
+
+    ranges: Ranges = MISSING
+    """Distribution ranges for the pose commands."""
+
+    prob_open: float = 0.5
+    """Probability of generating 'open' command (z=1.0). Default is 0.5 (equal probability for 0.0 and 1.0)."""
+
+    goal_pose_visualizer_cfg: VisualizationMarkersCfg = FRAME_MARKER_CFG.replace(
+        prim_path="/Visuals/Command/goal_pose"
+    )
+    """The configuration for the goal pose visualization marker. Defaults to FRAME_MARKER_CFG."""
+
+    current_pose_visualizer_cfg: VisualizationMarkersCfg = FRAME_MARKER_CFG.replace(
+        prim_path="/Visuals/Command/body_pose"
+    )
+    """The configuration for the current pose visualization marker. Defaults to FRAME_MARKER_CFG."""
+
+    # Set the scale of the visualization markers to (0.1, 0.1, 0.1)
+    goal_pose_visualizer_cfg.markers["frame"].scale = (0.1, 0.1, 0.1)
+    current_pose_visualizer_cfg.markers["frame"].scale = (0.1, 0.1, 0.1)

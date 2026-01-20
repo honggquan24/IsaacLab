@@ -3,7 +3,7 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Hierarchical navigation task - high-level navigation with pre-trained balance policy."""
+"""Locomotion-manipulation task - balance with velocity command and arm control."""
 
 from . import agents  # noqa: F401
-from .hierarchical_env_cfg import *  # noqa: F401, F403
+from .manipulation_env_cfg import *  # noqa: F401, F403

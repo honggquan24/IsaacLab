@@ -1,5 +1,5 @@
 import gymnasium as gym
-from . import balance, navigation
+from . import navigation
 
 # ============================================================================
 # EVOBOT V1 - Isaac Lab Training & Evaluation Guide
@@ -73,10 +73,17 @@ from . import balance, navigation
 #
 #   Evaluate:
 #   ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
-#       --task Isaac-Evobot-V1-Velocity \
+#       --task Isaac-Evobot-V1-Velocity-Play \
 #       --num_envs 4 \
 #       'agent.load_run=<run_name>' \
 #       'agent.load_checkpoint="model_500.pt"'
+#
+#   Test with keyboard control:
+#   ./isaaclab.sh -p source/isaaclab_assets/isaaclab_assets/evobot_v1/tests/test_policy_keyboard_full.py \
+#       --task Isaac-Evobot-V1-Velocity-Play \
+#       --load_run <run_name> \
+#       --checkpoint model_500.pt \
+#       --num_envs 1
 #
 # ============================================================================
 # 3. LOCOMOTION-MANIPULATION TASK (Balance + velocity + arm control)
@@ -233,8 +240,8 @@ gym.register(
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
     disable_env_checker=True,
     kwargs={
-        "env_cfg_entry_point": f"{balance.__name__}.evobot_v1_balance_env_cfg:EvobotV1BalanceEnvCfg",
-        "rsl_rl_cfg_entry_point": f"{balance.agents.__name__}.rsl_rl_ppo_cfg:EvobotBalancePPORunnerCfg"
+        "env_cfg_entry_point": f"{navigation.balance.__name__}.evobot_v1_balance_env_cfg:EvobotV1BalanceEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{navigation.balance.agents.__name__}.rsl_rl_ppo_cfg:EvobotBalancePPORunnerCfg"
     },
 )
 
@@ -249,70 +256,57 @@ gym.register(
     },
 )
 
+# Velocity Balance Task (Play - no noise/disturbances): Isaac-Evobot-V1-Velocity-Play
+gym.register(
+    id="Isaac-Evobot-V1-Velocity-Play",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{navigation.velocity.__name__}.velocity_env_cfg_play:EvobotV1VelocityBalanceEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{navigation.velocity.agents.__name__}.rsl_rl_ppo_cfg:EvobotVelocityPPORunnerCfg",
+    },
+)
+
+# Gripper Fine-tuning Task: Isaac-Evobot-V1-Gripper-FineTune
+gym.register(
+    id="Isaac-Evobot-V1-Gripper-FineTune",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{navigation.velocity.__name__}.velocity_env_cfg_gripper_finetune:EvobotV1GripperFineTuneEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{navigation.velocity.agents.__name__}.rsl_rl_ppo_cfg:EvobotGripperFineTunePPORunnerCfg",
+    },
+)
+
+# Navigation Task: Isaac-Evobot-V1-Navigation
+gym.register(
+    id="Isaac-Evobot-V1-Navigation",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{navigation.navigation.__name__}.navigation_env_cfg:EvobotV1NavigationPretrainedEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{navigation.navigation.agents.__name__}.rsl_rl_ppo_cfg:EvobotNavigationPPORunnerCfg",
+    },
+)
+
+# Navigation Evaluation: Isaac-Evobot-V1-Navigation-Play
+gym.register(
+    id="Isaac-Evobot-V1-Navigation-Play",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{navigation.navigation.__name__}.navigation_env_cfg:EvobotV1NavigationPretrainedEnvCfgPlay",
+        "rsl_rl_cfg_entry_point": f"{navigation.navigation.agents.__name__}.rsl_rl_ppo_cfg:EvobotNavigationPPORunnerCfg",
+    },
+)
+
 # Locomotion-Manipulation Task: Isaac-Evobot-V1-Locomotion-Manipulation
 gym.register(
-    id="Isaac-Evobot-V1-Locomotion-Manipulation",
+    id="Isaac-Evobot-V1-Manipulation",
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
     disable_env_checker=True,
     kwargs={
-        "env_cfg_entry_point": f"{navigation.locomotion_manipulation.__name__}.loc_man_env_cfg:EvobotV1LocomotionManipulationBalanceEnvCfg",
-        "rsl_rl_cfg_entry_point": f"{navigation.locomotion_manipulation.agents.__name__}.rsl_rl_ppo_cfg:EvobotLocomotionManipulationPPORunnerCfg",
-    },
-)
-
-# Hierarchical Velocity Pretrained Task: Isaac-Evobot-V1-Velocity-Pretrained
-# Uses pre-trained low-level balance policy, trains high-level velocity command policy
-gym.register(
-    id="Isaac-Evobot-V1-Velocity-Pretrained",
-    entry_point="isaaclab.envs:ManagerBasedRLEnv",
-    disable_env_checker=True,
-    kwargs={
-        "env_cfg_entry_point": f"{navigation.velocity.__name__}.hierarchical_vel_env_cfg:EvobotV1VelocityPretrainedEnvCfg",
-        "rsl_rl_cfg_entry_point": f"{navigation.velocity.agents.__name__}.rsl_rl_ppo_cfg:EvobotVelocityPretrainPPORunnerCfg",
-    },
-)
-
-# Hierarchical Velocity Pretrained Evaluation: Isaac-Evobot-V1-Velocity-Pretrained-Play
-gym.register(
-    id="Isaac-Evobot-V1-Velocity-Pretrained-Play",
-    entry_point="isaaclab.envs:ManagerBasedRLEnv",
-    disable_env_checker=True,
-    kwargs={
-        "env_cfg_entry_point": f"{navigation.velocity.__name__}.hierarchical_vel_env_cfg:EvobotV1VelocityPretrainedEnvCfgPlay",
-        "rsl_rl_cfg_entry_point": f"{navigation.velocity.agents.__name__}.rsl_rl_ppo_cfg:EvobotVelocityPretrainPPORunnerCfg",
-    },
-)
-
-# Hierarchical Navigation Task: Isaac-Evobot-V1-Navigation-Hierarchical
-gym.register(
-    id="Isaac-Evobot-V1-Navigation-Hierarchical",
-    entry_point="isaaclab.envs:ManagerBasedRLEnv",
-    disable_env_checker=True,
-    kwargs={
-        "env_cfg_entry_point": f"{navigation.hierarchical.__name__}.hierarchical_env_cfg:EvobotV1NavigationPretrainedEnvCfg",
-        "rsl_rl_cfg_entry_point": f"{navigation.hierarchical.agents.__name__}.rsl_rl_ppo_cfg:EvobotNavigationPPORunnerCfg",
-    },
-)
-
-# Hierarchical Navigation Evaluation: Isaac-Evobot-V1-Navigation-Hierarchical-Play
-gym.register(
-    id="Isaac-Evobot-V1-Navigation-Hierarchical-Play",
-    entry_point="isaaclab.envs:ManagerBasedRLEnv",
-    disable_env_checker=True,
-    kwargs={
-        "env_cfg_entry_point": f"{navigation.hierarchical.__name__}.hierarchical_env_cfg:EvobotV1NavigationPretrainedEnvCfgPlay",
-        "rsl_rl_cfg_entry_point": f"{navigation.hierarchical.agents.__name__}.rsl_rl_ppo_cfg:EvobotNavigationPPORunnerCfg",
-    },
-)
-
-# PID-based Velocity Control: Isaac-Evobot-V1-Velocity-PID
-# Uses PID controller to convert velocity commands to wheel torques
-gym.register(
-    id="Isaac-Evobot-V1-Velocity-PID",
-    entry_point="isaaclab.envs:ManagerBasedRLEnv",
-    disable_env_checker=True,
-    kwargs={
-        "env_cfg_entry_point": f"{navigation.velocity.__name__}.velocity_pid_env_cfg:EvobotV1VelocityPIDEnvCfg",
-        "rsl_rl_cfg_entry_point": f"{navigation.velocity.agents.__name__}.rsl_rl_ppo_cfg:EvobotVelocityPIDPPORunnerCfg",
+        "env_cfg_entry_point": f"{navigation.manipulation.__name__}.manipulation_env_cfg:EvobotV1LocomotionManipulationBalanceEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{navigation.manipulation.agents.__name__}.rsl_rl_ppo_cfg:EvobotLocomotionManipulationPPORunnerCfg",
     },
 )

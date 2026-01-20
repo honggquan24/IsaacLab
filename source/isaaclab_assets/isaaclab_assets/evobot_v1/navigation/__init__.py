@@ -5,4 +5,4 @@
 
 """Navigation tasks for Evobot V1."""
 
-from . import velocity, locomotion_manipulation, hierarchical  # noqa: F401
+from . import balance, velocity, manipulation, navigation  # noqa: F401

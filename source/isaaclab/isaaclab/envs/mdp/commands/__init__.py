@@ -12,9 +12,11 @@ from .commands_cfg import (
     UniformPose2dCommandCfg,
     UniformPoseCommandCfg,
     UniformVelocityCommandCfg,
-    UniformVelocity2DCommandCfg
+    UniformVelocity2DCommandCfg,
+    BinaryGripperCommandCfg,
 )
 from .null_command import NullCommand
 from .pose_2d_command import TerrainBasedPose2dCommand, UniformPose2dCommand
 from .pose_command import UniformPoseCommand
 from .velocity_command import NormalVelocityCommand, UniformVelocityCommand
+from .binary_command import BinaryGripperCommand

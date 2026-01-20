@@ -106,11 +106,11 @@ EVOBOT_V1_CFG = ArticulationCfg(
         # ===== Grabbers =====
         "grabbers": DCMotorCfg(
             joint_names_expr=[".*_gripper_joint"],
-            saturation_effort=100.0,        # ↓ Giảm (từ 50)
-            effort_limit=80.0,
-            velocity_limit=30.0,             # ↓ Giảm (từ 10)
+            saturation_effort=100.0,        # Matched with trained config
+            effort_limit=80.0,              # Matched with trained config
+            velocity_limit=30.0,
             stiffness=0.0,
-            damping=1.0,                    # ↓ Giảm (từ 100) - QUAN TRỌNG
+            damping=1.0,
             armature=0.001,
             friction=0.01,
             dynamic_friction=0.01,

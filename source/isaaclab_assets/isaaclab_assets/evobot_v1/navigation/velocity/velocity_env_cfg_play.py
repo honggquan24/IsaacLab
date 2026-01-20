@@ -7,7 +7,7 @@ maintaining balance.
 
 import math
 import isaaclab.sim as sim_utils
-from isaaclab.assets import Articulation, AssetBaseCfg
+from isaaclab.assets import Articulation, AssetBaseCfg, RigidObjectCfg
 from isaaclab.envs import ManagerBasedRLEnvCfg
 from isaaclab.managers import (
     EventTermCfg,
@@ -24,12 +24,13 @@ from isaaclab.sensors import (
     ContactSensorCfg,
     ImuCfg,
 )
+from isaaclab.terrains import TerrainImporterCfg
 from ...evobot_v1_cfg import EVOBOT_V1_CFG
 from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
 from isaaclab.envs.mdp import actions, observations, events, rewards, terminations, commands
 from isaaclab.envs.mdp import *
 from ...mdp import (
-    binary_gripper_tracking, 
+    gripper_height_tracking_l2,
     joint_angle_command_l2,
 )
 
@@ -64,6 +65,17 @@ class EvobotV1SceneConfig(InteractiveSceneCfg):
         gravity_bias=(0.0, 0.0, 0.0),
     )
 
+    cube = RigidObjectCfg(
+        prim_path="{ENV_REGEX_NS}/Cube",
+        spawn=sim_utils.CuboidCfg(
+            size=(0.4, 0.2, 0.4),
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(),
+            mass_props=sim_utils.MassPropertiesCfg(mass=0.5),
+            collision_props=sim_utils.CollisionPropertiesCfg(),
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 0.0, 0.0)),
+        ),
+        init_state=RigidObjectCfg.InitialStateCfg(pos=(0.5, 0.0, 0.2)),
+    )
     
     contact_forces = ContactSensorCfg(prim_path="{ENV_REGEX_NS}/Robot/evobot/evobot/.*")
 
@@ -105,7 +117,7 @@ class CommandsCfg:
         resampling_time_range=(3.0, 6.0),  # Giữ command 3-5s
 
         # QUAN TRỌNG: Tùy chỉnh cho balance
-        rel_standing_envs=0.3,     # 30% thời gian đứng yên (tập balance tại chỗ)
+        rel_standing_envs=0.1,     # 10% thời gian đứng yên (tập balance tại chỗ)
 
         heading_command=False,     # FALSE = Dùng angular velocity (not heading angle)
         debug_vis=True,
@@ -136,38 +148,35 @@ class CommandsCfg:
         ),
     )
     
-    # Binary command - z is binary (0 or 1), other dims continuous
-    grip_ee_pose_left = commands.BinaryGripperCommandCfg(
+    grip_ee_pose_left = commands.UniformPoseCommandCfg(
         asset_name="robot",
-        body_name="gripper",
-        resampling_time_range=(1.5, 3.0),
-        debug_vis=False,
-        prob_open=0.5,  # Equal probability of open (1.0) / close (0.0)
-        ranges=commands.BinaryGripperCommandCfg.Ranges(
-            pos_x=(0.0, 0.0),  
-            pos_y=(0.0, 0.0),  
-            # pos_z is BINARY (0.0 or 1.0)
+        body_name="gripper",   # đổi đúng link EE của evobot
+        resampling_time_range=(3.0, 5.0),
+        # debug_vis=True,
+        ranges=commands.UniformPoseCommandCfg.Ranges(
+            pos_x=(0.0, 0.0),  # Not used for height tracking
+            pos_y=(0.0, 0.0),  # Not used for height tracking
+            pos_z=(0, 0.1),  # Target height range: ±15cm relative to base
             roll=(0.0, 0.0),
             pitch=(0.0, 0.0),
             yaw=(0.0, 0.0),
         ),
     )
 
-    grip_ee_pose_right = commands.BinaryGripperCommandCfg(
+    grip_ee_pose_right = commands.UniformPoseCommandCfg(
         asset_name="robot",
-        body_name="gripper_01",
-        resampling_time_range=(1.5, 3.0),
-        debug_vis=False,
-        prob_open=0.5,
-        ranges=commands.BinaryGripperCommandCfg.Ranges(
-            pos_x=(0.0, 0.0),
-            pos_y=(0.0, 0.0),
+        body_name="gripper_01",   # đổi đúng link EE của evobot
+        resampling_time_range=(3.0, 5.0),
+        # debug_vis=True,
+        ranges=commands.UniformPoseCommandCfg.Ranges(
+            pos_x=(0.0, 0.0),  # Not used for height tracking
+            pos_y=(0.0, 0.0),  # Not used for height tracking
+            pos_z=(0, 0.1),  # Target height range: ±15cm relative to base
             roll=(0.0, 0.0),
             pitch=(0.0, 0.0),
             yaw=(0.0, 0.0),
         ),
     )
-
 
 @configclass
 class ObservationsCfg:
@@ -276,75 +285,42 @@ class ObservationsCfg:
 
 @configclass
 class EventCfg:
-    """Event configuration for environment resets."""
+    """Event configuration for environment resets - CLEAN VERSION for testing (no randomization)."""
 
-    # Reset joints with small random offsets (avoid local minima)
+    # Reset joints to default positions (no random offsets)
     reset_joints = EventTermCfg(
         func=events.reset_joints_by_offset,
         mode="reset",
         params={
             "asset_cfg": SceneEntityCfg(name="robot"),
-            "position_range": (-0.05, 0.05),
-            "velocity_range": (-0.1, 0.1),
+            "position_range": (0.0, 0.0),  # No randomization
+            "velocity_range": (0.0, 0.0),  # No randomization
         },
     )
 
-    # Reset base with small noise (increase robustness)
+    # Reset base to default pose (no noise)
     reset_position = EventTermCfg(
         func=events.reset_root_state_uniform,
         mode="reset",
         params={
             "asset_cfg": SceneEntityCfg(name="robot"),
             "pose_range": {
-                "x": (-0.1, 0.1),
-                "y": (-0.1, 0.1),
-                "z": (0.12, 0.12),
-                "roll": (-0.05, 0.05),
-                "pitch": (-0.05, 0.05),
-                "yaw": (-0.1, 0.1),
+                "x": (0.0, 0.0),     # No randomization
+                "y": (0.0, 0.0),     # No randomization
+                "z": (0.12, 0.12),   # Fixed height
+                "roll": (0.0, 0.0),  # No randomization
+                "pitch": (0.0, 0.0), # No randomization
+                "yaw": (0.0, 0.0),   # No randomization
             },
             "velocity_range": {
-                "linear": (-0.05, 0.05),
-                "angular": (-0.05, 0.05),
+                "linear": (0.0, 0.0),  # No randomization
+                "angular": (0.0, 0.0), # No randomization
             },
         },
     )
-    
-    # randomize_com = EventTermCfg(
-    #     func=mdp_v.randomize_rigid_body_com,
-    #     mode="reset",
-    #     params={
-    #         "asset_cfg": SceneEntityCfg(
-    #             "robot",
-    #             body_names=[
-    #                 "arm_link",
-    #                 "gripper.*",
-    #             ],
-    #         ),
-    #         "com_range": {
-    #             "x": (-0.01, 0.01),
-    #             "y": (-0.01, 0.01),
-    #             "z": (-0.01, 0.01),
-    #         },
-    #     },
-    # )
-    
-    external_push_arm = EventTermCfg(
-        func=mdp_v.apply_external_force_torque,
-        mode="interval",
-        interval_range_s=(1.0, 2.0),
-        params={
-            "asset_cfg": SceneEntityCfg(
-                "robot",
-                body_names=[
-                    "arm_link",
-                    "gripper_.*",
-                ],
-            ),
-            "force_range": (-100.0, -100.0),      
-            "torque_range": (-100.0, 100.0),   
-        },
-    )
+
+    # REMOVED: randomize_com - No COM randomization for clean testing
+    # REMOVED: external_push_arm - No external disturbances for clean testing
 
 
 
@@ -361,13 +337,13 @@ class RewardCfg:
 
     terminating = RewardTermCfg(
         func=rewards.is_terminated,
-        weight=-100.0,
+        weight=-500.0,
     )
     
     # (3) Command tracking
     lin_vel_tracking = RewardTermCfg(
         func=rewards.track_lin_vel_xy_exp,
-        weight=25.0,  
+        weight=-20.0,  
         params={
             "command_name": "velocity_command",
             "std": 0.5,
@@ -376,7 +352,7 @@ class RewardCfg:
 
     ang_vel_tracking = RewardTermCfg(
         func=rewards.track_ang_vel_z_exp,
-        weight=25.0,  
+        weight=-20.0,  
         params={
             "command_name": "velocity_command",
             "std": 0.5,
@@ -386,38 +362,17 @@ class RewardCfg:
     # Joint angle tracking - Arm tracks commanded angle (from yaw component)
     arm_joint_tracking = RewardTermCfg(
         func=joint_angle_command_l2,
-        weight=-10.0, 
+        weight=-50.0,  # Penalty for joint angle error (squared error)
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names="arm_joint"),
             "command_name": "arm_ee_pose",  # Extract yaw from this command
         },
     )
 
-    # BINARY GRIPPER TRACKING - MAIN FOCUS (Exponential reward for binary targets)
-    grip_ee_tracking_left = RewardTermCfg(
-        func=binary_gripper_tracking,
-        weight=10.0,  # POSITIVE weight - exponential reward (higher is better)
-        params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names="left_gripper_joint"),
-            "command_name": "grip_ee_pose_left",
-            "joint_limits": (0.0, 0.2),  # Gripper joint range in meters
-        },
-    )
-
-    grip_ee_tracking_right = RewardTermCfg(
-        func=binary_gripper_tracking,
-        weight=10.0,  # POSITIVE weight - exponential reward
-        params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names="right_gripper_joint"),
-            "command_name": "grip_ee_pose_right",
-            "joint_limits": (0.0, 0.2),
-        },
-    )
-
     # Smooth
     action_rate = RewardTermCfg(
         func=rewards.action_rate_l2,
-        weight=-0.005,  # Matched with trained config
+        weight=-0.005,
     )
 
     
@@ -498,7 +453,7 @@ class EvobotV1VelocityBalanceEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.use_fabric = True
         
         self.decimation = 1  
-        self.episode_length_s = 10.0  
+        self.episode_length_s = 60.0  
         # Physics
         self.sim.dt = 1 / 60.0
         

@@ -38,10 +38,10 @@ class EvobotVelocityPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         value_loss_coef=1.0,
         use_clipped_value_loss=True,
         clip_param=0.2,
-        entropy_coef=0.01,  # Lower entropy for more focused exploration
+        entropy_coef=0.01,
         num_learning_epochs=4,
         num_mini_batches=32,
-        learning_rate=1e-4,
+        learning_rate=1.0e-3,
         schedule="adaptive",
         gamma=0.99,
         lam=0.95,
@@ -145,4 +145,50 @@ class EvobotVelocityPIDPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         lam=0.95,
         desired_kl=0.02,
         max_grad_norm=1.0,
+    )
+
+
+@configclass
+class EvobotGripperFineTunePPORunnerCfg(RslRlOnPolicyRunnerCfg):
+    """PPO configuration for gripper fine-tuning.
+
+    Fine-tuning from pretrained velocity policy with focus on gripper control.
+    Uses lower learning rate to avoid catastrophic forgetting of base skills.
+
+    Key characteristics:
+    - LOW learning rate (preserve pretrained weights)
+    - Same network size as base velocity policy
+    - Longer episodes (30s for gripper practice)
+    - Higher entropy (explore gripper movements)
+    """
+
+    num_steps_per_env = 10 * 60  # 30s episodes at 60Hz (from velocity_env_cfg_gripper_finetune.py)
+    max_iterations = 500  # Fewer iterations for fine-tuning
+    save_interval = 5
+    experiment_name = "evobot_v1_gripper_finetune"
+
+    # Same network as base velocity policy
+    policy = RslRlPpoActorCriticCfg(
+        init_noise_std=0.05,
+        actor_obs_normalization=True,
+        critic_obs_normalization=True,
+        actor_hidden_dims=[128, 256, 128],
+        critic_hidden_dims=[128, 256, 128],
+        activation="elu",
+    )
+
+    # PPO algorithm with LOWER learning rate for fine-tuning
+    algorithm = RslRlPpoAlgorithmCfg(
+        value_loss_coef=1.0,
+        use_clipped_value_loss=True,
+        clip_param=0.2,
+        entropy_coef=0.02,  # HIGHER than base (0.01) - explore gripper movements
+        num_learning_epochs=5,
+        num_mini_batches=32,
+        learning_rate=3e-5,  # MUCH LOWER than base (1e-3) - preserve pretrained skills
+        schedule="adaptive",
+        gamma=0.99,
+        lam=0.95,
+        desired_kl=0.01,  # LOWER KL limit - careful updates
+        max_grad_norm=0.5,  # LOWER gradient clipping - stable fine-tuning
     )
