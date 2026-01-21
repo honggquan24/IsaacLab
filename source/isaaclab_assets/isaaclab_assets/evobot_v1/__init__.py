@@ -278,6 +278,17 @@ gym.register(
     },
 )
 
+# Arm Fine-tuning Task: Isaac-Evobot-V1-Arm-FineTune
+gym.register(
+    id="Isaac-Evobot-V1-Arm-FineTune",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{navigation.velocity.__name__}.velocity_env_cfg_arm_finetune:EvobotV1ArmFineTuneEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{navigation.velocity.agents.__name__}.rsl_rl_ppo_cfg:EvobotArmFineTunePPORunnerCfg",
+    },
+)
+
 # Navigation Task: Isaac-Evobot-V1-Navigation
 gym.register(
     id="Isaac-Evobot-V1-Navigation",

@@ -90,7 +90,7 @@ class ActionCfg:
         scale={
             "left_wheel_joint": 400.0,    # Match effort_limit
             "right_wheel_joint": 400.0,
-            "arm_joint": 200.0,
+            "arm_joint": 100.0,
             "left_gripper_joint": 80.0,
             "right_gripper_joint": 80.0,
         },
@@ -132,7 +132,7 @@ class CommandsCfg:
             pos_z=(0.0, 0.0),  # Not used
             roll=(0.0, 0.0),   # Not used
             pitch=(0.0, 0.0),  # Not used
-            yaw=(-math.pi, math.pi), # Use yaw as joint angle target (±90 degrees)
+            yaw=(-math.pi * 0 , math.pi * 0 ), # Use yaw as joint angle target (±90 degrees)
         ),
     )
     
@@ -310,24 +310,24 @@ class EventCfg:
         },
     )
     
-    # randomize_com = EventTermCfg(
-    #     func=mdp_v.randomize_rigid_body_com,
-    #     mode="reset",
-    #     params={
-    #         "asset_cfg": SceneEntityCfg(
-    #             "robot",
-    #             body_names=[
-    #                 "arm_link",
-    #                 "gripper.*",
-    #             ],
-    #         ),
-    #         "com_range": {
-    #             "x": (-0.01, 0.01),
-    #             "y": (-0.01, 0.01),
-    #             "z": (-0.01, 0.01),
-    #         },
-    #     },
-    # )
+    randomize_com = EventTermCfg(
+        func=mdp_v.randomize_rigid_body_com,
+        mode="reset",
+        params={
+            "asset_cfg": SceneEntityCfg(
+                "robot",
+                body_names=[
+                    "arm_link",
+                    "gripper.*",
+                ],
+            ),
+            "com_range": {
+                "x": (-0.01, 0.01),
+                "y": (-0.01, 0.01),
+                "z": (-0.01, 0.01),
+            },
+        },
+    )
     
     external_push_arm = EventTermCfg(
         func=mdp_v.apply_external_force_torque,
@@ -338,10 +338,9 @@ class EventCfg:
                 "robot",
                 body_names=[
                     "arm_link",
-                    "gripper_.*",
                 ],
             ),
-            "force_range": (-100.0, -100.0),      
+            "force_range": (-100.0, 100.0),      
             "torque_range": (-100.0, 100.0),   
         },
     )
@@ -396,7 +395,7 @@ class RewardCfg:
     # BINARY GRIPPER TRACKING - MAIN FOCUS (Exponential reward for binary targets)
     grip_ee_tracking_left = RewardTermCfg(
         func=binary_gripper_tracking,
-        weight=10.0,  # POSITIVE weight - exponential reward (higher is better)
+        weight=10.0,  
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names="left_gripper_joint"),
             "command_name": "grip_ee_pose_left",
@@ -406,7 +405,7 @@ class RewardCfg:
 
     grip_ee_tracking_right = RewardTermCfg(
         func=binary_gripper_tracking,
-        weight=10.0,  # POSITIVE weight - exponential reward
+        weight=10.0,  
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names="right_gripper_joint"),
             "command_name": "grip_ee_pose_right",
@@ -417,7 +416,7 @@ class RewardCfg:
     # Smooth
     action_rate = RewardTermCfg(
         func=rewards.action_rate_l2,
-        weight=-0.005,  # Matched with trained config
+        weight=-0.001, 
     )
 
     

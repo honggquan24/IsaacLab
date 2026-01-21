@@ -65,17 +65,30 @@ class EvobotV1SceneConfig(InteractiveSceneCfg):
         gravity_bias=(0.0, 0.0, 0.0),
     )
 
-    cube = RigidObjectCfg(
-        prim_path="{ENV_REGEX_NS}/Cube",
+    cube_a = RigidObjectCfg(
+        prim_path="{ENV_REGEX_NS}/Cube_A",
         spawn=sim_utils.CuboidCfg(
-            size=(0.4, 0.2, 0.4),
+            size=(0.8, 0.8, 0.1),
             rigid_props=sim_utils.RigidBodyPropertiesCfg(),
-            mass_props=sim_utils.MassPropertiesCfg(mass=0.5),
+            mass_props=sim_utils.MassPropertiesCfg(mass=50),
             collision_props=sim_utils.CollisionPropertiesCfg(),
-            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 0.0, 0.0)),
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 0.0, 0.75)),
         ),
-        init_state=RigidObjectCfg.InitialStateCfg(pos=(0.5, 0.0, 0.2)),
+        init_state=RigidObjectCfg.InitialStateCfg(pos=(1.5, -2.0, 0.2)),
     )
+    
+    cube_b = RigidObjectCfg(
+        prim_path="{ENV_REGEX_NS}/Cube_B",
+        spawn=sim_utils.CuboidCfg(
+            size=(0.5, 0.2, 0.45),
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(),
+            mass_props=sim_utils.MassPropertiesCfg(mass=0.1),
+            collision_props=sim_utils.CollisionPropertiesCfg(),
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 1.0, 0.75)),
+        ),
+        init_state=RigidObjectCfg.InitialStateCfg(pos=(1.5, 0.0, 0.2)),
+    )
+    
     
     contact_forces = ContactSensorCfg(prim_path="{ENV_REGEX_NS}/Robot/evobot/evobot/.*")
 
@@ -102,9 +115,9 @@ class ActionCfg:
         scale={
             "left_wheel_joint": 400.0,    # Match effort_limit
             "right_wheel_joint": 400.0,
-            "arm_joint": 200.0,
-            "left_gripper_joint": 80.0,
-            "right_gripper_joint": 80.0,
+            "arm_joint": 00.0,
+            "left_gripper_joint": 00.0,
+            "right_gripper_joint": 00.0,
         },
     )
 
@@ -120,7 +133,7 @@ class CommandsCfg:
         rel_standing_envs=0.1,     # 10% thời gian đứng yên (tập balance tại chỗ)
 
         heading_command=False,     # FALSE = Dùng angular velocity (not heading angle)
-        debug_vis=True,
+        debug_vis=False,
 
         # RANGE AN TOÀN CHO BALANCE + Xoay
         ranges=commands.UniformVelocityCommandCfg.Ranges(
@@ -144,7 +157,7 @@ class CommandsCfg:
             pos_z=(0.0, 0.0),  # Not used
             roll=(0.0, 0.0),   # Not used
             pitch=(0.0, 0.0),  # Not used
-            yaw=(-math.pi, math.pi), # Use yaw as joint angle target (±90 degrees)
+            yaw=(-math.pi / 1.8, math.pi / 1.8), # Use yaw as joint angle target (±90 degrees)
         ),
     )
     
@@ -156,7 +169,7 @@ class CommandsCfg:
         ranges=commands.UniformPoseCommandCfg.Ranges(
             pos_x=(0.0, 0.0),  # Not used for height tracking
             pos_y=(0.0, 0.0),  # Not used for height tracking
-            pos_z=(0, 0.1),  # Target height range: ±15cm relative to base
+            pos_z=(0, 0.0),  # Target height range: ±15cm relative to base
             roll=(0.0, 0.0),
             pitch=(0.0, 0.0),
             yaw=(0.0, 0.0),
@@ -171,7 +184,7 @@ class CommandsCfg:
         ranges=commands.UniformPoseCommandCfg.Ranges(
             pos_x=(0.0, 0.0),  # Not used for height tracking
             pos_y=(0.0, 0.0),  # Not used for height tracking
-            pos_z=(0, 0.1),  # Target height range: ±15cm relative to base
+            pos_z=(0, 0.0),  # Target height range: ±15cm relative to base
             roll=(0.0, 0.0),
             pitch=(0.0, 0.0),
             yaw=(0.0, 0.0),
@@ -318,6 +331,43 @@ class EventCfg:
             },
         },
     )
+    
+    reset_cube_a = EventTermCfg(
+        func=events.reset_root_state_uniform,
+        mode="reset",
+        params={"asset_cfg": SceneEntityCfg(name="cube_a"),
+            "pose_range": {
+            "x": (0.0, 0.0),     # No randomization
+            "y": (0.0, 0.0),     # No randomization
+            "z": (0.12, 0.12),   # Fixed height
+            "roll": (0.0, 0.0),  # No randomization
+            "pitch": (0.0, 0.0), # No randomization
+            "yaw": (0.0, 0.0),   # No randomization
+            },
+            "velocity_range": {
+                "linear": (0.0, 0.0),  # No randomization
+                "angular": (0.0, 0.0), # No randomization
+        },},
+    )
+
+    reset_cube_b = EventTermCfg(
+        func=events.reset_root_state_uniform,
+        mode="reset",
+        params={"asset_cfg": SceneEntityCfg(name="cube_b"), 
+            "pose_range": {
+            "x": (0.0, 0.0),     # No randomization
+            "y": (0.0, 0.0),     # No randomization
+            "z": (0.12, 0.12),   # Fixed height
+            "roll": (0.0, 0.0),  # No randomization
+            "pitch": (0.0, 0.0), # No randomization
+            "yaw": (0.0, 0.0),   # No randomization
+        },
+        "velocity_range": {
+            "linear": (0.0, 0.0),  # No randomization
+            "angular": (0.0, 0.0), # No randomization
+        },},
+)
+
 
     # REMOVED: randomize_com - No COM randomization for clean testing
     # REMOVED: external_push_arm - No external disturbances for clean testing
@@ -458,5 +508,5 @@ class EvobotV1VelocityBalanceEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.dt = 1 / 60.0
         
         # Viewer
-        self.viewer.eye = (5.0, 5.0, 3.0)
+        self.viewer.eye = (-4.0, 4.0, 3.0)
         self.viewer.lookat = (0.0, 0.0, 0.5)

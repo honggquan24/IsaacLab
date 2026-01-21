@@ -334,9 +334,9 @@ def track_ang_vel_z_l2(
     ang_vel = asset.data.root_ang_vel_b[:, 2]
 
     error = ang_cmd - ang_vel
-    lost = error ** 2
+    cost = error ** 2
 
-    return lost
+    return cost
 
 def track_lin_vel_xy_l2(
     env: ManagerBasedRLEnv,
@@ -354,6 +354,6 @@ def track_lin_vel_xy_l2(
     vel_xy = asset.data.root_lin_vel_b[:, :2]
 
     error = vel_cmd_xy - vel_xy
-    lost = torch.sum(error ** 2, dim=1)
+    cost = torch.sum(error ** 2, dim=1)
 
-    return  lost
+    return  cost

@@ -80,10 +80,10 @@ EVOBOT_V1_CFG = ArticulationCfg(
             joint_names_expr=[".*_wheel_joint"],
             saturation_effort=500.0,    
             effort_limit=400.0,          
-            velocity_limit=100.0,        
+            velocity_limit=200.0,        
             stiffness=0.0,
-            damping=0.5,                   
-            armature=0.001,
+            damping=1.0,                   
+            armature=0.01,
             friction=0.01,                  
             dynamic_friction=0.01,
             viscous_friction=0.01,
@@ -92,15 +92,15 @@ EVOBOT_V1_CFG = ArticulationCfg(
         # ===== Arm =====
         "arm": DCMotorCfg(
             joint_names_expr=["arm_joint"],
-            saturation_effort=300.0,       # ↓ Giảm (từ 500)
-            effort_limit=200.0,
-            velocity_limit=50.0,            # ↓ Giảm (từ 100)
+            saturation_effort=400.0,       # ↓ Giảm (từ 500)
+            effort_limit=380.0,
+            velocity_limit=2.0,            # ↓ Giảm (từ 100)
             stiffness=0.0,
-            damping=2.0,                    # ↓ Giảm (từ 100) - QUAN TRỌNG
-            armature=0.001,
-            friction=0.01,
+            damping=1.0,                    # ↓ Giảm (từ 100) - QUAN TRỌNG
+            armature=0.01,
+            friction=0.05,
             dynamic_friction=0.01,
-            viscous_friction=0.01,
+            viscous_friction=0.05,
         ),
 
         # ===== Grabbers =====

@@ -7,3 +7,4 @@
 
 from . import agents  # noqa: F401
 from .velocity_env_cfg import *  # noqa: F401, F403
+from .velocity_env_cfg_arm_finetune import *  # noqa: F401, F403
