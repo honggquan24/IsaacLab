@@ -77,6 +77,8 @@ import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils import get_checkpoint_path
 from isaaclab_tasks.utils.hydra import hydra_task_config
 
+import isaaclab_assets  # noqa: F401  ← register custom tasks (legged_v3, evobot_v1, ...)
+
 # PLACEHOLDER: Extension template (do not remove this comment)
 
 

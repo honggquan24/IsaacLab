@@ -28,6 +28,8 @@ class EvobotVelocityPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         init_noise_std=0.05,
         actor_obs_normalization=True,
         critic_obs_normalization=True,
+        # actor_hidden_dims=[256, 512, 256],
+        # critic_hidden_dims=[256, 512, 256],
         actor_hidden_dims=[128, 256, 128],
         critic_hidden_dims=[128, 256, 128],
         activation="elu",
@@ -41,7 +43,7 @@ class EvobotVelocityPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         entropy_coef=0.01,
         num_learning_epochs=4,
         num_mini_batches=32,
-        learning_rate=1.0e-3,
+        learning_rate=1.0e-4,
         schedule="adaptive",
         gamma=0.99,
         lam=0.95,
@@ -80,7 +82,7 @@ class EvobotVelocityPretrainPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         init_noise_std=0.1,  # Low noise to keep actions in [-1, 1] range
         actor_obs_normalization=True,
         critic_obs_normalization=True,
-        actor_hidden_dims=[64, 128, 64],  # Smaller than low-level
+        actor_hidden_dims=[64, 128, 64],
         critic_hidden_dims=[64, 128, 64],
         activation="elu",
     )

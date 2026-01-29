@@ -6,34 +6,66 @@
 
 """Test RL policy velocity tracking performance with step response analysis.
 
-This script tests how well the trained RL policy tracks velocity commands.
-It generates step commands and logs both commanded and actual velocities.
+This script tests how well the trained RL policy tracks commands (velocity or arm).
+It generates step commands and logs both commanded and actual values.
 Output CSV can be used to plot tracking response curves.
+Supports action smoothing to reduce oscillations.
 
 Usage:
-    # Test with trained RL policy
-    ./isaaclab.sh -p source/isaaclab_assets/isaaclab_assets/evobot_v1/navigation/velocity/test_rl_velocity_tracking.py \
-        --load_run 2026-01-15_01-19-39 \
-        --checkpoint model_500.pt
+    # Test linear velocity (vx) - DEFAULT
+    ./isaaclab.sh -p source/isaaclab_assets/isaaclab_assets/evobot_v1/test/rl_tests/test_rl_velocity_tracking.py \
+        --load_run 2026-01-23_02-20-53 \
+        --checkpoint model_700.pt \
+        --test_mode linear \
+        --step_duration 5.0 \
+        --step_values "0.0"
 
-    # Custom test sequence (step values)
+    ./isaaclab.sh -p source/isaaclab_assets/isaaclab_assets/evobot_v1/test/rl_tests/test_rl_velocity_tracking.py \
+        --task Isaac-Evobot-V1-Arm-FineTune \
+        --load_run 2026-01-19_21-41-30 \
+        --checkpoint model_1045.pt \
+        --test_mode linear \
+        --step_duration 5.0 \
+        --step_values "0.0"
+
+    # Test angular velocity (wz)
     ./isaaclab.sh -p source/isaaclab_assets/isaaclab_assets/evobot_v1/test/test_rl_velocity_tracking.py \
         --load_run 2026-01-21_08-24-47 \
         --checkpoint model_1410.pt \
-        --step_duration 10.0 \
-        --step_values "0.0,0.5,0.0,-0.3,0.0,0.8,0.0"
+        --test_mode angular \
+        --step_values "0.0,0.5,0.0,-0.5,0.0"
 
-    # Test only linear velocity
-    ./isaaclab.sh -p source/isaaclab_assets/isaaclab_assets/evobot_v1/navigation/velocity/test_rl_velocity_tracking.py \
-        --load_run 2026-01-15_01-19-39 \
-        --checkpoint model_500.pt \
-        --test_linear
+    # Test both linear and angular (combined)
+    ./isaaclab.sh -p source/isaaclab_assets/isaaclab_assets/evobot_v1/test/test_rl_velocity_tracking.py \
+        --load_run 2026-01-21_08-24-47 \
+        --checkpoint model_1410.pt \
+        --test_mode combined \
+        --step_values "0.0,0.3,0.0"
 
-    # Test only angular velocity
-    ./isaaclab.sh -p source/isaaclab_assets/isaaclab_assets/evobot_v1/navigation/velocity/test_rl_velocity_tracking.py \
-        --load_run 2026-01-15_01-19-39 \
-        --checkpoint model_500.pt \
-        --test_angular
+    # Test arm joint angle tracking
+    ./isaaclab.sh -p source/isaaclab_assets/isaaclab_assets/evobot_v1/test/test_rl_velocity_tracking.py \
+        --load_run 2026-01-21_08-24-47 \
+        --checkpoint model_1410.pt \
+        --test_mode arm \
+        --step_values "0.0,1.57,-1.57,0.0"
+
+    # Test with fixed action smoothing (recommended: 0.3-0.7)
+    ./isaaclab.sh -p source/isaaclab_assets/isaaclab_assets/evobot_v1/test/test_rl_velocity_tracking.py \
+        --load_run 2026-01-21_08-24-47 \
+        --checkpoint model_1410.pt \
+        --test_mode linear \
+        --step_values "0.0,0.5,0.0,-0.3,0.0" \
+        --action_smoothing 0.5
+
+    # Test with adaptive smoothing (BEST: auto-adjusts alpha based on command changes)
+    ./isaaclab.sh -p source/isaaclab_assets/isaaclab_assets/evobot_v1/test/test_rl_velocity_tracking.py \
+        --load_run 2026-01-22_17-28-25 \
+        --checkpoint model_600.pt \
+        --test_mode linear \
+        --step_values "0.0,0.15,0.0,-0.5" \
+        --adaptive_smoothing \
+        --smoothing_fast 0.8 \
+        --smoothing_slow 0.2
 
 Output:
     - Console: Real-time tracking data
@@ -42,6 +74,12 @@ Output:
 
 CSV Columns:
     time, vx_cmd, vx_actual, wz_cmd, wz_actual, vx_error, wz_error
+
+Test Modes:
+    - linear: Test linear velocity (vx) only
+    - angular: Test angular velocity (wz) only
+    - arm: Test arm joint angle tracking
+    - combined: Test both vx and wz simultaneously
 """
 
 import argparse
@@ -70,11 +108,23 @@ parser.add_argument(
     default="0.0,0.1,0.0,-0.1,0.0",
     help="Comma-separated velocity step values",
 )
-parser.add_argument("--test_linear", action="store_true", help="Test linear velocity (vx) - default if neither specified")
-parser.add_argument("--test_angular", action="store_true", help="Test angular velocity (wz)")
+parser.add_argument(
+    "--test_mode",
+    type=str,
+    default="linear",
+    choices=["linear", "angular", "arm", "combined"],
+    help="Test mode: linear (vx), angular (wz), arm (joint angle), combined (vx+wz)",
+)
 
 # Logging parameters
 parser.add_argument("--log_interval", type=int, default=1, help="Log every N steps (1=every step)")
+
+# Action smoothing
+parser.add_argument("--action_smoothing", type=float, default=0.0, help="Action smoothing factor (0.0=no smoothing, 0.9=heavy smoothing)")
+parser.add_argument("--adaptive_smoothing", action="store_true", help="Enable adaptive smoothing (alpha adjusts based on command changes)")
+parser.add_argument("--smoothing_fast", type=float, default=0.2, help="Alpha when command changes (fast response)")
+parser.add_argument("--smoothing_slow", type=float, default=0.7, help="Alpha when command stable (heavy smoothing)")
+parser.add_argument("--command_change_threshold", type=float, default=0.05, help="Threshold to detect command change")
 
 parser.add_argument(
     "--disable_fabric", action="store_true", default=False, help="Disable fabric and use USD I/O operations."
@@ -99,7 +149,12 @@ from rsl_rl.runners import OnPolicyRunner
 class TrackingLogger:
     """CSV logger for velocity tracking data."""
 
-    def __init__(self, log_dir: str = "logs", filename_prefix: str = "rl_velocity_tracking"):
+    def __init__(self, log_dir: str = None, filename_prefix: str = "rl_velocity_tracking"):
+        # Default to test/logs/ directory relative to this script
+        if log_dir is None:
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            log_dir = os.path.join(script_dir, "logs")
+
         os.makedirs(log_dir, exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.filepath = os.path.join(log_dir, f"{filename_prefix}_{timestamp}.csv")
@@ -209,9 +264,11 @@ def main():
     # Parse step values
     step_values = [float(x) for x in args_cli.step_values.split(",")]
 
-    # Default: test linear if neither specified
-    test_linear = args_cli.test_linear or not args_cli.test_angular
-    test_angular = args_cli.test_angular
+    # Determine test mode
+    test_mode = args_cli.test_mode
+    test_linear = test_mode in ["linear", "combined"]
+    test_angular = test_mode in ["angular", "combined"]
+    test_arm = test_mode == "arm"
 
     # Create environment
     env_cfg = parse_env_cfg(
@@ -228,9 +285,15 @@ def main():
     print("RL POLICY VELOCITY TRACKING TEST")
     print("=" * 80)
     print(f"Task: {args_cli.task}")
+    print(f"Test mode: {test_mode.upper()}")
     print(f"Test duration: {total_duration:.1f}s ({len(step_values)} steps × {args_cli.step_duration:.1f}s)")
     print(f"Step values: {step_values}")
-    print(f"Testing: {'Linear (vx)' if test_linear else ''} {'Angular (wz)' if test_angular else ''}")
+    if test_linear:
+        print("  - Testing: Linear velocity (vx)")
+    if test_angular:
+        print("  - Testing: Angular velocity (wz)")
+    if test_arm:
+        print("  - Testing: Arm joint angle")
     print("=" * 80)
 
     # Load agent config
@@ -253,14 +316,64 @@ def main():
     env.reset()
     obs = env_wrapped.get_observations()
 
-    # Get robot
-    robot = env.unwrapped.scene["robot"]
+    # Get robot and environment internals
+    env_unwrapped = env.unwrapped  # type: ignore
+    robot = env_unwrapped.scene["robot"]
 
     # Get timestep
-    dt = env.unwrapped.physics_dt * env.unwrapped.cfg.decimation
+    dt = env_unwrapped.physics_dt * env_unwrapped.cfg.decimation
     control_freq = 1.0 / dt
 
+    # CRITICAL: Disable automatic command resampling for ALL command terms
+    # Set resampling time to a very large value so commands don't change automatically
+    command_manager = env_unwrapped.command_manager
+
+    # Find the velocity command term
+    velocity_term_name = None
+    arm_term_name = None
+
+    print(f"[INFO] Available command terms: {command_manager.active_terms}")
+
+    for term_name in command_manager.active_terms:
+        cmd_term = command_manager._terms[term_name]
+        original_resampling_range = cmd_term.cfg.resampling_time_range
+
+        # Identify term type
+        if "velocity" in term_name.lower():
+            velocity_term_name = term_name
+            print(f"[INFO] Found velocity command term: '{term_name}'")
+        elif "arm" in term_name.lower():
+            arm_term_name = term_name
+            print(f"[INFO] Found arm command term: '{term_name}'")
+
+        # Disable resampling for all terms
+        cmd_term.cfg.resampling_time_range = (1e6, 1e6)
+        cmd_term.time_left[:] = 1e6
+        print(f"  - Disabled resampling for '{term_name}' (was {original_resampling_range})")
+
+    if velocity_term_name is None and (test_linear or test_angular):
+        raise RuntimeError("No velocity command term found, but test mode requires it!")
+    if arm_term_name is None and test_arm:
+        raise RuntimeError("No arm command term found, but test mode requires it!")
+
     print(f"\n[INFO] Control frequency: {control_freq:.1f} Hz (dt={dt:.4f}s)")
+
+    # Action smoothing setup
+    alpha = args_cli.action_smoothing
+    prev_actions = None
+    prev_vel_command = None
+    use_adaptive = args_cli.adaptive_smoothing
+
+    if alpha > 0.0 or use_adaptive:
+        if use_adaptive:
+            print(f"[INFO] Adaptive EMA smoothing enabled:")
+            print(f"      - Fast alpha (command change): {args_cli.smoothing_fast:.2f}")
+            print(f"      - Slow alpha (stable): {args_cli.smoothing_slow:.2f}")
+            print(f"      - Change threshold: {args_cli.command_change_threshold:.3f}")
+        else:
+            print(f"[INFO] Fixed EMA smoothing enabled: alpha={alpha:.2f}")
+        print(f"      Formula: action_smooth = alpha * prev_action + (1-alpha) * current_action")
+
     print("[INFO] Starting test...\n")
 
     # Data storage
@@ -276,8 +389,12 @@ def main():
     elapsed_time = 0.0
     current_step_idx = 0
 
-    # Get command manager (velocity commands are managed by environment)
-    command_manager = env.unwrapped.command_manager
+    print(f"[INFO] Commands will be overridden with manual step commands")
+    if test_linear or test_angular:
+        print(f"  - Velocity term: '{velocity_term_name}'")
+    if test_arm:
+        print(f"  - Arm term: '{arm_term_name}'")
+    print()
 
     print(f"{'Time':>8s} {'VxCmd':>10s} {'VxAct':>10s} {'WzCmd':>10s} {'WzAct':>10s} {'VxErr':>10s} {'WzErr':>10s}")
     print("-" * 78)
@@ -285,7 +402,7 @@ def main():
     try:
         while simulation_app.is_running() and elapsed_time < total_duration:
             with torch.inference_mode():
-                # Update command manually based on step index
+                # Check if we need to update to next step command
                 if elapsed_time >= (current_step_idx + 1) * args_cli.step_duration:
                     current_step_idx += 1
                     if current_step_idx < len(step_values):
@@ -294,23 +411,73 @@ def main():
                         print(f"{'Time':>8s} {'VxCmd':>10s} {'VxAct':>10s} {'WzCmd':>10s} {'WzAct':>10s} {'VxErr':>10s} {'WzErr':>10s}")
                         print("-" * 78)
 
-                # Set command manually (override environment's command)
-                # Access via command manager's active terms
-                if len(command_manager.active_terms) > 0:
-                    term_name = command_manager.active_terms[0]
-                    term_command = command_manager.get_command(term_name)
+                # CRITICAL: Set command BEFORE getting observations
+                # This ensures the policy sees the correct command in its observation
+
+                # Set velocity commands (vx, vy, wz)
+                if test_linear or test_angular:
+                    vel_command = command_manager.get_command(velocity_term_name)
 
                     if test_linear:
-                        term_command[:, 0] = step_values[current_step_idx]  # vx
+                        vel_command[:, 0] = step_values[current_step_idx]  # vx
                     else:
-                        term_command[:, 0] = 0.0
+                        vel_command[:, 0] = 0.0
+
+                    # vy is always 0 for differential drive
+                    vel_command[:, 1] = 0.0
 
                     if test_angular:
-                        term_command[:, 1] = step_values[current_step_idx]  # wz
+                        vel_command[:, 2] = step_values[current_step_idx]  # wz
                     else:
-                        term_command[:, 1] = 0.0
+                        vel_command[:, 2] = 0.0
 
-                # Get current velocity
+                # Set arm command (joint angle via yaw component)
+                if test_arm:
+                    arm_command = command_manager.get_command(arm_term_name)
+                    # Arm command structure: [pos_x, pos_y, pos_z, roll, pitch, yaw]
+                    # We use yaw component as joint angle target
+                    arm_command[:, 5] = step_values[current_step_idx]  # yaw = joint angle
+
+                # Update observations AFTER setting command
+                # This ensures the observation includes the correct command
+                obs = env_wrapped.get_observations()
+
+                # Get action from policy using updated observations
+                actions = policy(obs)
+
+                # Apply action smoothing (exponential moving average)
+                if alpha > 0.0 or use_adaptive:
+                    if prev_actions is None:
+                        # First step: initialize with current action
+                        prev_actions = actions.clone()
+                        if use_adaptive and (test_linear or test_angular):
+                            prev_vel_command = vel_command.clone()
+                    else:
+                        # Determine alpha (fixed or adaptive)
+                        current_alpha = alpha
+
+                        if use_adaptive:
+                            # Adaptive smoothing: adjust alpha based on command changes
+                            if test_linear or test_angular and prev_vel_command is not None:
+                                # Detect command change
+                                cmd_diff = torch.abs(vel_command - prev_vel_command).max().item()
+
+                                if cmd_diff > args_cli.command_change_threshold:
+                                    # Command changed: use fast alpha (low value = fast response)
+                                    current_alpha = args_cli.smoothing_fast
+                                else:
+                                    # Command stable: use slow alpha (high value = heavy smoothing)
+                                    current_alpha = args_cli.smoothing_slow
+
+                                prev_vel_command = vel_command.clone()
+                            else:
+                                current_alpha = args_cli.smoothing_slow
+
+                        # Apply smoothing: action_smooth = alpha * prev_action + (1-alpha) * current_action
+                        actions = current_alpha * prev_actions + (1.0 - current_alpha) * actions
+                        prev_actions = actions.clone()
+
+                # Get current velocity BEFORE stepping
                 vel_current = torch.stack(
                     [
                         robot.data.root_lin_vel_b[:, 0],  # vx
@@ -319,23 +486,19 @@ def main():
                     dim=-1,
                 )
 
-                # Get action from policy
-                actions = policy(obs)
-
                 # Step environment
                 obs, reward, dones, _ = env_wrapped.step(actions)
 
                 # Log data
                 if step_count % args_cli.log_interval == 0:
-                    # Get current command
-                    if len(command_manager.active_terms) > 0:
-                        term_name = command_manager.active_terms[0]
-                        cmd_tensor = command_manager.get_command(term_name)
-                        vx_cmd = cmd_tensor[0, 0].item()
-                        wz_cmd = cmd_tensor[0, 1].item()
+                    # Read the commands we just set
+                    if test_linear or test_angular:
+                        vx_cmd = vel_command[0, 0].item()
+                        wz_cmd = vel_command[0, 2].item()  # wz is index 2, not 1!
                     else:
                         vx_cmd = 0.0
                         wz_cmd = 0.0
+
                     vx_actual = vel_current[0, 0].item()
                     wz_actual = vel_current[0, 1].item()
 
