@@ -53,7 +53,7 @@ from . import navigation
 #   Train (production):
 #   ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
 #       --task=Isaac-Evobot-V1-Velocity \
-#       --num_envs 7000 \
+#       --num_envs 5000 \
 #       --headless --rendering_mode performance
 #
 #   Train (debug):
@@ -65,9 +65,9 @@ from . import navigation
 #   Continue training from checkpoint:
 #   ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
 #       --task=Isaac-Evobot-V1-Velocity \
-#       --num_envs 7000 \
-#       --resume --load_run=2026-01-17_15-33-57 \
-#       --checkpoint=model_40.pt \
+#       --num_envs 5000 \
+#       --resume --load_run=2026-01-22_17-28-25 \
+#       --checkpoint=model_600.pt \
 #       --video --rendering_mode performance \
 #       --headless
 #

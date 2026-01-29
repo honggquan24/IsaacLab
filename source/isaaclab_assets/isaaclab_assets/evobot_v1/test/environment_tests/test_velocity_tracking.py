@@ -22,11 +22,11 @@ Usage:
         --kp 1.0 --ki 0.1 --kd 0.5
 
     # Custom test sequence
-    ./isaaclab.sh -p source/isaaclab_assets/isaaclab_assets/evobot_v1/navigation/velocity/test_velocity_tracking.py \
-        --load_run 2026-01-15_01-19-39 \
-        --checkpoint model_500.pt \
-        --step_duration 5.0 \
-        --step_values 0.0,0.5,0.0,-0.3,0.0
+    ./isaaclab.sh -p source/isaaclab_assets/isaaclab_assets/evobot_v1/test/environment_tests/test_velocity_tracking.py \
+        --load_run 2026-01-22_19-26-20 \
+        --checkpoint model_690.pt \
+        --step_duration 10.0 \
+        --step_values 0.0,0.5,0.0,-0.5
 
 Output:
     - Console: Real-time tracking performance metrics
@@ -511,7 +511,8 @@ def main():
                     # Update command in observation (if using RL policy)
                     # Note: Assumes velocity command is in observation
                     actions = policy(obs)
-                    obs, reward, terminated, truncated, info = env_wrapped.step(actions)
+                    # RslRlVecEnvWrapper returns 4 values (obs, reward, done, info) instead of 5
+                    obs, reward, _, _ = env_wrapped.step(actions)
 
                 # Log data
                 if step_count % args_cli.log_interval == 0:

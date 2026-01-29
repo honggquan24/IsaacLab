@@ -131,7 +131,7 @@ class CommandsCfg:
             pos_z=(0.0, 0.0),  # Not used
             roll=(0.0, 0.0),   # Not used
             pitch=(0.0, 0.0),  # Not used
-            yaw=(-math.pi / 2, math.pi / 2), # Use yaw as joint angle target (±90 degrees)
+            yaw=(-0 / 2, 0 / 2), # Use yaw as joint angle target (±90 degrees)
         ),
     )
     

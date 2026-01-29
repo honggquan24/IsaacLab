@@ -20,7 +20,7 @@ Cost function: Minimize squared error + control effort
 
 Usage:
     # Run auto-tuning with default settings
-    ./isaaclab.sh -p source/isaaclab_assets/isaaclab_assets/evobot_v1/balance/test_pid_autotune.py
+    ./isaaclab.sh -p source/isaaclab_assets/isaaclab_assets/evobot_v1/navigation/balance/test_pid_autotune.py
 
     # Run with custom initial gains
     ./isaaclab.sh -p source/isaaclab_assets/isaaclab_assets/evobot_v1/balance/test_pid_autotune.py \
@@ -257,7 +257,7 @@ class PIDAutoTuner:
 
         # Track iterations without improvement for early stopping
         self.no_improvement_count = 0
-        self.max_no_improvement = 10
+        self.max_no_improvement = 99999
 
     def evaluate_gains(self, gains: list[float]) -> float:
         """Evaluate cost function for given gains.

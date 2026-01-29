@@ -5,9 +5,15 @@ This script reads CSV data from test_rl_velocity_tracking.py and generates
 professional plots with tracking performance analysis.
 
 Usage:
-    python plot_velocity_tracking.py logs/rl_velocity_tracking_20260116_123456.csv
-    python plot_velocity_tracking.py logs/rl_velocity_tracking_20260116_123456.csv --output my_plot.png
-    python plot_velocity_tracking.py logs/rl_velocity_tracking_20260116_123456.csv --no-show
+    # Run from test directory
+    python source/isaaclab_assets/isaaclab_assets/evobot_v1/test/plot_velocity_tracking.py \
+        source/isaaclab_assets/isaaclab_assets/evobot_v1/test/logs/rl_velocity_tracking_20260116_123456.csv
+
+    python source/isaaclab_assets/isaaclab_assets/evobot_v1/test/plot_velocity_tracking.py \
+        source/isaaclab_assets/isaaclab_assets/evobot_v1/test/logs/rl_velocity_tracking_20260116_123456.csv --output my_plot.png
+
+    python source/isaaclab_assets/isaaclab_assets/evobot_v1/test/plot_velocity_tracking.py \
+        source/isaaclab_assets/isaaclab_assets/evobot_v1/test/logs/rl_velocity_tracking_20260116_123456.csv --no-show
 """
 
 import argparse

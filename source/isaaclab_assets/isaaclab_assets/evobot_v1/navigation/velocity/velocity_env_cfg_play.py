@@ -115,9 +115,9 @@ class ActionCfg:
         scale={
             "left_wheel_joint": 400.0,    # Match effort_limit
             "right_wheel_joint": 400.0,
-            "arm_joint": 00.0,
-            "left_gripper_joint": 00.0,
-            "right_gripper_joint": 00.0,
+            "arm_joint": 100.0,
+            "left_gripper_joint": 80.0,
+            "right_gripper_joint": 80.0,
         },
     )
 
@@ -157,7 +157,8 @@ class CommandsCfg:
             pos_z=(0.0, 0.0),  # Not used
             roll=(0.0, 0.0),   # Not used
             pitch=(0.0, 0.0),  # Not used
-            yaw=(-math.pi / 1.8, math.pi / 1.8), # Use yaw as joint angle target (±90 degrees)
+            # yaw=(-math.pi / 5, math.pi / 5), # Use yaw as joint angle target (±90 degrees)
+            yaw=(0.0, 0.0)
         ),
     )
     
@@ -499,7 +500,7 @@ class EvobotV1VelocityBalanceEnvCfg(ManagerBasedRLEnvCfg):
     
     def __post_init__(self):
         # General
-        self.sim.device = "gpu"
+        self.sim.device = "cuda"
         self.sim.use_fabric = True
         
         self.decimation = 1  

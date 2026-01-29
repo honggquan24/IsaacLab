@@ -105,16 +105,16 @@ class CommandsCfg:
         resampling_time_range=(3.0, 6.0),  # Giữ command 3-5s
 
         # QUAN TRỌNG: Tùy chỉnh cho balance
-        rel_standing_envs=0.3,     # 30% thời gian đứng yên (tập balance tại chỗ)
+        rel_standing_envs=0.5,     # 30% thời gian đứng yên (tập balance tại chỗ)
 
         heading_command=False,     # FALSE = Dùng angular velocity (not heading angle)
         debug_vis=True,
 
         # RANGE AN TOÀN CHO BALANCE + Xoay
         ranges=commands.UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(-1.0, 1.0),      # TỐC ĐỘ CHẬM để giữ balance
+            lin_vel_x=(-0.5, 0.5),      # TỐC ĐỘ CHẬM để giữ balance
             lin_vel_y=(0.0, 0.0),        # BỎ y-velocity (differential drive không đi ngang)
-            ang_vel_z=(-1.0, 1.0),       # Angular velocity range
+            ang_vel_z=(-0.5, 0.5),       # Angular velocity range
             heading=(0.0, 0.0),          # Ignored khi heading_command=False
         ),
     )
@@ -132,7 +132,8 @@ class CommandsCfg:
             pos_z=(0.0, 0.0),  # Not used
             roll=(0.0, 0.0),   # Not used
             pitch=(0.0, 0.0),  # Not used
-            yaw=(-math.pi * 0 , math.pi * 0 ), # Use yaw as joint angle target (±90 degrees)
+            # yaw=(-math.pi / 2, math.pi / 2), # Use yaw as joint angle target (±90 degrees)
+            yaw=(0.0, 0.0)
         ),
     )
     
@@ -310,40 +311,40 @@ class EventCfg:
         },
     )
     
-    randomize_com = EventTermCfg(
-        func=mdp_v.randomize_rigid_body_com,
-        mode="reset",
-        params={
-            "asset_cfg": SceneEntityCfg(
-                "robot",
-                body_names=[
-                    "arm_link",
-                    "gripper.*",
-                ],
-            ),
-            "com_range": {
-                "x": (-0.01, 0.01),
-                "y": (-0.01, 0.01),
-                "z": (-0.01, 0.01),
-            },
-        },
-    )
+    # randomize_com = EventTermCfg(
+    #     func=mdp_v.randomize_rigid_body_com,
+    #     mode="reset",
+    #     params={
+    #         "asset_cfg": SceneEntityCfg(
+    #             "robot",
+    #             body_names=[
+    #                 "arm_link",
+    #                 "gripper.*",
+    #             ],
+    #         ),
+    #         "com_range": {
+    #             "x": (-0.01, 0.01),
+    #             "y": (-0.01, 0.01),
+    #             "z": (-0.01, 0.01),
+    #         },
+    #     },
+    # )
     
-    external_push_arm = EventTermCfg(
-        func=mdp_v.apply_external_force_torque,
-        mode="interval",
-        interval_range_s=(1.0, 2.0),
-        params={
-            "asset_cfg": SceneEntityCfg(
-                "robot",
-                body_names=[
-                    "arm_link",
-                ],
-            ),
-            "force_range": (-100.0, 100.0),      
-            "torque_range": (-100.0, 100.0),   
-        },
-    )
+    # external_push_arm = EventTermCfg(
+    #     func=mdp_v.apply_external_force_torque,
+    #     mode="interval",
+    #     interval_range_s=(0.0, 1.0),
+    #     params={
+    #         "asset_cfg": SceneEntityCfg(
+    #             "robot",
+    #             body_names=[
+    #                 "arm_link",
+    #             ],
+    #         ),
+    #         "force_range": (-10.0, 10.0),      
+    #         "torque_range": (-10.0, 10.0),   
+    #     },
+    # )
 
 
 
@@ -360,32 +361,30 @@ class RewardCfg:
 
     terminating = RewardTermCfg(
         func=rewards.is_terminated,
-        weight=-100.0,
+        weight=-5000.0,
     )
     
     # (3) Command tracking
     lin_vel_tracking = RewardTermCfg(
-        func=rewards.track_lin_vel_xy_exp,
-        weight=25.0,  
+        func=rewards.track_lin_vel_xy_l2,
+        weight=-100.0,  
         params={
             "command_name": "velocity_command",
-            "std": 0.5,
         },
     )
 
     ang_vel_tracking = RewardTermCfg(
-        func=rewards.track_ang_vel_z_exp,
-        weight=25.0,  
+        func=rewards.track_ang_vel_z_l2,
+        weight=-100.0,  
         params={
             "command_name": "velocity_command",
-            "std": 0.5,
         },
     )
 
     # Joint angle tracking - Arm tracks commanded angle (from yaw component)
     arm_joint_tracking = RewardTermCfg(
         func=joint_angle_command_l2,
-        weight=-10.0, 
+        weight=-100.0, 
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names="arm_joint"),
             "command_name": "arm_ee_pose",  # Extract yaw from this command
@@ -395,7 +394,7 @@ class RewardCfg:
     # BINARY GRIPPER TRACKING - MAIN FOCUS (Exponential reward for binary targets)
     grip_ee_tracking_left = RewardTermCfg(
         func=binary_gripper_tracking,
-        weight=10.0,  
+        weight=20.0,  
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names="left_gripper_joint"),
             "command_name": "grip_ee_pose_left",
@@ -405,7 +404,7 @@ class RewardCfg:
 
     grip_ee_tracking_right = RewardTermCfg(
         func=binary_gripper_tracking,
-        weight=10.0,  
+        weight=20.0,  
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names="right_gripper_joint"),
             "command_name": "grip_ee_pose_right",
@@ -417,6 +416,14 @@ class RewardCfg:
     action_rate = RewardTermCfg(
         func=rewards.action_rate_l2,
         weight=-0.001, 
+    )
+    
+    velocity_arm = RewardTermCfg(
+        func=joint_vel_l2,
+        weight=-10,
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names="arm_joint"),
+        }
     )
 
     
@@ -493,7 +500,7 @@ class EvobotV1VelocityBalanceEnvCfg(ManagerBasedRLEnvCfg):
     
     def __post_init__(self):
         # General
-        self.sim.device = "gpu"
+        self.sim.device = "cuda"
         self.sim.use_fabric = True
         
         self.decimation = 1  

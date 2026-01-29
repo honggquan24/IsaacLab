@@ -10,11 +10,27 @@ This script loads a trained policy and allows you to control:
 - Base velocity commands (linear x, angular z)
 - Arm joint angle (yaw command)
 - Direct gripper action override (both hands)
+- Action smoothing (exponential moving average)
 
 Usage:
-    ./isaaclab.sh -p source/isaaclab_assets/isaaclab_assets/evobot_v1/tests/test_policy_keyboard_full.py \
-        --load_run 2026-01-20_01-01-48 \
-        --checkpoint model_1515.pt
+    # Basic usage
+    ./isaaclab.sh -p source/isaaclab_assets/isaaclab_assets/evobot_v1/test/test_policy_keyboard_full_copy.py \
+        --load_run 2026-01-21_08-24-47 \
+        --checkpoint model_1410.pt
+
+    # With fixed action smoothing (recommended: 0.3-0.7 for smooth control)
+    ./isaaclab.sh -p source/isaaclab_assets/isaaclab_assets/evobot_v1/test/test_policy_keyboard_full_copy.py \
+        --load_run 2026-01-21_08-24-47 \
+        --checkpoint model_1410.pt \
+        --action_smoothing 0.5
+
+    # With adaptive smoothing (BEST: auto-adjusts based on command changes)
+    ./isaaclab.sh -p source/isaaclab_assets/isaaclab_assets/evobot_v1/test/test_policy_keyboard_full_copy.py \
+        --load_run 2026-01-21_08-24-47 \
+        --checkpoint model_1410.pt \
+        --adaptive_smoothing \
+        --smoothing_fast 0.2 \
+        --smoothing_slow 0.7
 
 Keyboard Controls:
     Base Velocity:
@@ -55,6 +71,11 @@ parser.add_argument("--checkpoint", type=str, default="model_500.pt", help="Chec
 parser.add_argument("--vel_sensitivity", type=float, default=0.5, help="Base velocity sensitivity")
 parser.add_argument("--arm_sensitivity", type=float, default=0.3, help="Arm rotation sensitivity (rad/step)")
 parser.add_argument("--gripper_sensitivity", type=float, default=0.01, help="Gripper height sensitivity (m/step)")
+parser.add_argument("--action_smoothing", type=float, default=0.0, help="Action smoothing factor (0.0=no smoothing, 0.9=heavy smoothing)")
+parser.add_argument("--adaptive_smoothing", action="store_true", help="Enable adaptive smoothing (alpha adjusts based on command changes)")
+parser.add_argument("--smoothing_fast", type=float, default=0.2, help="Alpha when command changes (fast response)")
+parser.add_argument("--smoothing_slow", type=float, default=0.7, help="Alpha when command stable (heavy smoothing)")
+parser.add_argument("--command_change_threshold", type=float, default=0.05, help="Threshold to detect command change")
 parser.add_argument(
     "--disable_fabric", action="store_true", default=False, help="Disable fabric and use USD I/O operations."
 )
@@ -102,9 +123,9 @@ def print_keyboard_help():
     print("=" * 80 + "\n")
 
 
-# ./isaaclab.sh -p source/isaaclab_assets/isaaclab_assets/evobot_v1/tests/test_policy_keyboard_full.py         --load_run 2026-01-20_01-01-48         --checkpoint model_1335.pt
+# ./isaaclab.sh -p source/isaaclab_assets/isaaclab_assets/evobot_v1/test/test_policy_keyboard_full.py         --load_run 2026-01-20_01-01-48         --checkpoint model_1335.pt
 
-# ./isaaclab.sh -p source/isaaclab_assets/isaaclab_assets/evobot_v1/tests/test_policy_keyboard_full_copy.py         --load_run 2026-01-21_08-24-47         --checkpoint model_1410.pt --rendering quality
+# ./isaaclab.sh -p source/isaaclab_assets/isaaclab_assets/evobot_v1/test/test_policy_keyboard_full_copy.py         --load_run 2026-01-21_08-24-47         --checkpoint model_1410.pt --rendering quality
 class FullKeyboardController:
     """Custom keyboard controller for velocity + arm + gripper commands."""
 
@@ -351,6 +372,22 @@ def main():
     obs = env_wrapped.get_observations()
     print("[INFO] Environment ready. Use keyboard to control...\n")
 
+    # Action smoothing buffer
+    alpha = args_cli.action_smoothing
+    prev_actions = None
+    prev_velocity_cmd = None
+    use_adaptive = args_cli.adaptive_smoothing
+
+    if alpha > 0.0 or use_adaptive:
+        if use_adaptive:
+            print(f"[INFO] Adaptive EMA smoothing enabled:")
+            print(f"      - Fast alpha (command change): {args_cli.smoothing_fast:.2f}")
+            print(f"      - Slow alpha (stable): {args_cli.smoothing_slow:.2f}")
+            print(f"      - Change threshold: {args_cli.command_change_threshold:.3f}")
+        else:
+            print(f"[INFO] Fixed EMA smoothing enabled: alpha={alpha:.2f}")
+        print(f"      Formula: action_smooth = alpha * prev_action + (1-alpha) * current_action\n")
+
     # Main loop
     count = 0
     while simulation_app.is_running():
@@ -380,6 +417,38 @@ def main():
                 # Set both grippers to the override value
                 actions[:, -2:] = keyboard.gripper_action_override
 
+            # Apply action smoothing (exponential moving average)
+            if alpha > 0.0 or use_adaptive:
+                if prev_actions is None:
+                    # First step: initialize with current action
+                    prev_actions = actions.clone()
+                    if use_adaptive:
+                        prev_velocity_cmd = velocity_cmd.clone()
+                else:
+                    # Determine alpha (fixed or adaptive)
+                    current_alpha = alpha
+
+                    if use_adaptive:
+                        # Adaptive smoothing: adjust alpha based on command changes
+                        if prev_velocity_cmd is not None:
+                            # Detect velocity command change
+                            cmd_diff = torch.abs(velocity_cmd - prev_velocity_cmd).max().item()
+
+                            if cmd_diff > args_cli.command_change_threshold:
+                                # Command changed: use fast alpha (low value = fast response)
+                                current_alpha = args_cli.smoothing_fast
+                            else:
+                                # Command stable: use slow alpha (high value = heavy smoothing)
+                                current_alpha = args_cli.smoothing_slow
+
+                            prev_velocity_cmd = velocity_cmd.clone()
+                        else:
+                            current_alpha = args_cli.smoothing_slow
+
+                    # Apply smoothing: action_smooth = alpha * prev_action + (1-alpha) * current_action
+                    actions = current_alpha * prev_actions + (1.0 - current_alpha) * actions
+                    prev_actions = actions.clone()
+
             # Step environment
             obs, reward, dones, _ = env_wrapped.step(actions)
 
@@ -406,6 +475,8 @@ def main():
                 # Reset keyboard commands (like pressing P)
                 keyboard.reset()
                 print("[RESET] All commands reset to zero, gripper MAX CLOSE")
+                # Reset action smoothing buffer
+                prev_actions = None
                 obs = env_wrapped.get_observations()
 
     # Close
