@@ -16,6 +16,7 @@ def rpy_alignment_imu(
     env: ManagerBasedRLEnv,
     target_rpy: tuple[float, float, float] = (0.0, 0.0, 0.0),
     imu_cfg: SceneEntityCfg = SceneEntityCfg("imu"),
+    scale: float = 5.0
 ) -> torch.Tensor:
     """Penalty for deviating from the target roll/pitch (balance penalty).
 
@@ -45,8 +46,7 @@ def rpy_alignment_imu(
     roll_error = wrap_to_pi(roll - target_roll)
     pitch_error = wrap_to_pi(pitch - target_pitch)
 
-    total_error = torch.square(roll_error) + torch.square(pitch_error)
-
+    total_error = torch.abs(roll_error) + torch.abs(pitch_error)
     return total_error
 
 

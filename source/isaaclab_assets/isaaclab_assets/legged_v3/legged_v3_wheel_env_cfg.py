@@ -174,26 +174,34 @@ class LeggedV3SceneCfg(InteractiveSceneCfg):
 class ActionCfg:
     """Joint effort control for all 8 DOF."""
 
-    joint_effort = actions.JointEffortActionCfg(
+    joint_effort = actions.JointPositionActionCfg(
         asset_name="robot",
         joint_names=[
             "left_hip_joint",    # hip abduction L
             "left_thigh_joint",  # thigh pitch L
             "left_knee_joint",   # knee L
-            "left_wheel_joint",  # wheel L (differential drive)
             "right_hip_joint",   # hip abduction R
             "right_thigh_joint", # thigh pitch R
             "right_knee_joint",  # knee R
+        ],
+        scale={
+            "left_hip_joint":    1.0,
+            "left_thigh_joint":  1.0,
+            "left_knee_joint":   1.0,
+            "right_hip_joint":   1.0,
+            "right_thigh_joint": 1.0,
+            "right_knee_joint":  1.0,
+        },
+    )
+    
+    wheel_effort = actions.JointEffortActionCfg(
+        asset_name="robot",
+        joint_names=[
+            "left_wheel_joint",  # wheel L (differential drive)
             "right_wheel_joint", # wheel R (differential drive)
         ],
         scale={
-            "left_hip_joint":    20.0,
-            "left_thigh_joint":  20.0,
-            "left_knee_joint":   20.0,
             "left_wheel_joint":  50.0,
-            "right_hip_joint":   20.0,
-            "right_thigh_joint": 20.0,
-            "right_knee_joint":  20.0,
             "right_wheel_joint": 50.0,
         },
     )
@@ -344,8 +352,8 @@ class EventCfg:
         params={
             "asset_cfg": SceneEntityCfg(name="robot"),
             "pose_range": {
-                "x": (-0.5, 0.5),
-                "y": (-0.5, 0.5),
+                "x": (-5.0, 5.0),
+                "y": (-5.0, 5.0),
                 "yaw": (-3.14, 3.14),
             },
             "velocity_range": {
@@ -447,13 +455,13 @@ class RewardCfg:
     )
 
     # ── Keep leg joints near default stance (à la H1 joint_deviation_hip) ─────
-    # joint_deviation_leg = RewardTermCfg(
-    #     func=rewards.joint_deviation_l1,
-    #     weight=-20.0,
-    #     params={
-    #         "asset_cfg": SceneEntityCfg("robot", joint_names=".*_hip_joint"),
-    #     },
-    # )
+    joint_deviation_leg = RewardTermCfg(
+        func=rewards.joint_deviation_l1,
+        weight=-20.0,
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names=".*_hip_joint"),
+        },
+    )
 
     # ── Penalize joint limit violations (requires limits in USD) ──────────────
     dof_pos_limits = RewardTermCfg(
@@ -556,7 +564,7 @@ class TerminationsCfg:
     illegal_contact_base = TerminationTermCfg(
         func=terminations.illegal_contact,
         params={
-            "threshold": 200.0,   # [N]
+            "threshold": 50.0,   # [N]
             "sensor_cfg": SceneEntityCfg(
                 name="contact_forces_base",
                 body_names=["base"],
@@ -569,7 +577,7 @@ class TerminationsCfg:
     illegal_contact_right_leg = TerminationTermCfg(
         func=terminations.illegal_contact,
         params={
-            "threshold": 200.0,   # [N]
+            "threshold": 50.0,   # [N]
             "sensor_cfg": SceneEntityCfg(
                 name="contact_forces_right_leg",
                 body_names=["thigh", "right_hip", "right_calf_motor"],
@@ -582,7 +590,7 @@ class TerminationsCfg:
     illegal_contact_left_leg = TerminationTermCfg(
         func=terminations.illegal_contact,
         params={
-            "threshold": 200.0,   # [N]
+            "threshold": 50.0,   # [N]
             "sensor_cfg": SceneEntityCfg(
                 name="contact_forces_left_leg",
                 body_names=["thigh", "left_hip", "left_calf_motor"],

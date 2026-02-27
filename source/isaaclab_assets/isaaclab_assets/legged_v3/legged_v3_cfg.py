@@ -23,7 +23,7 @@ NOTE: Joint names MUST match the USD prim names (Onshape mate feature names).
 """
 import os
 import isaaclab.sim as sim_utils
-from isaaclab.actuators import ImplicitActuatorCfg
+from isaaclab.actuators import ImplicitActuatorCfg, DelayedPDActuatorCfg
 from isaaclab.assets import ArticulationCfg
 
 # PATH CONFIG
@@ -83,26 +83,24 @@ LEGGED_ROBOT_V3_CFG = ArticulationCfg(
     # ACTUATORS
     actuators={
         # --- LEFT LEG ---
-        "hip_left": ImplicitActuatorCfg(
+        "hip_left": DelayedPDActuatorCfg(
             joint_names_expr=["left_hip_joint"],
             effort_limit_sim=100.0,
-            stiffness=0.0,
+            stiffness=20.0,
             damping=0.0,
             velocity_limit_sim=50.0,
-            friction=100,
         ),
-        "thigh_left": ImplicitActuatorCfg(
+        "thigh_left": DelayedPDActuatorCfg(
             joint_names_expr=["left_thigh_joint"],
             effort_limit_sim=100.0,
-            stiffness=0.0,
+            stiffness=20.0,
             damping=0.0,
             velocity_limit_sim=50.0,
-            friction=100,
         ),
-        "knee_left": ImplicitActuatorCfg(
+        "knee_left": DelayedPDActuatorCfg(
             joint_names_expr=["left_knee_joint"],
             effort_limit_sim=100.0,
-            stiffness=0.0,
+            stiffness=20.0,
             damping=0.0,
             velocity_limit_sim=50.0,
         ),
@@ -115,24 +113,24 @@ LEGGED_ROBOT_V3_CFG = ArticulationCfg(
         ),
 
         # --- RIGHT LEG ---
-        "hip_right": ImplicitActuatorCfg(
+        "hip_right": DelayedPDActuatorCfg(
             joint_names_expr=["right_hip_joint"],
             effort_limit_sim=100.0,
-            stiffness=0.0,
+            stiffness=20.0,
             damping=0.0,
             velocity_limit_sim=50.0,
         ),
-        "thigh_right": ImplicitActuatorCfg(
+        "thigh_right": DelayedPDActuatorCfg(
             joint_names_expr=["right_thigh_joint"],
             effort_limit_sim=100.0,
-            stiffness=0.0,
+            stiffness=20.0,
             damping=0.0,
             velocity_limit_sim=50.0,
         ),
-        "knee_right": ImplicitActuatorCfg(
+        "knee_right": DelayedPDActuatorCfg(
             joint_names_expr=["right_knee_joint"],
             effort_limit_sim=100.0,
-            stiffness=0.0,
+            stiffness=20.0,
             damping=0.0,
             velocity_limit_sim=50.0,
         ),
