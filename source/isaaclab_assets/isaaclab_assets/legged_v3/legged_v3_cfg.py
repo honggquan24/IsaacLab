@@ -39,41 +39,33 @@ LEGGED_ROBOT_V3_CFG = ArticulationCfg(
         activate_contact_sensors=True,
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             rigid_body_enabled=True,
-            max_linear_velocity=25.0,
-            max_angular_velocity=50.0,
-            linear_damping=0.002,
-            angular_damping=0.005,
-            max_depenetration_velocity=1.0,
             enable_gyroscopic_forces=True,
-            max_contact_impulse=500,
             retain_accelerations=True,
         ),
         articulation_props=sim_utils.ArticulationRootPropertiesCfg(
             enabled_self_collisions=True,
-            solver_position_iteration_count=20,
-            solver_velocity_iteration_count=1,
         ),
-        collision_props=sim_utils.schemas.CollisionPropertiesCfg(
-            collision_enabled=True,
-        ),
+        # collision_props không set ở đây vì USD dùng instanced prims —
+        # IsaacLab không thể override thuộc tính này lên instanced prim.
+        # Collision đã được cấu hình sẵn trong file USD khi export từ Onshape.
     ),
 
     # INITIAL STATE — standing pose
     # Signs: left and right joints are mirrored (opposite sign for symmetric joints).
     # Adjust if the robot spawns in an incorrect pose.
     init_state=ArticulationCfg.InitialStateCfg(
-        pos=(0.0, 0.0, 0.30),
+        pos=(0.0, 0.0, 0.50),
         joint_pos={
             # --- Left leg (Onshape mate feature names) ---
-            "left_hip_joint":   0.0,   # hip abduction/adduction
-            "left_thigh_joint": 0.3,   # hip pitch (forward lean)
-            "left_knee_joint": -0.6,   # knee bend
-            "left_wheel_joint": 0.0,   # wheel (free spinning)
+            "left_hip_joint":     0.0,   # hip abduction/adduction
+            "left_thigh_joint":  -0.3,   # hip pitch (forward lean)
+            "left_knee_joint":    0.0,   # knee bend
+            "left_wheel_joint":   0.0,   # wheel (free spinning)
 
             # --- Right leg ---
-            "right_hip_joint":   0.0,
-            "right_thigh_joint": -0.3,  # mirrored sign
-            "right_knee_joint":   0.6,  # mirrored sign
+            "right_hip_joint":    0.0,
+            "right_thigh_joint":  0.3, 
+            "right_knee_joint":   0.0, 
             "right_wheel_joint":  0.0,
         },
         joint_vel={
@@ -95,28 +87,30 @@ LEGGED_ROBOT_V3_CFG = ArticulationCfg(
             joint_names_expr=["left_hip_joint"],
             effort_limit_sim=100.0,
             stiffness=0.0,
-            damping=0.5,
+            damping=0.0,
             velocity_limit_sim=50.0,
+            friction=100,
         ),
         "thigh_left": ImplicitActuatorCfg(
             joint_names_expr=["left_thigh_joint"],
             effort_limit_sim=100.0,
             stiffness=0.0,
-            damping=0.5,
+            damping=0.0,
             velocity_limit_sim=50.0,
+            friction=100,
         ),
         "knee_left": ImplicitActuatorCfg(
             joint_names_expr=["left_knee_joint"],
             effort_limit_sim=100.0,
             stiffness=0.0,
-            damping=0.5,
+            damping=0.0,
             velocity_limit_sim=50.0,
         ),
         "wheel_left": ImplicitActuatorCfg(
             joint_names_expr=["left_wheel_joint"],
             effort_limit_sim=50.0,
             stiffness=0.0,
-            damping=0.1,
+            damping=0.0,
             velocity_limit_sim=100.0,
         ),
 
@@ -125,28 +119,28 @@ LEGGED_ROBOT_V3_CFG = ArticulationCfg(
             joint_names_expr=["right_hip_joint"],
             effort_limit_sim=100.0,
             stiffness=0.0,
-            damping=0.5,
+            damping=0.0,
             velocity_limit_sim=50.0,
         ),
         "thigh_right": ImplicitActuatorCfg(
             joint_names_expr=["right_thigh_joint"],
             effort_limit_sim=100.0,
             stiffness=0.0,
-            damping=0.5,
+            damping=0.0,
             velocity_limit_sim=50.0,
         ),
         "knee_right": ImplicitActuatorCfg(
             joint_names_expr=["right_knee_joint"],
             effort_limit_sim=100.0,
             stiffness=0.0,
-            damping=0.5,
+            damping=0.0,
             velocity_limit_sim=50.0,
         ),
         "wheel_right": ImplicitActuatorCfg(
             joint_names_expr=["right_wheel_joint"],
             effort_limit_sim=50.0,
             stiffness=0.0,
-            damping=0.1,
+            damping=0.0,
             velocity_limit_sim=100.0,
         ),
     },

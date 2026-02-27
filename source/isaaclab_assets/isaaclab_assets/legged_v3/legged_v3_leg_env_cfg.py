@@ -1,24 +1,16 @@
-"""Velocity tracking environment for Legged Robot V3.
+"""Legged locomotion environment for Legged Robot V3.
 
 Robot: 2-legged wheeled robot (robot_legged_v2 from Onshape)
-Task: Track linear and angular velocity commands while maintaining balance.
-
-Reward design inspired by H1RoughEnvCfg:
-- Exponential velocity tracking rewards (better shaped than L2 penalties)
-- Joint deviation penalty to keep legs in stable default stance
-- Joint position limits penalty
-- Vertical velocity penalty (no bouncing)
-- Stand-still leg stabilization when command ~ 0
-- IMU-based upright/balance reward
+Task: Track velocity commands using leg-based locomotion (walking, not wheels).
 
 Train:
     ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \\
-        --task Isaac-Legged-V3-Velocity \\
+        --task Isaac-Legged-V3-Leg \\
         --num_envs 4096 --headless
 
 Play:
     ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \\
-        --task Isaac-Legged-V3-Velocity \\
+        --task Isaac-Legged-V3-Leg \\
         --num_envs 4
 """
 
@@ -38,6 +30,8 @@ from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.utils import configclass
 from isaaclab.sensors import ImuCfg, ContactSensorCfg
 from isaaclab.envs.mdp import actions, observations, events, rewards, terminations, commands
+from isaaclab.terrains import TerrainImporterCfg
+import isaaclab.terrains as terrain_gen
 
 # Velocity mdp: track_lin_vel_xy_yaw_frame_exp, track_ang_vel_z_world_exp,
 #               stand_still_joint_deviation_l1, joint_deviation_l1, joint_pos_limits
@@ -60,9 +54,66 @@ class LeggedV3SceneCfg(InteractiveSceneCfg):
         spawn=sim_utils.DomeLightCfg(color=(0.9, 0.9, 0.9), intensity=500.0),
     )
 
-    cfg_ground = AssetBaseCfg(
+    # Flat ground (tạm thời)
+    # terrain = TerrainImporterCfg(
+    #     prim_path="/World/ground",
+    #     terrain_type="plane",
+    #     collision_group=-1,
+    #     physics_material=sim_utils.RigidBodyMaterialCfg(
+    #         friction_combine_mode="multiply",
+    #         restitution_combine_mode="multiply",
+    #         static_friction=1.0,
+    #         dynamic_friction=1.0,
+    #     ),
+    #     debug_vis=False,
+    # )
+
+    # Rough terrain
+    terrain = TerrainImporterCfg(
         prim_path="/World/ground",
-        spawn=sim_utils.GroundPlaneCfg(),
+        terrain_type="generator",
+        terrain_generator=terrain_gen.TerrainGeneratorCfg(
+            size=(8.0, 8.0),
+            border_width=20.0,
+            num_rows=10,
+            num_cols=20,
+            horizontal_scale=0.1,
+            vertical_scale=0.005,
+            slope_threshold=0.75,
+            use_cache=False,
+            sub_terrains={
+                "flat": terrain_gen.MeshPlaneTerrainCfg(proportion=0.2),
+                "random_rough": terrain_gen.HfRandomUniformTerrainCfg(
+                    proportion=0.4,
+                    noise_range=(0.01, 0.05),
+                    noise_step=0.01,
+                    border_width=0.25,
+                ),
+                "hf_pyramid_slope": terrain_gen.HfPyramidSlopedTerrainCfg(
+                    proportion=0.2,
+                    slope_range=(0.0, 0.2),
+                    platform_width=2.0,
+                    border_width=0.25,
+                ),
+                "pyramid_stairs": terrain_gen.MeshPyramidStairsTerrainCfg(
+                    proportion=0.2,
+                    step_height_range=(0.02, 0.08),
+                    step_width=0.3,
+                    platform_width=3.0,
+                    border_width=1.0,
+                    holes=False,
+                ),
+            },
+        ),
+        max_init_terrain_level=5,
+        collision_group=-1,
+        physics_material=sim_utils.RigidBodyMaterialCfg(
+            friction_combine_mode="multiply",
+            restitution_combine_mode="multiply",
+            static_friction=1.0,
+            dynamic_friction=1.0,
+        ),
+        debug_vis=False,
     )
 
     robot: Articulation = LEGGED_ROBOT_V3_CFG.replace(
@@ -74,7 +125,7 @@ class LeggedV3SceneCfg(InteractiveSceneCfg):
     # Check USD structure with: print(env.scene["robot"].data.body_names)
     imu = ImuCfg(
         prim_path="{ENV_REGEX_NS}/Robot/robot_legged_v3/robot_legged_v3/base",
-        update_period=0.02,  # 50 Hz
+        update_period=0.01,  
         gravity_bias=(0.0, 0.0, 0.0),
         debug_vis=False,
     )
@@ -94,7 +145,7 @@ class LeggedV3SceneCfg(InteractiveSceneCfg):
     contact_forces_base = ContactSensorCfg(
         prim_path="{ENV_REGEX_NS}/Robot/robot_legged_v3/robot_legged_v3/base",
         update_period=0.0,
-        history_length=3,
+        # history_length=3,
         debug_vis=False,
     )
 
@@ -102,7 +153,8 @@ class LeggedV3SceneCfg(InteractiveSceneCfg):
     contact_forces_right_leg = ContactSensorCfg(
         prim_path="{ENV_REGEX_NS}/Robot/robot_legged_v3/robot_legged_v3/right_leg/.*",
         update_period=0.0,
-        # history_length=3,
+        history_length=3,
+        track_air_time=True,
         debug_vis=False,
     )
 
@@ -110,7 +162,8 @@ class LeggedV3SceneCfg(InteractiveSceneCfg):
     contact_forces_left_leg = ContactSensorCfg(
         prim_path="{ENV_REGEX_NS}/Robot/robot_legged_v3/robot_legged_v3/left_leg/.*",
         update_period=0.0,
-        # history_length=3,
+        history_length=3,
+        track_air_time=True,
         debug_vis=False,
     )
 
@@ -137,13 +190,12 @@ class ActionCfg:
             "left_hip_joint":    10.0,
             "left_thigh_joint":  10.0,
             "left_knee_joint":   10.0,
-            "left_wheel_joint":  10.0,
+            "left_wheel_joint":  50.0,
             "right_hip_joint":   10.0,
             "right_thigh_joint": 10.0,
             "right_knee_joint":  10.0,
-            "right_wheel_joint": 10.0,
+            "right_wheel_joint": 50.0,
         },
-        debug_vis=False,
     )
 
 
@@ -151,19 +203,39 @@ class ActionCfg:
 
 @configclass
 class CommandsCfg:
-    """Velocity commands for differential drive (x forward, z turn)."""
+    """Velocity commands for differential drive (x forward, z turn) + height command."""
 
     velocity_command = commands.UniformVelocityCommandCfg(
         asset_name="robot",
-        resampling_time_range=(4.0, 8.0),
-        rel_standing_envs=0.5,    # 20% of envs stand still → balance training
-        heading_command=False,    # angular velocity mode (not heading angle)
-        debug_vis=True,
+        resampling_time_range=(3.0, 5.0),
+        rel_standing_envs=0.5,
+        heading_command=False,
+        debug_vis=False,
         ranges=commands.UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(-1.0, 1.0),  # forward / backward  [m/s]
+            lin_vel_x=(-5.0, 5.0),  # forward / backward  [m/s]
             lin_vel_y=(0.0, 0.0),   # no lateral (differential drive)
-            ang_vel_z=(-0.5, 0.5),  # turn rate  [rad/s]
+            ang_vel_z=(-1.0, 1.0),  # turn rate  [rad/s]
             heading=(0.0, 0.0),     # unused
+        ),
+    )
+
+    # Lệnh chiều cao mục tiêu cho base robot.
+    # Robot học cách duỗi/gập chân để đạt đúng độ cao được yêu cầu.
+    # Chỉ điều chỉnh pos_z — giữ nguyên x/y và orientation.
+    # Dải hợp lý: 0.20 m (squat thấp) → 0.38 m (đứng thẳng tối đa).
+    height_command = commands.UniformPoseCommandCfg(
+        asset_name="robot",
+        body_name="base",
+        resampling_time_range=(3.0, 6.0),
+        make_quat_unique=False,
+        debug_vis=False,
+        ranges=commands.UniformPoseCommandCfg.Ranges(
+            pos_x=(0.0, 0.0),    # không dịch chuyển ngang
+            pos_y=(0.0, 0.0),
+            pos_z=(0.4, 0.7),    # độ cao mục tiêu [m]
+            roll=(0.0, 0.0),     # giữ thẳng
+            pitch=(0.0, 0.0),
+            yaw=(0.0, 0.0),
         ),
     )
 
@@ -197,6 +269,12 @@ class ObservationsCfg:
             params={"command_name": "velocity_command"},
         )
 
+        # Height command (7-dim: pos xyz + quat xyzw — chỉ pos_z có ý nghĩa)
+        height_cmd = ObservationTermCfg(
+            func=observations.generated_commands,
+            params={"command_name": "height_command"},
+        )
+
         def __post_init__(self) -> None:
             self.enable_corruption = False
             self.concatenate_terms = True
@@ -227,6 +305,11 @@ class ObservationsCfg:
             params={"command_name": "velocity_command"},
         )
 
+        height_cmd = ObservationTermCfg(
+            func=observations.generated_commands,
+            params={"command_name": "height_command"},
+        )
+
         current_time   = ObservationTermCfg(func=observations.current_time_s)
         remaining_time = ObservationTermCfg(func=observations.remaining_time_s)
 
@@ -249,30 +332,50 @@ class EventCfg:
         mode="reset",
         params={
             "asset_cfg": SceneEntityCfg(name="robot"),
-            "position_range": (-0.05, 0.05),
-            "velocity_range": (-0.1, 0.1),
+            "position_range": (-0.02, 0.02),
+            "velocity_range": (-0.02, 0.02),
         },
     )
 
+    # Flat ground: reset về gốc tọa độ
     reset_position = EventTermCfg(
         func=events.reset_root_state_uniform,
         mode="reset",
         params={
             "asset_cfg": SceneEntityCfg(name="robot"),
             "pose_range": {
-                "x":     (-0.5, 0.5),
-                "y":     (-0.5, 0.5),
-                "z":     (0.28, 0.32),
-                "roll":  (-0.05, 0.05),
-                "pitch": (-0.05, 0.05),
-                "yaw":   (-math.pi, math.pi),
+                "x": (-0.5, 0.5),
+                "y": (-0.5, 0.5),
+                "yaw": (-3.14, 3.14),
             },
             "velocity_range": {
-                "linear":  (-0.05, 0.05),
-                "angular": (-0.05, 0.05),
+                "x": (-0.02, 0.02),
+                "y": (-0.02, 0.02),
+                "z": (-0.02, 0.02),
             },
         },
     )
+
+    # Rough terrain: spawn robot tại terrain origins
+    # reset_position = EventTermCfg(
+    #     func=events.reset_root_state_with_random_orientation,
+    #     mode="reset",
+    #     params={
+    #         "asset_cfg": SceneEntityCfg(name="robot"),
+    #         "pose_range": {
+    #             "roll":  (-0.005, 0.005),
+    #             "pitch": (-0.005, 0.005),
+    #         },
+    #         "velocity_range": {
+    #             "x": (-0.02, 0.02),
+    #             "y": (-0.02, 0.02),
+    #             "z": (-0.02, 0.02),
+    #             "roll":  (-0.005, 0.005),
+    #             "pitch": (-0.005, 0.005),
+    #             "yaw":   (-0.02, 0.02),
+    #         },
+    #     },
+    # )
 
 
 # ─────────────────────────── Rewards ──────────────────────────────────────────
@@ -304,27 +407,38 @@ class RewardCfg:
         weight=-200.0,
     )
 
+    # ── Height tracking (exp-kernel, range [0,1]) ─────────────────────────────
+    track_base_height_exp = RewardTermCfg(
+        func=mdp.rewards.track_base_height_exp,
+        weight=1.0,
+        params={
+            "command_name": "height_command",
+            "std": 0.05,    # ±5 cm → reward ≈ 0.37; ±2 cm → reward ≈ 0.85
+        },
+    )
+
     # ── Velocity tracking (exp-kernel, à la H1) ───────────────────────────────
     track_lin_vel_xy_exp = RewardTermCfg(
         func=mdp_vel.track_lin_vel_xy_yaw_frame_exp,
-        weight=2.0,
+        weight=5.0,
         params={"command_name": "velocity_command", "std": 0.5},
     )
+
     track_ang_vel_z_exp = RewardTermCfg(
         func=mdp_vel.track_ang_vel_z_world_exp,
-        weight=1,
+        weight=5.0,
         params={"command_name": "velocity_command", "std": 0.5},
     )
 
     # ── Balance: keep robot upright (exp-kernel, range [0,1]) ─────────────────
-    # upright = RewardTermCfg(
-    #     func=mdp.rewards.rpy_alignment_imu,
-    #     weight=1.0,
-    #     params={
-    #         "target_rpy": (0.0, 0.0, 0.0),
-    #         "imu_cfg": SceneEntityCfg(name="imu"),
-    #     },
-    # )
+    upright = RewardTermCfg(
+        func=mdp.rewards.rpy_alignment_imu,
+        weight=10.0,
+        params={
+            "target_rpy": (0.0, 0.0, 0.0),
+            "imu_cfg": SceneEntityCfg(name="imu"),
+        },
+    )
 
     # ── Suppress vertical velocity (no bouncing) ──────────────────────────────
     lin_vel_z_l2 = RewardTermCfg(
@@ -342,18 +456,53 @@ class RewardCfg:
     # )
 
     # ── Penalize joint limit violations (requires limits in USD) ──────────────
-    dof_pos_limits = RewardTermCfg(
-        func=rewards.joint_pos_limits,
-        weight=-1.0,
+    # dof_pos_limits = RewardTermCfg(
+    #     func=rewards.joint_pos_limits,
+    #     weight=-1.0,
+    #     params={
+    #         "asset_cfg": SceneEntityCfg("robot", joint_names=_LEG_JOINTS),
+    #     },
+    # )
+
+    feet_air_time_left = RewardTermCfg(
+        func=mdp_vel.feet_air_time_positive_biped,
+        weight=0.25,
         params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names=_LEG_JOINTS),
+            "command_name": "velocity_command",
+            "sensor_cfg": SceneEntityCfg("contact_forces_left_leg", body_names=["left_wheel"]),
+            "threshold": 0.4,
+        },
+    )
+    feet_air_time_right = RewardTermCfg(
+        func=mdp_vel.feet_air_time_positive_biped,
+        weight=0.25,
+        params={
+            "command_name": "velocity_command",
+            "sensor_cfg": SceneEntityCfg("contact_forces_right_leg", body_names=["right_wheel"]),
+            "threshold": 0.4,
+        },
+    )
+    feet_slide_left = RewardTermCfg(
+        func=mdp_vel.feet_slide,
+        weight=-0.25,
+        params={
+            "sensor_cfg": SceneEntityCfg("contact_forces_left_leg", body_names=["left_wheel"]),
+            "asset_cfg": SceneEntityCfg("robot", body_names=["left_wheel"]),
+        },
+    )
+    feet_slide_right = RewardTermCfg(
+        func=mdp_vel.feet_slide,
+        weight=-0.25,
+        params={
+            "sensor_cfg": SceneEntityCfg("contact_forces_right_leg", body_names=["right_wheel"]),
+            "asset_cfg": SceneEntityCfg("robot", body_names=["right_wheel"]),
         },
     )
 
     # ── When command ≈ 0, penalize deviation of leg joints from default ────────
     stand_still = RewardTermCfg(
         func=mdp_vel.stand_still_joint_deviation_l1,
-        weight=-0.1,
+        weight=-1.0,
         params={
             "command_name": "velocity_command",
             "command_threshold": 0.05,
@@ -364,7 +513,7 @@ class RewardCfg:
     # ── Action smoothness ─────────────────────────────────────────────────────
     action_rate = RewardTermCfg(
         func=rewards.action_rate_l2,
-        weight=-0.001,
+        weight=-0.01,
     )
 
 
@@ -406,7 +555,6 @@ class TerminationsCfg:
     )
 
     # Terminate khi base chạm mặt đất → robot ngã hẳn.
-
     illegal_contact_base = TerminationTermCfg(
         func=terminations.illegal_contact,
         params={
@@ -448,7 +596,7 @@ class TerminationsCfg:
 # ─────────────────────────── Env ──────────────────────────────────────────────
 
 @configclass
-class LeggedV3VelocityEnvCfg(ManagerBasedRLEnvCfg):
+class LeggedV3LegEnvCfg(ManagerBasedRLEnvCfg):
     """Environment config for legged_v3 velocity tracking."""
 
     scene:        LeggedV3SceneCfg  = LeggedV3SceneCfg(num_envs=1, env_spacing=2.0)
@@ -461,7 +609,7 @@ class LeggedV3VelocityEnvCfg(ManagerBasedRLEnvCfg):
 
     def __post_init__(self):
         self.decimation = 2           # control @ 30 Hz  (sim 60 Hz / 2)
-        self.episode_length_s = 10.0
+        self.episode_length_s = 40.0
 
         self.sim.dt = 1 / 60.0
         self.sim.render_interval = self.decimation
