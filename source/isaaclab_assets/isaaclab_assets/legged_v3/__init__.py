@@ -23,14 +23,15 @@ Resume training:
     ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
         --task Isaac-Legged-V3-Wheel \
         --num_envs 15500 \
-        --resume --load_run=2026-02-26_20-45-01 \
-        --checkpoint=model_1400.pt
+        --resume --load_run=2026-02-27_23-54-51 \
+        --checkpoint=model_2400.pt
 
 Play:
     ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
         --task Isaac-Legged-V3-Wheel \
         --num_envs 4 \
-        'agent.load_run=2026-02-25_18-00-41' 'agent.load_checkpoint="model_3300.pt"'
+        'agent.load_run=2026-02-27_23-54-51' \
+        'agent.load_checkpoint="model_1300.pt"'
 """
 
 from .legged_v3_cfg import *

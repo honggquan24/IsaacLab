@@ -194,7 +194,7 @@ class ActionCfg:
         },
     )
     
-    wheel_effort = actions.JointEffortActionCfg(
+    wheel_vel = actions.JointVelocityActionCfg(
         asset_name="robot",
         joint_names=[
             "left_wheel_joint",  # wheel L (differential drive)
@@ -220,7 +220,7 @@ class CommandsCfg:
         heading_command=False,
         debug_vis=False,
         ranges=commands.UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(-5.0, 5.0),  # forward / backward  [m/s]
+            lin_vel_x=(-1.5, 1.5),  # forward / backward  [m/s]
             lin_vel_y=(0.0, 0.0),   # no lateral (differential drive)
             ang_vel_z=(-1.0, 1.0),  # turn rate  [rad/s]
             heading=(0.0, 0.0),     # unused
@@ -483,34 +483,10 @@ class RewardCfg:
         },
     )
 
-    # # ── Khi chạy: phạt chân trái/phải xuất lực chênh nhau (loại trừ bánh xe) ─
-    # equal_effort_leg_when_cmd = RewardTermCfg(
-    #     func=mdp.rewards.equal_effort_leg_when_cmd,
-    #     weight=-2.0,
-    #     params={
-    #         "command_name": "velocity_command",
-    #         "command_threshold": 0.05,
-    #         "left_cfg":  SceneEntityCfg("robot", joint_names=["left_hip_joint",  "left_thigh_joint",  "left_knee_joint"]),
-    #         "right_cfg": SceneEntityCfg("robot", joint_names=["right_hip_joint", "right_thigh_joint", "right_knee_joint"]),
-    #     },
-    # )
-
-    # # ── Khi dừng: phạt chân trái/phải (kể cả bánh xe) xuất lực chênh nhau ───
-    # equal_effort_all_when_still = RewardTermCfg(
-    #     func=mdp.rewards.equal_effort_all_when_still,
-    #     weight=-2.5,
-    #     params={
-    #         "command_name": "velocity_command",
-    #         "command_threshold": 0.05,
-    #         "left_cfg":  SceneEntityCfg("robot", joint_names=["left_hip_joint",  "left_thigh_joint",  "left_knee_joint",  "left_wheel_joint"]),
-    #         "right_cfg": SceneEntityCfg("robot", joint_names=["right_hip_joint", "right_thigh_joint", "right_knee_joint", "right_wheel_joint"]),
-    #     },
-    # )
-
     # ── Joint acceleration (chống rung lắc khớp) ─────────────────────────────
     joint_acc = RewardTermCfg(
         func=rewards.joint_acc_l2,
-        weight=-5e-7,
+        weight=-2.5e-7,
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names=_LEG_JOINTS),
         },

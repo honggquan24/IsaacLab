@@ -104,11 +104,11 @@ LEGGED_ROBOT_V3_CFG = ArticulationCfg(
             damping=0.0,
             velocity_limit_sim=50.0,
         ),
-        "wheel_left": ImplicitActuatorCfg(
+        "wheel_left": DelayedPDActuatorCfg(
             joint_names_expr=["left_wheel_joint"],
-            effort_limit_sim=50.0,
+            effort_limit_sim=100.0,
             stiffness=0.0,
-            damping=0.0,
+            damping=5.0,
             velocity_limit_sim=100.0,
         ),
 
@@ -134,11 +134,11 @@ LEGGED_ROBOT_V3_CFG = ArticulationCfg(
             damping=0.0,
             velocity_limit_sim=50.0,
         ),
-        "wheel_right": ImplicitActuatorCfg(
+        "wheel_right": DelayedPDActuatorCfg(
             joint_names_expr=["right_wheel_joint"],
-            effort_limit_sim=50.0,
+            effort_limit_sim=100.0,
             stiffness=0.0,
-            damping=0.0,
+            damping=5.0,
             velocity_limit_sim=100.0,
         ),
     },
