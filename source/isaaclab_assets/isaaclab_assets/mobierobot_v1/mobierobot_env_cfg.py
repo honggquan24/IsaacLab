@@ -1,0 +1,174 @@
+import math
+import torch
+import isaaclab.sim as sim_utils
+from isaaclab.assets import Articulation, AssetBaseCfg
+from isaaclab.envs import ManagerBasedRLEnvCfg
+from isaaclab.managers import (
+    EventTermCfg as EventTerm, 
+    ObservationGroupCfg as ObsGroup, 
+    ObservationTermCfg as ObsTerm, 
+    RewardTermCfg,
+    SceneEntityCfg, 
+    TerminationTermCfg
+)
+from isaaclab.scene import InteractiveSceneCfg
+from isaaclab.utils import configclass
+from isaaclab.sensors import (
+    CameraCfg,
+    ContactSensorCfg,
+    RayCasterCfg,
+    ImuCfg,
+    patterns
+)
+from isaaclab.terrains import TerrainImporterCfg
+from isaaclab.terrains.config.rough import ROUGH_TERRAINS_CFG
+
+# from .cartpole_v2_cfg import CARTPOLE_V2_CFG
+from .mobierobotv1_cfg import MOBIE_ROBOT_CFG
+from isaaclab.envs.mdp import actions, observations, events, rewards, terminations
+import isaaclab.utils.math as math_utils
+from isaaclab.sim import SimulationCfg, RenderCfg
+from icecream import ic
+import isaaclab.envs.mdp as mdp
+# from .mdp.rewards import *
+# from .mdp.terminations import *
+# from .mdp.observations import *
+
+@configclass
+class MobieRobotV1SceneConfig(InteractiveSceneCfg):
+    """Scene configuration for the legged robot environment."""
+    num_envs: int = 1
+    
+    # Add light
+    dome_light = AssetBaseCfg(
+        prim_path="/World/DomeLight",
+        spawn=sim_utils.DomeLightCfg(color=(0.9, 0.9, 0.9), intensity=500.0),
+    )
+
+    cfg_ground = AssetBaseCfg( 
+        prim_path="/World/ground", 
+        spawn=sim_utils.GroundPlaneCfg(), 
+    )
+
+    # Add robot 
+    robot: Articulation = MOBIE_ROBOT_CFG.replace(
+        prim_path="{ENV_REGEX_NS}/Robot",
+    )
+    # Add robot
+    imu= ImuCfg(
+    prim_path="/World/envs/env_.*/Robot/Mobie_robot_RL/base_link",
+        offset=ImuCfg.OffsetCfg(
+        pos=(0.0, 0.0, -0.35),
+        rot=(0.0, 0.0, 0.0, 1.0),
+    ),
+    update_period=0.0,
+    debug_vis=True,
+    )
+
+@configclass
+class ActionsCfg :
+    joint_effort = actions.JointVelocityActionCfg(
+        asset_name="robot",
+        joint_names=[
+            "Revolute1",
+            "Revolute2"
+        ],
+        scale={
+            "Revolute1": 100.0,
+            "Revolute2": 100.0,
+        },
+        debug_vis=True,
+    )
+@configclass
+class ObservationsCfg:
+
+    """Observation specifications for the environment."""
+    @configclass
+    class PolicyCfg(ObsGroup):
+
+        """Observations for policy group."""
+        # observation terms (order preserved)
+        joint_pos = ObsTerm(func=mdp.joint_pos,params={"asset_cfg": SceneEntityCfg("robot")},)
+        joint_vel = ObsTerm(func=mdp.joint_vel,params={"asset_cfg": SceneEntityCfg("robot")},)
+        def __post_init__(self) -> None:
+            self.enable_corruption = False
+            self.concatenate_terms = True
+    
+    # observation groups
+    @configclass  
+    class CriticCfg(ObsGroup):
+        """Observations for policy group."""
+        # observation terms (order preserved)
+        joint_pos = ObsTerm(func=mdp.joint_pos,params={"asset_cfg": SceneEntityCfg("robot")},)
+        joint_vel = ObsTerm(func=mdp.joint_vel,params={"asset_cfg": SceneEntityCfg("robot")},)
+        def __post_init__(self) -> None:
+            self.enable_corruption = False
+            self.concatenate_terms = True
+    # observation groups
+    policy: PolicyCfg = PolicyCfg()
+    critic: CriticCfg = CriticCfg()
+
+@configclass
+class EventCfg:
+    # on reset
+    reset_pole_position = EventTerm(
+        func=mdp.events.reset_joints_by_offset,
+        mode="reset",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names=["Revolute[1-2]"]),
+            "position_range": (-0.125 * math.pi, 0.125 * math.pi),
+            "velocity_range": (-0.01 * math.pi, 0.01 * math.pi),
+        },
+    )
+
+@configclass
+class RewardCfg:
+    alive = RewardTermCfg(
+        func=rewards.is_alive, 
+        weight=1.0
+    )
+    terminating = RewardTermCfg(
+        func=rewards.is_terminated, 
+        weight=-2.0
+    )
+
+
+@configclass
+class TerminationsCfg:
+    # TIME OUT - Episode ends after episode_length_s
+    time_out = TerminationTermCfg(
+        func=terminations.time_out,
+        time_out=True,  # Mark as timeout (not failure)
+    )
+
+    
+@configclass
+class MobieRobotV1EnvCfg(ManagerBasedRLEnvCfg):
+    """Configuration for the legged robot environment."""  
+    # Scene settings
+    scene: MobieRobotV1SceneConfig = MobieRobotV1SceneConfig(
+        num_envs=1,
+        env_spacing=2.0,
+    )
+    observations: ObservationsCfg = ObservationsCfg()
+    actions: ActionsCfg = ActionsCfg()
+    events: EventCfg = EventCfg()
+    rewards: RewardCfg = RewardCfg()
+    terminations: TerminationsCfg = TerminationsCfg()
+
+
+    def __post_init__(self) -> None:
+        """Post initialization."""
+        # General settings
+        self.decimation = 2  # Control freq = 60/2 = 30 Hz
+        self.episode_length_s = 100  # Episode duration
+        
+        # Viewer settings
+        self.viewer.eye = (0.0, 5.0, 2.0)  # Camera position
+        self.viewer.lookat = (0.0, 0.0, 0.5)  # FIX: Added lookat point
+                
+        # Simulation settings
+        self.sim.dt = 1 / 60  # Physics timestep = 60 Hz
+        self.sim.render_interval = self.decimation  # Render every decimation steps
+
+

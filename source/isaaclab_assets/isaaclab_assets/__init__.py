@@ -29,3 +29,4 @@ from .cartpole_v2 import *
 from .balancecar_v1 import *
 from .evobot_v1 import *
 from .legged_v3 import *
+from .mobierobot_v1 import *
