@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//home/hongquan/Documents/uav/**)",
+      "Bash(git show legged_v3 --name-only --format=\"\")",
+      "Bash(git show legged_v3 --name-only --format=\"\" -- \"*.py\")",
+      "Bash(xargs -I{} git show legged_v3:{})"
+    ],
+    "additionalDirectories": [
+      "/home/hongquan/Documents/uav"
+    ]
+  }
+}
