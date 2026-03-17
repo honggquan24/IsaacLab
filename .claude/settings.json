@@ -4,7 +4,11 @@
       "WebFetch(domain:github.com)",
       "Bash(python -c \"from isaaclab_rl.rsl_rl import RslRlPpoActorCriticCfg; import inspect; print\\(inspect.getsource\\(RslRlPpoActorCriticCfg\\)\\)\")",
       "Bash(git -C /home/hongquan/Documents/GitHub/IsaacLabUTE diff HEAD -- source/isaaclab_assets/isaaclab_assets/legged_v3/agents/rsl_rl_ppo_cfg.py)",
-      "Bash(ls /home/hongquan/Documents/GitHub/IsaacLabUTE/logs/rsl_rl/legged_v3_wheel/2026-02-27_00-17-15/*.pt)"
+      "Bash(ls /home/hongquan/Documents/GitHub/IsaacLabUTE/logs/rsl_rl/legged_v3_wheel/2026-02-27_00-17-15/*.pt)",
+      "Bash(conda env list)"
+    ],
+    "additionalDirectories": [
+      "/home/hongquan/Documents/GitHub/IsaacLabUTE/source/isaaclab_assets/isaaclab_assets/legged_v3/curriculum"
     ]
   }
 }

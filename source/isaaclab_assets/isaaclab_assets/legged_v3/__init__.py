@@ -37,6 +37,7 @@ Play:
 from .legged_v3_cfg import *
 from .legged_v3_wheel_env_cfg import *
 from .legged_v3_leg_env_cfg import *
+from .curriculum import LeggedV3CurriculumEnvCfg
 
 import gymnasium as gym
 from . import agents
@@ -58,5 +59,17 @@ gym.register(
     kwargs={
         "env_cfg_entry_point": f"{__name__}.legged_v3_leg_env_cfg:LeggedV3LegEnvCfg",
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:LeggedV3LegPPORunnerCfg",
+    },
+)
+
+# ─── Single-run Auto-Curriculum ────────────────────────────────────────────────
+
+gym.register(
+    id="Isaac-Legged-V3-Curriculum",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.curriculum.env_cfg:LeggedV3CurriculumEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:LeggedV3CurriculumPPORunnerCfg",
     },
 )
