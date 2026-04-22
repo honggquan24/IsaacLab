@@ -22,3 +22,10 @@ __version__ = ISAACLAB_ASSETS_METADATA["package"]["version"]
 
 from .robots import *
 from .sensors import *
+from .mobierobot_v1 import *
+from .rotarypendulum_v1 import *
+from .balancecar_v1 import *
+from .cartpole_v1 import *
+from .cartpole_v2 import *
+
+

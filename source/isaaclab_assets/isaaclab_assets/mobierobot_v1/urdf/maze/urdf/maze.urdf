@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by Stephen Brawner (brawner@gmail.com) 
+     Commit Version: 1.6.0-4-g7f85cfe  Build Version: 1.6.7995.38578
+     For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
+<robot
+  name="maze">
+  <link
+    name="base_link">
+    <inertial>
+      <origin
+        xyz="-0.0851121822870669 0.374441479057587 0.749999999999999"
+        rpy="0 0 0" />
+      <mass
+        value="18354.4992365759" />
+      <inertia
+        ixx="47881.7177476495"
+        ixy="-7260.47648777536"
+        ixz="4.27732972118429E-12"
+        iyy="32326.1047186429"
+        iyz="3.40698217421567E-13"
+        izz="73324.8852525765" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://maze/meshes/base_link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://maze/meshes/base_link.STL" />
+      </geometry>
+    </collision>
+  </link>
+</robot>

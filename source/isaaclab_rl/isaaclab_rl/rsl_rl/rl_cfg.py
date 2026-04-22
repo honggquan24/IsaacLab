@@ -211,7 +211,7 @@ class RslRlPpoAlgorithmCfg:
     Otherwise, the advantage is normalized over the entire collected trajectories.
     """
 
-    share_cnn_encoders: bool = False
+    # share_cnn_encoders: bool = False
     """Whether to share the CNN networks between actor and critic, in case CNNModels are used. Defaults to False."""
 
     rnd_cfg: RslRlRndCfg | None = None

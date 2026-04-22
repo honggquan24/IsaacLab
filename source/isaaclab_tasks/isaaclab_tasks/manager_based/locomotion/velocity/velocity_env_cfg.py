@@ -60,6 +60,7 @@ class MySceneCfg(InteractiveSceneCfg):
         ),
         debug_vis=False,
     )
+    
     # robots
     robot: ArticulationCfg = MISSING
     # sensors

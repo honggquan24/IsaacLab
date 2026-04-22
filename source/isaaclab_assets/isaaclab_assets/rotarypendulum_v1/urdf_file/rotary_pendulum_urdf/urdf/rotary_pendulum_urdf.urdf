@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by Stephen Brawner (brawner@gmail.com) 
+     Commit Version: 1.6.0-4-g7f85cfe  Build Version: 1.6.7995.38578
+     For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
+<robot
+  name="rotary_pendulum_urdf">
+  <link
+    name="base_link">
+    <inertial>
+      <origin
+        xyz="1.30104260698261E-18 0 0.0524980547483315"
+        rpy="0 0 0" />
+      <mass
+        value="7.44616085557537" />
+      <inertia
+        ixx="0.012440992728397"
+        ixy="2.35693289558265E-19"
+        ixz="2.81450788395657E-20"
+        iyy="0.012440992728397"
+        iyz="-2.09398391915433E-24"
+        izz="0.0112006750044298" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://rotary_pendulum_urdf/meshes/base_link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.650980392156863 0.619607843137255 0.588235294117647 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://rotary_pendulum_urdf/meshes/base_link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <link
+    name="cart_link">
+    <inertial>
+      <origin
+        xyz="-1.43114686768087E-17 -0.00651554402554576 0.0210483391997777"
+        rpy="0 0 0" />
+      <mass
+        value="0.35" />
+      <inertia
+        ixx="6.28220390509056E-05"
+        ixy="1.9860245584519E-20"
+        ixz="-1.96021911330094E-21"
+        iyy="2.20841827611899E-05"
+        iyz="-6.16554118428692E-07"
+        izz="6.39125771009001E-05" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://rotary_pendulum_urdf/meshes/cart_link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://rotary_pendulum_urdf/meshes/cart_link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="Revolute_1"
+    type="continuous">
+    <origin
+      xyz="0 0 0.105"
+      rpy="0 0 0" />
+    <parent
+      link="base_link" />
+    <child
+      link="cart_link" />
+    <axis
+      xyz="0 0 0" />
+  </joint>
+  <link
+    name="pendulum">
+    <inertial>
+      <origin
+        xyz="0.000581973331558416 -0.0408159674611681 -0.049171999554707"
+        rpy="0 0 0" />
+      <mass
+        value="0.37" />
+      <inertia
+        ixx="4.68436323847433E-05"
+        ixy="-3.65997993841831E-10"
+        ixz="5.36257833722173E-07"
+        iyy="4.57298825428693E-05"
+        iyz="3.10174779514858E-08"
+        izz="1.54136862628222E-06" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://rotary_pendulum_urdf/meshes/pendulum.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 0.125490196078431 0.258823529411765 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://rotary_pendulum_urdf/meshes/pendulum.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="Revolute_2"
+    type="continuous">
+    <origin
+      xyz="0 -0.03211 0.020919"
+      rpy="0 0 0" />
+    <parent
+      link="cart_link" />
+    <child
+      link="pendulum" />
+    <axis
+      xyz="0 1 0" />
+  </joint>
+</robot>
