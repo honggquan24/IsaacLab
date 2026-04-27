@@ -1,0 +1,305 @@
+<mujoco model="simplified_robot">
+
+  <!--
+    Converted from: simplified/urdf/robot.SLDASM/urdf/robot.SLDASM.urdf
+    Structure:
+      base_link
+      ├── pad_link_right (fixed) → hip_frame_link_right (fixed)
+      │     ├── thigh_right_1 → calf_right_link_1 → wheel_link_right  [ACTIVE chain]
+      │     └── thigh_right_2 → calf_right_link_2                     [PASSIVE chain - loop closed via equality]
+      └── pad_link_left  (fixed) → hip_frame_link_left (fixed)
+            ├── thigh_left_1  → calf_left_link_1  → wheel_link_left   [ACTIVE chain]
+            └── thigh_left_2  → calf_left_link_2                      [PASSIVE chain - loop closed via equality]
+
+    Equality constraints close the 5-bar parallel linkage loop:
+      calf_right_link_2 tip ↔ wheel_link_right
+      calf_left_link_2  tip ↔ wheel_link_left
+
+    NOTE: relpose in <weld> may need tuning based on actual geometry.
+    NOTE: Replace geom type="box/cylinder" placeholders with type="mesh" once STL files are available.
+    MESHDIR: point meshdir to the folder containing your STL files.
+  -->
+
+  <compiler angle="radian" eulerseq="XYZ" meshdir="urdf/robot.SLDASM/meshes/"/>
+
+  <option gravity="0 0 -9.81" timestep="0.002"/>
+
+  <default>
+    <joint damping="0.1" armature="0.01"/>
+    <geom contype="0" conaffinity="0" rgba="0.8 0.82 0.93 1"/>
+  </default>
+
+  <!-- ======================================================
+       ASSETS — swap type="mesh" once STL files are ready
+       ====================================================== -->
+  <asset>
+    <!-- Uncomment when STL files are available:
+    <mesh name="base_link"           file="base_link.STL"/>
+    <mesh name="pad_link_right"      file="pad_link_right.STL"/>
+    <mesh name="hip_frame_link_right" file="hip_frame_link_right.STL"/>
+    <mesh name="thigh_right_1"       file="thigh_right_1.STL"/>
+    <mesh name="calf_right_link_1"   file="calf_right_link_1.STL"/>
+    <mesh name="wheel_link_right"    file="wheel_link_right.STL"/>
+    <mesh name="thigh_right_2"       file="thigh_right_2.STL"/>
+    <mesh name="calf_right_link_2"   file="calf_right_link_2.STL"/>
+    <mesh name="pad_link_left"       file="pad_link_left.STL"/>
+    <mesh name="hip_frame_link_left" file="hip_frame_link_left.STL"/>
+    <mesh name="thigh_left_1"        file="thigh_left_1.STL"/>
+    <mesh name="calf_left_link_1"    file="calf_left_link_1.STL"/>
+    <mesh name="wheel_link_left"     file="wheel_link_left.STL"/>
+    <mesh name="thigh_left_2"        file="thigh_left_2.STL"/>
+    <mesh name="calf_left_link_2"    file="calf_left_link_2.STL"/>
+    -->
+  </asset>
+
+  <!-- ======================================================
+       WORLD BODY
+       ====================================================== -->
+  <worldbody>
+
+    <!-- Ground plane -->
+    <geom name="floor" type="plane" size="5 5 0.1" pos="0 0 0"
+          contype="1" conaffinity="1" rgba="0.5 0.5 0.5 1"/>
+
+    <!-- ── BASE ────────────────────────────────────────────── -->
+    <!-- Spawned 0.5m above ground; freejoint allows it to fall/move freely -->
+    <body name="base_link" pos="0 0 0.5">
+      <freejoint name="root"/>
+      <inertial pos="0.100464743379373 -0.273417797162494 0.231369380364405"
+                mass="8.12765796417228"
+                fullinertia="0.113381267165392 0.104302535100205 0.193324449577809
+                             -1.10883716950187e-17 6.53856800641098e-18 7.39699722855432e-05"/>
+      <!-- placeholder visual: box approximating the body -->
+      <geom name="base_vis" type="box" size="0.12 0.08 0.04" pos="0.1 -0.27 0.23"/>
+
+      <!-- ══════════════════════════════════════════════════
+           RIGHT SIDE
+           pad_joint_right: xyz="-0.01454 -0.16846 0.15344"  rpy="-π 0 π"
+           ══════════════════════════════════════════════════ -->
+      <body name="pad_link_right"
+            pos="-0.0145352566206275 -0.168456056407975 0.153440174945304"
+            euler="-3.14159265358979 0 3.14159265358979">
+        <inertial pos="-3.55729214853301e-05 -0.105 0"
+                  mass="1.05976991118431"
+                  fullinertia="0.00120769274628234 0.0023325641456101 0.00141046839633323
+                               -5.29395592033938e-22 8.824233070056e-20 -2.4525925475937e-21"/>
+        <geom name="pad_right_vis" type="box" size="0.03 0.05 0.01" pos="0 -0.105 0"/>
+
+        <!-- hip_frame_joint_right: xyz="0.01 -0.105 0.097"  rpy="0 0 π/2" -->
+        <body name="hip_frame_link_right"
+              pos="0.01 -0.105 0.097"
+              euler="0 0 1.5707963267949">
+          <inertial pos="-0.00787535032168385 -0.0307485208640013 0"
+                    mass="1.51193274122872"
+                    fullinertia="0.00230798720358944 0.00722477501190136 0.00595941566724505
+                                 -0.000347926290296318 1.89078126881913e-19 4.08813026916916e-19"/>
+          <geom name="hip_frame_right_vis" type="box" size="0.06 0.04 0.02" pos="-0.008 -0.031 0"/>
+
+          <!-- ── ACTIVE CHAIN (right) ──────────────────────────── -->
+          <!-- thigh_joint_right_1: xyz="0.0510 -0.06 0"  rpy="π -1.10816 0" -->
+          <body name="thigh_right_1"
+                pos="0.0510000000000153 -0.06 0"
+                euler="3.14159265358979 -1.10816260407562 0">
+            <joint name="thigh_joint_right_1" type="hinge" axis="0 1 0"
+                   range="-3.14159 3.14159"/>
+            <inertial pos="0.0700000000000471 0.00650000000000001 0"
+                      mass="0.116525440310417"
+                      fullinertia="2.4587749999541e-05 0.000338559690951383 0.000317254074187252
+                                   -1.36515067319353e-21 1.53967296404782e-15 2.19953294954768e-21"/>
+            <geom name="thigh_right_1_vis" type="capsule" size="0.013" fromto="0 0 0 0.14 0.013 0"/>
+
+            <!-- calf_joint_right_1: xyz="0.14 0 0"  rpy="π -1.31007 π" -->
+            <body name="calf_right_link_1"
+                  pos="0.13999999999996 0 0"
+                  euler="3.14159265358979 -1.31007351696931 3.14159265358979">
+              <joint name="calf_joint_right_1" type="hinge" axis="0 1 0"
+                     range="-3.14159 3.14159"/>
+              <inertial pos="-0.0900000000007728 -0.00650000000000001 0"
+                        mass="0.142525440310417"
+                        fullinertia="3.03705833328743e-05 0.000603757766611383 0.000577401649847252
+                                     9.05353026545483e-22 9.29316268849425e-16 2.33468699611553e-22"/>
+              <geom name="calf_right_1_vis" type="capsule" size="0.013" fromto="0 0 0 -0.18 0.001 0"/>
+
+              <!-- wheel_joint_right: xyz="-0.180 0.001 0"  rpy="0 0.92880 π" -->
+              <body name="wheel_link_right"
+                    pos="-0.180000000000025 0.000999999999999987 0"
+                    euler="0 0.928798996028179 3.14159265358979">
+                <joint name="wheel_joint_right" type="hinge" axis="0 1 0"
+                       range="-3.14159 3.14159" damping="0.01"/>
+                <inertial pos="0 -0.015 0"
+                          mass="0.234111484545512"
+                          fullinertia="0.00016481448512004 0.000294512247558254 0.00016481448512004
+                                       -1.38494337144744e-21 -2.5410988417629e-21 3.31377145312428e-21"/>
+                <!-- foot contact sphere -->
+                <geom name="wheel_right_col" type="sphere" size="0.025" pos="0 -0.015 0"
+                      contype="1" conaffinity="1" rgba="0.2 0.2 0.8 1"/>
+              </body>
+            </body>
+          </body>
+
+          <!-- ── PASSIVE CHAIN (right) — loop broken here ─────── -->
+          <!-- thigh_joint_right_2: xyz="-0.0510 -0.078 0"  rpy="0 -0.88686 π" -->
+          <body name="thigh_right_2"
+                pos="-0.0510000000000018 -0.078 0"
+                euler="0 -0.886862904121189 3.14159265358979">
+            <joint name="thigh_joint_right_2" type="hinge" axis="0 1 0"
+                   range="-3.14159 3.14159"/>
+            <inertial pos="0.0699999999999911 0.00649999999999999 0"
+                      mass="0.116525440310417"
+                      fullinertia="2.45877499995411e-05 0.000338559690951382 0.000317254074187251
+                                   6.9352432719385e-22 1.05707424828379e-15 -2.84526358354157e-21"/>
+            <geom name="thigh_right_2_vis" type="capsule" size="0.013" fromto="0 0 0 0.14 0.013 0"/>
+
+            <!-- calf_joint_right_2: xyz="0.140 0.013 0"  rpy="π 1.39897 π" -->
+            <body name="calf_right_link_2"
+                  pos="0.140000000000064 0.013 0"
+                  euler="3.14159265358979 1.39896599112596 3.14159265358979">
+              <joint name="calf_joint_right_2" type="hinge" axis="0 1 0"
+                     range="-3.14159 3.14159"/>
+              <inertial pos="-0.0899999999994293 0.00649999999999999 0"
+                        mass="0.142525440310417"
+                        fullinertia="3.03705833328744e-05 0.000603757766611383 0.000577401649847252
+                                     -2.23748770220882e-21 2.01531838634784e-15 -1.81007091485894e-21"/>
+              <geom name="calf_right_2_vis" type="capsule" size="0.013" fromto="0 0 0 -0.18 -0.001 0"/>
+              <!-- TIP SITE — used as anchor for equality constraint -->
+              <site name="calf_right_2_tip" pos="-0.18 -0.001 0" size="0.005"/>
+            </body>
+          </body>
+
+        </body><!-- hip_frame_link_right -->
+      </body><!-- pad_link_right -->
+
+      <!-- ══════════════════════════════════════════════════
+           LEFT SIDE
+           pad_joint_left: xyz="0.21546 -0.37846 0.15344"  rpy="π 0 0"
+           ══════════════════════════════════════════════════ -->
+      <body name="pad_link_left"
+            pos="0.215464743379373 -0.378456056407975 0.153440174945304"
+            euler="3.14159265358979 0 0">
+        <inertial pos="-3.5572921485344e-05 -0.105 0"
+                  mass="1.05976991118431"
+                  fullinertia="0.00120769274628234 0.0023325641456101 0.00141046839633323
+                               1.05879118406788e-22 -2.33498734180828e-19 1.83171406703271e-21"/>
+        <geom name="pad_left_vis" type="box" size="0.03 0.05 0.01" pos="0 -0.105 0"/>
+
+        <!-- hil_frame_joint_left (typo in original URDF): xyz="0.01 -0.105 0.097"  rpy="0 0 -π/2" -->
+        <body name="hip_frame_link_left"
+              pos="0.01 -0.105 0.097"
+              euler="0 0 -1.5707963267949">
+          <inertial pos="-0.0078753503216839 0.0307485208640013 0"
+                    mass="1.51193274122872"
+                    fullinertia="0.00230798720358944 0.00722477501190135 0.00595941566724504
+                                 0.000347926290296318 -1.35078386623163e-18 8.40488619506597e-20"/>
+          <geom name="hip_frame_left_vis" type="box" size="0.06 0.04 0.02" pos="-0.008 0.031 0"/>
+
+          <!-- ── ACTIVE CHAIN (left) ───────────────────────────── -->
+          <!-- thigh_joint_left_1: xyz="0.0510 0.06 0"  rpy="π -1.10060 0" -->
+          <body name="thigh_left_1"
+                pos="0.0509999999999999 0.06 0"
+                euler="3.14159265358979 -1.10060010562748 0">
+            <joint name="thigh_joint_left_1" type="hinge" axis="0 1 0"
+                   range="-3.14159 3.14159"/>
+            <inertial pos="0.07 -0.00649999999999995 0"
+                      mass="0.116525440310417"
+                      fullinertia="2.45877499995411e-05 0.000338559690951383 0.000317254074187252
+                                   5.27965569542743e-23 8.30092288309214e-20 -9.12645292528991e-22"/>
+            <geom name="thigh_left_1_vis" type="capsule" size="0.013" fromto="0 0 0 0.14 -0.013 0"/>
+
+            <!-- calf_joint_left_1: xyz="0.14 0 0"  rpy="π -1.32013 π" -->
+            <body name="calf_left_link_1"
+                  pos="0.14 0 0"
+                  euler="3.14159265358979 -1.32012929338845 3.14159265358979">
+              <joint name="calf_joint_left_1" type="hinge" axis="0 1 0"
+                     range="-3.14159 3.14159"/>
+              <inertial pos="-0.0899999999999976 0.00650000000000001 0"
+                        mass="0.142525440310417"
+                        fullinertia="3.03705833328744e-05 0.000603757766611385 0.000577401649847254
+                                     -6.23776929673658e-21 2.64274279543342e-19 2.42468484584563e-22"/>
+              <geom name="calf_left_1_vis" type="capsule" size="0.013" fromto="0 0 0 -0.18 -0.001 0"/>
+
+              <!-- wheel_joint_left: xyz="-0.180 -0.001 0"  rpy="0 0.84993 π" -->
+              <body name="wheel_link_left"
+                    pos="-0.180000000000001 -0.001 0"
+                    euler="0 0.849933072221034 3.14159265358979">
+                <joint name="wheel_joint_left" type="hinge" axis="0 1 0"
+                       range="-3.14159 3.14159" damping="0.01"/>
+                <inertial pos="0 0.015 0"
+                          mass="0.234111484545512"
+                          fullinertia="0.00016481448512004 0.000294512247558254 0.00016481448512004
+                                       -1.32690051411216e-21 5.22185070698748e-40 -2.10584729793552e-35"/>
+                <geom name="wheel_left_col" type="sphere" size="0.025" pos="0 0.015 0"
+                      contype="1" conaffinity="1" rgba="0.2 0.2 0.8 1"/>
+              </body>
+            </body>
+          </body>
+
+          <!-- ── PASSIVE CHAIN (left) — loop broken here ──────── -->
+          <!-- thigh_joint_left_2: xyz="-0.0510 0.078 0"  rpy="0 -0.88552 π" -->
+          <body name="thigh_left_2"
+                pos="-0.0510000000000005 0.078 0"
+                euler="0 -0.885520670756392 3.14159265358979">
+            <joint name="thigh_joint_left_2" type="hinge" axis="0 1 0"
+                   range="-3.14159 3.14159"/>
+            <inertial pos="0.0699999999999821 -0.00649999999999995 0"
+                      mass="0.116525440310417"
+                      fullinertia="2.45877499995411e-05 0.000338559690951383 0.000317254074187252
+                                   2.25113385230681e-22 2.15993401549847e-19 -1.13788144941437e-21"/>
+            <geom name="thigh_left_2_vis" type="capsule" size="0.013" fromto="0 0 0 0.14 -0.013 0"/>
+
+            <!-- calf_left_joint_2: xyz="0.140 -0.013 0"  rpy="π 1.40617 π" -->
+            <body name="calf_left_link_2"
+                  pos="0.139999999999993 -0.013 0"
+                  euler="3.14159265358979 1.40616950507853 3.14159265358979">
+              <joint name="calf_joint_left_2" type="hinge" axis="0 1 0"
+                     range="-3.14159 3.14159"/>
+              <inertial pos="-0.0900000000000073 -0.00650000000000001 0"
+                        mass="0.142525440310417"
+                        fullinertia="3.03705833328745e-05 0.000603757766611385 0.000577401649847254
+                                     -3.00074510556189e-21 -1.04185052512279e-19 2.89004002464875e-21"/>
+              <geom name="calf_left_2_vis" type="capsule" size="0.013" fromto="0 0 0 -0.18 0.001 0"/>
+              <!-- TIP SITE — used as anchor for equality constraint -->
+              <site name="calf_left_2_tip" pos="-0.18 0.001 0" size="0.005"/>
+            </body>
+          </body>
+
+        </body><!-- hip_frame_link_left -->
+      </body><!-- pad_link_left -->
+
+    </body><!-- base_link -->
+  </worldbody>
+
+  <!-- ======================================================
+       EQUALITY CONSTRAINTS — close the parallel linkage loops
+       weld body1=passive_calf_tip to body2=foot (wheel)
+       relpose: position and quaternion [w x y z] of body2 in body1 frame
+       NOTE: relpose="0 0 0 1 0 0 0" assumes origins coincide at default config.
+             If the robot sags or explodes on load, tune relpose or use
+             the connect type with explicit anchor positions.
+       ====================================================== -->
+  <equality>
+    <weld name="close_loop_right"
+          body1="calf_right_link_2" body2="wheel_link_right"
+          relpose="0 0 0 1 0 0 0"
+          solimp="0.9 0.95 0.001" solref="0.02 1"/>
+    <weld name="close_loop_left"
+          body1="calf_left_link_2" body2="wheel_link_left"
+          relpose="0 0 0 1 0 0 0"
+          solimp="0.9 0.95 0.001" solref="0.02 1"/>
+  </equality>
+
+  <!-- ======================================================
+       ACTUATORS — drive only the active chain joints
+       thigh_*_2 and calf_*_2 are passive (driven by linkage constraint)
+       ====================================================== -->
+  <actuator>
+    <motor name="act_thigh_right_1" joint="thigh_joint_right_1"
+           gear="1" ctrllimited="true" ctrlrange="-20 20"/>
+    <motor name="act_calf_right_1"  joint="calf_joint_right_1"
+           gear="1" ctrllimited="true" ctrlrange="-20 20"/>
+    <motor name="act_thigh_left_1"  joint="thigh_joint_left_1"
+           gear="1" ctrllimited="true" ctrlrange="-20 20"/>
+    <motor name="act_calf_left_1"   joint="calf_joint_left_1"
+           gear="1" ctrllimited="true" ctrlrange="-20 20"/>
+  </actuator>
+
+</mujoco>
