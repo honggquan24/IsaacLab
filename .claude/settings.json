@@ -4,7 +4,14 @@
       "Read(//home/hongquan/Documents/uav/**)",
       "Bash(git show legged_v3 --name-only --format=\"\")",
       "Bash(git show legged_v3 --name-only --format=\"\" -- \"*.py\")",
-      "Bash(xargs -I{} git show legged_v3:{})"
+      "Bash(xargs -I{} git show legged_v3:{})",
+      "Bash(mv pid_controller.py 00_pid_controller.py)",
+      "Bash(mv uav_pid_altitude.py 01_uav_pid_altitude.py)",
+      "Bash(mv uav_pid_position.py 02_uav_pid_position.py)",
+      "Bash(mv uav_pid_velocity.py 03_uav_pid_velocity.py)",
+      "Bash(mv uav_pid_hover.py 04_uav_pid_hover.py)",
+      "Bash(ls /home/hongquan/Documents/GitHub/IsaacLabUTE/source/isaaclab_assets/isaaclab_assets/uav/pid_control/*.py)",
+      "WebSearch"
     ],
     "additionalDirectories": [
       "/home/hongquan/Documents/uav"

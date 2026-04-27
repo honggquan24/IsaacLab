@@ -17,7 +17,7 @@ Play:
 """
 import math
 import isaaclab.sim as sim_utils
-from isaaclab.assets import Articulation, AssetBaseCfg
+from isaaclab.assets import Articulation, ArticulationCfg, AssetBaseCfg
 from isaaclab.envs import ManagerBasedRLEnvCfg
 from isaaclab.managers import (
     EventTermCfg,
@@ -65,6 +65,7 @@ class UAVSceneCfg(InteractiveSceneCfg):
 
     robot: Articulation = UAV_CFG.replace(
         prim_path="{ENV_REGEX_NS}/Robot",
+        init_state=ArticulationCfg.InitialStateCfg(pos=(0.0, 0.0, 0.1))
     )
 
 
@@ -97,9 +98,9 @@ class CommandsCfg:
         resampling_time_range=(10, 20.0),
         debug_vis=True,
         ranges=mdp.UAVTargetPosCommandCfg.Ranges(
-            pos_x=(-2.0, 2.0),
-            pos_y=(-2.0, 2.0),
-            pos_z=(0.5, 2.0),     # độ cao hover [m] — world frame tuyệt đối
+            pos_x=(-10.0, 10.0),
+            pos_y=(-10.0, 10.0),
+            pos_z=(0.2, 10.0),     # độ cao hover [m] — world frame tuyệt đối
         ),
     )
 
@@ -159,7 +160,7 @@ class EventCfg:
             "pose_range": {
                 "x": (-1.0, 1.0),
                 "y": (-1.0, 1.0),
-                "z": (0.5, 1.5),
+                "z": (0.1, 0.1),
                 "yaw": (-math.pi, math.pi),
             },
             "velocity_range": {
