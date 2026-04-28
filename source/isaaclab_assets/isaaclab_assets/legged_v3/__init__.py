@@ -10,8 +10,8 @@ Tasks:
   - Isaac-Legged-V3-Wheel: Wheeled locomotion with balance
 
 Train (headless):
-    ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \\
-        --task Isaac-Legged-V3-Wheel \\
+    ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
+        --task Isaac-Legged-V3-Wheel \
         --num_envs 4096 --headless
 
 Train (visual debug):

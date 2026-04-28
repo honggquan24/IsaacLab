@@ -120,6 +120,39 @@ def spawn_from_urdf(
     return _spawn_from_usd_file(prim_path, urdf_loader.usd_path, cfg, translation, orientation)
 
 
+def spawn_from_mjcf(
+    prim_path: str,
+    cfg: from_files_cfg.MjcfFileCfg,
+    translation: tuple[float, float, float] | None = None,
+    orientation: tuple[float, float, float, float] | None = None,
+) -> Usd.Prim:
+    """Spawn an asset from a MJCF file and override the settings with the given config.
+
+    It uses the :class:`MjcfConverter` class to create a USD file from MJCF. This file is then imported
+    at the specified prim path.
+    """
+    from pxr import UsdPhysics
+
+    mjcf_loader = converters.MjcfConverter(cfg)
+    result = _spawn_from_usd_file(prim_path, mjcf_loader.usd_path, cfg, translation, orientation)
+
+    # When fix_base=False the MJCF importer applies ArticulationRootAPI to both
+    # the worldBody prim and the base-link prim, causing IsaacLab to crash with
+    # "Found multiple articulations". Keep only the worldBody one.
+    if not cfg.fix_base:
+        stage = get_current_stage()
+        for prim in stage.Traverse():
+            prim_path_str = str(prim.GetPath())
+            if (
+                prim.HasAPI(UsdPhysics.ArticulationRootAPI)
+                and prim_path_str.startswith(prim_path)
+                and "worldBody" not in prim_path_str
+            ):
+                prim.RemoveAppliedSchema("PhysicsArticulationRootAPI")
+
+    return result
+
+
 def spawn_ground_plane(
     prim_path: str,
     cfg: from_files_cfg.GroundPlaneCfg,

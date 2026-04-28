@@ -132,6 +132,16 @@ class UrdfFileCfg(FileCfg, converters.UrdfConverterCfg):
     func: Callable = from_files.spawn_from_urdf
 
 
+@configclass
+class MjcfFileCfg(FileCfg, converters.MjcfConverterCfg):
+    """MJCF file to spawn asset from.
+
+    Uses :class:`MjcfConverter` to create a USD file from MJCF then spawns it.
+    """
+
+    func: Callable = from_files.spawn_from_mjcf
+
+
 """
 Spawning ground plane.
 """
