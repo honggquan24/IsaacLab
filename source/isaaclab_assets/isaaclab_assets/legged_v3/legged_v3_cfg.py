@@ -109,6 +109,10 @@ LEGGED_ROBOT_V3_CFG = ArticulationCfg(
             angular_damping=0.0,
             max_depenetration_velocity=1.0,
         ),
+        collision_props=sim_utils.CollisionPropertiesCfg(
+            contact_offset=0.001,
+            rest_offset=0.0,
+        ),
         articulation_props=sim_utils.ArticulationRootPropertiesCfg(
             enabled_self_collisions=False,
             solver_position_iteration_count=4,
@@ -120,7 +124,7 @@ LEGGED_ROBOT_V3_CFG = ArticulationCfg(
 
     # INITIAL STATE
     init_state=ArticulationCfg.InitialStateCfg(
-        pos=(0.0, 0.0, 0.50),
+        pos=(0.0, 0.0, 0.30),
         joint_pos={
             "pad_joint_right":      0.0,
             "pad_joint_left":       0.0,
@@ -140,41 +144,44 @@ LEGGED_ROBOT_V3_CFG = ArticulationCfg(
 
     # ACTUATORS
     actuators={
+        # pad: 100 N·m motor, ±20° range → Kp=100 gives 100 N·m at full range
         "pad": DelayedPDActuatorCfg(
             joint_names_expr=["pad_joint_right", "pad_joint_left"],
             effort_limit_sim=100.0,
-            stiffness=40.0,
-            damping=2.0,
+            stiffness=100.0,
+            damping=4.0,
             velocity_limit_sim=10.0,
         ),
+        # thigh/calf: 20 N·m motor, Kp=80 → 24 N·m at 0.3 rad error (clipped to limit)
+        # Kd = 2·√(80·0.01) ≈ 1.8 → use 2.0
         "thigh_active": DelayedPDActuatorCfg(
             joint_names_expr=["thigh_joint_right_1", "thigh_joint_left_1"],
             effort_limit_sim=20.0,
-            stiffness=30.0,
-            damping=5.0,
+            stiffness=80.0,
+            damping=2.0,
             velocity_limit_sim=50.0,
         ),
         "calf_active": DelayedPDActuatorCfg(
             joint_names_expr=["calf_joint_right_1", "calf_joint_left_1"],
             effort_limit_sim=20.0,
-            stiffness=30.0,
-            damping=5.0,
+            stiffness=80.0,
+            damping=2.0,
             velocity_limit_sim=50.0,
         ),
-        # Wheels: velocity control → stiffness=0, damping acts as the drive gain
+        # Wheels: velocity control → stiffness=0, damping = drive gain (N·m·s/rad)
         "wheel": DelayedPDActuatorCfg(
             joint_names_expr=["wheel_joint_right", "wheel_joint_left"],
             effort_limit_sim=20.0,
             stiffness=0.0,
-            damping=2.0,
+            damping=5.0,
             velocity_limit_sim=100.0,
         ),
-        # Passive chain: calf_2 only (thigh_2 omitted — may be auto-excluded by PhysX)
+        # Passive chain: zero torque, tiny damping to prevent numerical jitter
         "calf_passive": DelayedPDActuatorCfg(
             joint_names_expr=["calf_joint_right_2", "calf_joint_left_2"],
             effort_limit_sim=0.0,
             stiffness=0.0,
-            damping=0.1,
+            damping=0.05,
             velocity_limit_sim=50.0,
         ),
     },
