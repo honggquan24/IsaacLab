@@ -75,12 +75,14 @@ class PIDController:
         kp: float,
         ki: float,
         kd: float,
-        integral_limit: float | None = None,
+        integral_limit: float = 10.0,
+        derivative_limit: float = 10.0, 
     ):
         self.kp = kp
         self.ki = ki
         self.kd = kd
         self.integral_limit = integral_limit
+        self.derivative_limit = derivative_limit
 
         self._integral   = 0.0
         self._prev_error = 0.0
@@ -90,7 +92,9 @@ class PIDController:
         if self.integral_limit is not None:
             self._integral = max(-self.integral_limit, min(self.integral_limit, self._integral))
 
-        derivative = (error - self._prev_error) / dt if dt > 1e-6 else 0.0
+        if dt and self.derivative_limit:
+            derivative = (error - self._prev_error) / dt
+            derivative = max(-self.derivative_limit, min(self.derivative_limit, derivative))
         self._prev_error = error
 
         return self.kp * error + self.ki * self._integral + self.kd * derivative

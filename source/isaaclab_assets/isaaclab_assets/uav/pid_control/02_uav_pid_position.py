@@ -118,9 +118,9 @@ def main():
 
     # ── PID Controllers ────────────────────────────────────────────────────────
     pid = QuadcopterPID()
-    pid_roll  = PIDController(kp=0.001, ki=0.001, kd=0.002, integral_limit=0.01)
-    pid_pitch = PIDController(kp=0.001, ki=0.001, kd=0.002, integral_limit=0.01)
-    pid_yaw   = PIDController(kp=0.003, ki=0.0,   kd=0.001, integral_limit=0.01)
+    pid_roll  = PIDController(kp=0.01, ki=0.001, kd=0.002, integral_limit=0.01)
+    pid_pitch = PIDController(kp=0.01, ki=0.001, kd=0.002, integral_limit=0.01)
+    pid_yaw   = PIDController(kp=0.03, ki=0.0,   kd=0.001, integral_limit=0.01)
 
     # ── Live plot ─────────────────────────────────────────────────────────────
     sim_dt   = sim.get_physics_dt()
@@ -164,7 +164,7 @@ def main():
         # ── Allocation matrix: [Fz,Tx,Ty,Tz] → [F1,F2,F3,F4] ───────────
         wrench  = torch.tensor([thrust_N, m_roll, m_pitch, m_yaw], device=sim.device)
         F_props = (A_inv @ wrench).clamp(min=0.0)
-        F_props += torch.randn(4, device=sim.device) * MOTOR_THRUST_STD
+        # F_props += torch.randn(4, device=sim.device) * MOTOR_THRUST_STD
 
         forces_prop = torch.zeros(robot.num_instances, 4, 3, device=sim.device)
         forces_prop[0, :, 2] = F_props

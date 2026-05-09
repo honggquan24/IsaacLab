@@ -160,7 +160,7 @@ class EventCfg:
             "pose_range": {
                 "x": (-1.0, 1.0),
                 "y": (-1.0, 1.0),
-                "z": (0.1, 0.1),
+                "z": (1.0, 1.0),
                 "yaw": (-math.pi, math.pi),
             },
             "velocity_range": {
