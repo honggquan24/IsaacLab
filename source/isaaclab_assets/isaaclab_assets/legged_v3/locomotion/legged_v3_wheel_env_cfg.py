@@ -37,6 +37,7 @@ import isaaclab_tasks.manager_based.locomotion.velocity.mdp as mdp_vel
 from ..legged_v3_cfg import LEGGED_ROBOT_V3_CFG
 from .. import mdp
 
+import math 
 
 # ─────────────────────────── Scene ────────────────────────────────────────────
 
@@ -80,27 +81,27 @@ class LeggedV3SceneCfg(InteractiveSceneCfg):
     # URDF with merge_fixed_joints → all links flat under /Robot/.
     # Three separate sensors to avoid body-count mismatch.
 
-    contact_forces_base = ContactSensorCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/base_link",
-        update_period=0.0,
-        debug_vis=False,
-    )
+    # contact_forces_base = ContactSensorCfg(
+    #     prim_path="{ENV_REGEX_NS}/Robot/base_link",
+    #     update_period=0.0,
+    #     debug_vis=False,
+    # )
 
-    contact_forces_right = ContactSensorCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/.*right.*",
-        update_period=0.0,
-        history_length=3,
-        track_air_time=True,
-        debug_vis=False,
-    )
+    # contact_forces_right = ContactSensorCfg(
+    #     prim_path="{ENV_REGEX_NS}/Robot/.*right.*",
+    #     update_period=0.0,
+    #     history_length=3,
+    #     track_air_time=True,
+    #     debug_vis=False,
+    # )
 
-    contact_forces_left = ContactSensorCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/.*left.*",
-        update_period=0.0,
-        history_length=3,
-        track_air_time=True,
-        debug_vis=False,
-    )
+    # contact_forces_left = ContactSensorCfg(
+    #     prim_path="{ENV_REGEX_NS}/Robot/.*left.*",
+    #     update_period=0.0,
+    #     history_length=3,
+    #     track_air_time=True,
+    #     debug_vis=False,
+    # )
 
 
 # ─────────────────────────── Actions ──────────────────────────────────────────
@@ -140,7 +141,7 @@ class CommandsCfg:
     velocity_command = commands.UniformVelocityCommandCfg(
         asset_name="robot",
         resampling_time_range=(3.0, 5.0),
-        rel_standing_envs=0.02,
+        rel_standing_envs=0.3,
         heading_command=False,
         debug_vis=False,
         ranges=commands.UniformVelocityCommandCfg.Ranges(
@@ -348,13 +349,13 @@ class TerminationsCfg:
 
     time_out = TerminationTermCfg(func=terminations.time_out, time_out=True)
 
-    # bad_orientation = TerminationTermCfg(
-    #     func=terminations.bad_orientation,
-    #     params={
-    #         "limit_angle": math.pi / 2,
-    #         "asset_cfg": SceneEntityCfg(name="robot"),
-    #     },
-    # )
+    bad_orientation = TerminationTermCfg(
+        func=terminations.bad_orientation,
+        params={
+            "limit_angle": math.pi / 2,
+            "asset_cfg": SceneEntityCfg(name="robot"),
+        },
+    )
 
     # base_height = TerminationTermCfg(
     #     func=terminations.root_height_below_minimum,
@@ -364,13 +365,13 @@ class TerminationsCfg:
     #     },
     # )
 
-    # joint_vel_limit = TerminationTermCfg(
-    #     func=terminations.joint_vel_out_of_manual_limit,
-    #     params={
-    #         "max_velocity": 120.0,
-    #         "asset_cfg": SceneEntityCfg(name="robot"),
-    #     },
-    # )
+    joint_vel_limit = TerminationTermCfg(
+        func=terminations.joint_vel_out_of_manual_limit,
+        params={
+            "max_velocity": 120.0,
+            "asset_cfg": SceneEntityCfg(name="robot"),
+        },
+    )
 
     # illegal_contact_base = TerminationTermCfg(
     #     func=terminations.illegal_contact,
