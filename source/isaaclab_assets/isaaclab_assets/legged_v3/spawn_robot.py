@@ -15,7 +15,7 @@ app_launcher = AppLauncher(args)
 simulation_app = app_launcher.app
 
 import torch
-from isaaclab_assets.legged_v3.legged_v3_wheel_env_cfg import LeggedV3WheelEnvCfg
+from isaaclab_assets.legged_v3.locomotion.legged_v3_wheel_env_cfg import LeggedV3WheelEnvCfg
 from isaaclab.envs import ManagerBasedRLEnv
 
 # ── Build env directly (no gym registry needed) ───────────────────────────────

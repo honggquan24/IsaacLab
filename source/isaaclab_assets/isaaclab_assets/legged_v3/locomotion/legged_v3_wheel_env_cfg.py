@@ -14,7 +14,6 @@ Play:
         --num_envs 4
 """
 
-import math
 import isaaclab.sim as sim_utils
 from isaaclab.assets import Articulation, AssetBaseCfg
 from isaaclab.envs import ManagerBasedRLEnvCfg
@@ -35,8 +34,8 @@ from isaaclab.terrains import TerrainImporterCfg
 
 import isaaclab_tasks.manager_based.locomotion.velocity.mdp as mdp_vel
 
-from .legged_v3_cfg import LEGGED_ROBOT_V3_CFG
-from . import mdp
+from ..legged_v3_cfg import LEGGED_ROBOT_V3_CFG
+from .. import mdp
 
 
 # ─────────────────────────── Scene ────────────────────────────────────────────
@@ -116,10 +115,10 @@ class ActionCfg:
         joint_names=[
             "pad_joint_right",
             "thigh_joint_right_1",
-            "thigh_joint_right_2",
+            "calf_joint_right_1",
             "pad_joint_left",
             "thigh_joint_left_1",
-            "thigh_joint_left_2",
+            "calf_joint_left_1",
         ],
         scale=5.0,
     )
@@ -349,13 +348,13 @@ class TerminationsCfg:
 
     time_out = TerminationTermCfg(func=terminations.time_out, time_out=True)
 
-    bad_orientation = TerminationTermCfg(
-        func=terminations.bad_orientation,
-        params={
-            "limit_angle": math.pi / 2,
-            "asset_cfg": SceneEntityCfg(name="robot"),
-        },
-    )
+    # bad_orientation = TerminationTermCfg(
+    #     func=terminations.bad_orientation,
+    #     params={
+    #         "limit_angle": math.pi / 2,
+    #         "asset_cfg": SceneEntityCfg(name="robot"),
+    #     },
+    # )
 
     # base_height = TerminationTermCfg(
     #     func=terminations.root_height_below_minimum,
@@ -365,13 +364,13 @@ class TerminationsCfg:
     #     },
     # )
 
-    joint_vel_limit = TerminationTermCfg(
-        func=terminations.joint_vel_out_of_manual_limit,
-        params={
-            "max_velocity": 120.0,
-            "asset_cfg": SceneEntityCfg(name="robot"),
-        },
-    )
+    # joint_vel_limit = TerminationTermCfg(
+    #     func=terminations.joint_vel_out_of_manual_limit,
+    #     params={
+    #         "max_velocity": 120.0,
+    #         "asset_cfg": SceneEntityCfg(name="robot"),
+    #     },
+    # )
 
     # illegal_contact_base = TerminationTermCfg(
     #     func=terminations.illegal_contact,
@@ -422,10 +421,10 @@ class LeggedV3WheelEnvCfg(ManagerBasedRLEnvCfg):
     terminations: TerminationsCfg  = TerminationsCfg()
 
     def __post_init__(self):
-        self.decimation = 2           # control @ 30 Hz (sim 60 Hz / 2)
+        self.decimation = 4           # control @ 50 Hz (sim 200 Hz / 4)
         self.episode_length_s = 60.0
 
-        self.sim.dt = 1 / 60.0
+        self.sim.dt = 1 / 200.0
         self.sim.render_interval = self.decimation
 
         self.viewer.eye    = (3.0, 3.0, 2.0)

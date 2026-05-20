@@ -35,8 +35,8 @@ import isaaclab.terrains as terrain_gen
 
 import isaaclab_tasks.manager_based.locomotion.velocity.mdp as mdp_vel
 
-from .legged_v3_cfg import LEGGED_ROBOT_V3_CFG
-from . import mdp
+from ..legged_v3_cfg import LEGGED_ROBOT_V3_CFG
+from .. import mdp
 
 
 # ─────────────────────────── Scene ────────────────────────────────────────────
