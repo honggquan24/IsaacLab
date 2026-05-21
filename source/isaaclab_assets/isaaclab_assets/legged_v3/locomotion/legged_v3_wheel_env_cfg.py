@@ -81,27 +81,27 @@ class LeggedV3SceneCfg(InteractiveSceneCfg):
     # URDF with merge_fixed_joints → all links flat under /Robot/.
     # Three separate sensors to avoid body-count mismatch.
 
-    # contact_forces_base = ContactSensorCfg(
-    #     prim_path="{ENV_REGEX_NS}/Robot/base_link",
-    #     update_period=0.0,
-    #     debug_vis=False,
-    # )
+    contact_forces_base = ContactSensorCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/base_link",
+        update_period=0.0,
+        debug_vis=False,
+    )
 
-    # contact_forces_right = ContactSensorCfg(
-    #     prim_path="{ENV_REGEX_NS}/Robot/.*right.*",
-    #     update_period=0.0,
-    #     history_length=3,
-    #     track_air_time=True,
-    #     debug_vis=False,
-    # )
+    contact_forces_right = ContactSensorCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/.*right.*",
+        update_period=0.0,
+        history_length=3,
+        track_air_time=True,
+        debug_vis=False,
+    )
 
-    # contact_forces_left = ContactSensorCfg(
-    #     prim_path="{ENV_REGEX_NS}/Robot/.*left.*",
-    #     update_period=0.0,
-    #     history_length=3,
-    #     track_air_time=True,
-    #     debug_vis=False,
-    # )
+    contact_forces_left = ContactSensorCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/.*left.*",
+        update_period=0.0,
+        history_length=3,
+        track_air_time=True,
+        debug_vis=False,
+    )
 
 
 # ─────────────────────────── Actions ──────────────────────────────────────────
@@ -121,7 +121,7 @@ class ActionCfg:
             "thigh_joint_left_1",
             "calf_joint_left_1",
         ],
-        scale=5.0,
+        scale=10.0,
     )
 
     # Wheels: velocity control (policy outputs target angular velocity in rad/s)
@@ -276,50 +276,50 @@ class RewardCfg:
 
     track_lin_vel_xy_exp = RewardTermCfg(
         func=mdp_vel.track_lin_vel_xy_yaw_frame_exp,
-        weight=5.0,
+        weight=3.0,
         params={"command_name": "velocity_command", "std": 0.5},
     )
 
     track_ang_vel_z_exp = RewardTermCfg(
         func=mdp_vel.track_ang_vel_z_world_exp,
-        weight=2.0,
+        weight=5.0,  # tăng 2→5: yaw error 70 rad/s, cần ưu tiên hơn lin_vel
         params={"command_name": "velocity_command", "std": 0.5},
     )
 
     track_base_height_exp = RewardTermCfg(
         func=mdp.rewards.track_base_height_exp,
         weight=2.0,
-        params={"command_name": "height_command", "std": 0.05},
+        params={"command_name": "height_command", "std": 0.15},  # nới std 0.05→0.15: error 0.5m quá xa
     )
 
     # ── Stability ─────────────────────────────────────────────────────────────
     upright = RewardTermCfg(
         func=mdp.rewards.rpy_alignment_imu,
-        weight=-5.0,
+        weight=-40.0,  # tăng -20→-40: illegal_contact_left 73%, robot ngã trái liên tục
         params={
             "target_rpy": (0.0, 0.0, 0.0),
             "imu_cfg": SceneEntityCfg(name="imu"),
         },
     )
 
-    lin_vel_z_l2 = RewardTermCfg(func=rewards.lin_vel_z_l2, weight=-1.0)
+    # lin_vel_z_l2 = RewardTermCfg(func=rewards.lin_vel_z_l2, weight=-1.0)
 
     # ── Joint / action smoothness ─────────────────────────────────────────────
-    dof_pos_limits = RewardTermCfg(
-        func=rewards.joint_pos_limits,
-        weight=-2.0,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=_LEG_JOINTS)},
-    )
+    # dof_pos_limits = RewardTermCfg(
+    #     func=rewards.joint_pos_limits,
+    #     weight=-2.0,
+    #     params={"asset_cfg": SceneEntityCfg("robot", joint_names=_LEG_JOINTS)},
+    # )
 
-    joint_deviation_pad = RewardTermCfg(
-        func=rewards.joint_deviation_l1,
-        weight=-0.5,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names="pad_joint_.*")},
-    )
+    # joint_deviation_pad = RewardTermCfg(
+    #     func=rewards.joint_deviation_l1,
+    #     weight=-0.5,
+    #     params={"asset_cfg": SceneEntityCfg("robot", joint_names="pad_joint_.*")},
+    # )
 
     stand_still = RewardTermCfg(
         func=mdp_vel.stand_still_joint_deviation_l1,
-        weight=-1.0,
+        weight=-2.0,
         params={
             "command_name": "velocity_command",
             "command_threshold": 0.05,
@@ -327,17 +327,17 @@ class RewardCfg:
         },
     )
 
-    joint_acc = RewardTermCfg(
-        func=rewards.joint_acc_l2,
-        weight=-5e-5,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=_LEG_JOINTS)},
-    )
+    # joint_acc = RewardTermCfg(
+    #     func=rewards.joint_acc_l2,
+    #     weight=-5e-5,
+    #     params={"asset_cfg": SceneEntityCfg("robot", joint_names=_LEG_JOINTS)},
+    # )
 
-    joint_torques = RewardTermCfg(
-        func=rewards.joint_torques_l2,
-        weight=-1e-3,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=_LEG_JOINTS)},
-    )
+    # joint_torques = RewardTermCfg(
+    #     func=rewards.joint_torques_l2,
+    #     weight=-1e-3,
+    #     params={"asset_cfg": SceneEntityCfg("robot", joint_names=_LEG_JOINTS)},
+    # )
 
     action_rate = RewardTermCfg(func=rewards.action_rate_l2, weight=-0.01)
 
@@ -373,39 +373,39 @@ class TerminationsCfg:
         },
     )
 
-    # illegal_contact_base = TerminationTermCfg(
-    #     func=terminations.illegal_contact,
-    #     params={
-    #         "threshold": 100.0,
-    #         "sensor_cfg": SceneEntityCfg(name="contact_forces_base", body_names=["base_link"]),
-    #     },
-    # )
+    illegal_contact_base = TerminationTermCfg(
+        func=terminations.illegal_contact,
+        params={
+            "threshold": 100.0,
+            "sensor_cfg": SceneEntityCfg(name="contact_forces_base", body_names=["base_link"]),
+        },
+    )
 
-    # illegal_contact_right = TerminationTermCfg(
-    #     func=terminations.illegal_contact,
-    #     params={
-    #         "threshold": 100.0,
-    #         "sensor_cfg": SceneEntityCfg(
-    #             name="contact_forces_right",
-    #             body_names=["pad_link_right", "hip_frame_link_right",
-    #                         "thigh_right_1", "calf_right_link_1",
-    #                         "thigh_right_2", "calf_right_link_2"],
-    #         ),
-    #     },
-    # )
+    illegal_contact_right = TerminationTermCfg(
+        func=terminations.illegal_contact,
+        params={
+            "threshold": 100.0,
+            "sensor_cfg": SceneEntityCfg(
+                name="contact_forces_right",
+                body_names=["pad_link_right", "hip_frame_link_right",
+                            "thigh_right_1", "calf_right_link_1",
+                            "thigh_right_2", "calf_right_link_2"],
+            ),
+        },
+    )
 
-    # illegal_contact_left = TerminationTermCfg(
-    #     func=terminations.illegal_contact,
-    #     params={
-    #         "threshold": 100.0,
-    #         "sensor_cfg": SceneEntityCfg(
-    #             name="contact_forces_left",
-    #             body_names=["pad_link_left", "hip_frame_link_left",
-    #                         "thigh_left_1", "calf_left_link_1",
-    #                         "thigh_left_2", "calf_left_link_2"],
-    #         ),
-    #     },
-    # )
+    illegal_contact_left = TerminationTermCfg(
+        func=terminations.illegal_contact,
+        params={
+            "threshold": 100.0,
+            "sensor_cfg": SceneEntityCfg(
+                name="contact_forces_left",
+                body_names=["pad_link_left", "hip_frame_link_left",
+                            "thigh_left_1", "calf_left_link_1",
+                            "thigh_left_2", "calf_left_link_2"],
+            ),
+        },
+    )
 
 
 # ─────────────────────────── Env ──────────────────────────────────────────────

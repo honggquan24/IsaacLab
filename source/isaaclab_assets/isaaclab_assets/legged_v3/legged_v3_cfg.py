@@ -30,6 +30,12 @@ LEGGED_ROBOT_V3_URDF_PATH = os.path.join(
 
 _LOOP_JOINT_NAMES = {"close_loop_right", "close_loop_left"}
 
+# (secondary, primary) — secondary will mimic primary with gear ratio 1:1
+_MIMIC_PAIRS = [
+    ("thigh_joint_right_2", "thigh_joint_right_1"),
+    ("thigh_joint_left_2",  "thigh_joint_left_1"),
+]
+
 
 def _spawn_urdf_with_loop_joints(
     prim_path: str,
@@ -38,9 +44,9 @@ def _spawn_urdf_with_loop_joints(
     orientation=None,
     **kwargs,
 ):
-    """Spawn URDF and immediately set close_loop_* joints to excludeFromArticulation=True."""
+    """Spawn URDF, exclude close_loop_* from articulation, and add mimic constraints."""
     import omni.usd
-    from pxr import Usd, UsdPhysics
+    from pxr import Usd, UsdPhysics, PhysxSchema
 
     prim = spawn_from_urdf(prim_path, cfg, translation, orientation, **kwargs)
 
@@ -48,6 +54,7 @@ def _spawn_urdf_with_loop_joints(
     actual_path = str(prim.GetPath())
     print(f"[legged_v3_cfg] spawn actual_path = {actual_path}")
 
+    # ── 1. Exclude close-loop joints from articulation ────────────────────────
     found = []
     for joint_name in _LOOP_JOINT_NAMES:
         candidates = [
@@ -75,13 +82,32 @@ def _spawn_urdf_with_loop_joints(
                 drive.GetStiffnessAttr().Set(0.0)
                 drive.GetDampingAttr().Set(0.0)
 
-        # Verify the value was written
         val = UsdPhysics.Joint(joint_prim).GetExcludeFromArticulationAttr().Get()
         print(f"[legged_v3_cfg] {joint_prim.GetPath()} excludeFromArticulation={val}")
         found.append(joint_name)
 
     if len(found) != 2:
         print(f"[legged_v3_cfg] WARNING: expected 2 loop joints, found {len(found)}: {found}")
+
+    # ── 2. Apply PhysxMimicJointAPI: secondary tracks primary 1:1 ────────────
+    with Usd.EditContext(stage, stage.GetSessionLayer()):
+        for secondary_name, primary_name in _MIMIC_PAIRS:
+            primary_path   = f"{actual_path}/joints/{primary_name}"
+            secondary_path = f"{actual_path}/joints/{secondary_name}"
+
+            primary_prim   = stage.GetPrimAtPath(primary_path)
+            secondary_prim = stage.GetPrimAtPath(secondary_path)
+
+            if not primary_prim.IsValid() or not secondary_prim.IsValid():
+                print(f"[legged_v3_cfg] WARNING: mimic pair not found: {secondary_name} → {primary_name}")
+                continue
+
+            # "rotX" is the PhysX revolute DOF token (regardless of URDF axis)
+            mimic_api = PhysxSchema.PhysxMimicJointAPI.Apply(secondary_prim, "rotX")
+            mimic_api.GetGearingAttr().Set(1.0)
+            mimic_api.GetOffsetAttr().Set(0.0)
+            mimic_api.GetReferenceJointRel().AddTarget(primary_path)
+            print(f"[legged_v3_cfg] mimic: {secondary_name} → {primary_name}")
 
     return prim
 
@@ -122,7 +148,7 @@ LEGGED_ROBOT_V3_CFG = ArticulationCfg(
 
     # INITIAL STATE
     init_state=ArticulationCfg.InitialStateCfg(
-        pos=(0.0, 0.0, 0.30),
+        pos=(0.0, 0.0, 0.3),
         joint_pos={
             "pad_joint_right":      0.0,
             "pad_joint_left":       0.0,
@@ -156,14 +182,15 @@ LEGGED_ROBOT_V3_CFG = ArticulationCfg(
             damping=0.0,
             velocity_limit_sim=50.0,
         ),
-        "calf_active": DelayedPDActuatorCfg(
-            joint_names_expr=["calf_joint_right_1", "calf_joint_left_1"],
+        # thigh_*_2 are driven by PhysxMimicJointAPI → no stiffness needed
+        "thigh_passive": DelayedPDActuatorCfg(
+            joint_names_expr=["thigh_joint_right_2", "thigh_joint_left_2"],
             effort_limit_sim=20.0,
-            stiffness=1.0,
+            stiffness=0.0,
             damping=0.0,
             velocity_limit_sim=50.0,
         ),
-        # Wheels: velocity control → stiffness=0, damping = drive gain (N·m·s/rad)
+        # Wheels: velocity control → stiffness=0, damping = drivIllegal contact trái 73.7%, robot đang ngã trái liên tụce gain (N·m·s/rad)
         "wheel": DelayedPDActuatorCfg(
             joint_names_expr=["wheel_joint_right", "wheel_joint_left"],
             effort_limit_sim=20.0,
@@ -171,18 +198,11 @@ LEGGED_ROBOT_V3_CFG = ArticulationCfg(
             damping=5.0,
             velocity_limit_sim=100.0,
         ),
-        # Passive chains: hold near 0 to approximate broken close_loop constraint.
-        "thigh_passive": DelayedPDActuatorCfg(
-            joint_names_expr=["thigh_joint_right_2", "thigh_joint_left_2"],
-            effort_limit_sim=5.0,
-            stiffness=20.0,
-            damping=0.0,
-            velocity_limit_sim=50.0,
-        ),
         "calf_passive": DelayedPDActuatorCfg(
-            joint_names_expr=["calf_joint_right_2", "calf_joint_left_2"],
+            joint_names_expr=["calf_joint_right_1", "calf_joint_left_1",
+                              "calf_joint_right_2", "calf_joint_left_2"],
             effort_limit_sim=5.0,
-            stiffness=20.0,
+            stiffness=0.0,
             damping=0.0,
             velocity_limit_sim=50.0,
         ),

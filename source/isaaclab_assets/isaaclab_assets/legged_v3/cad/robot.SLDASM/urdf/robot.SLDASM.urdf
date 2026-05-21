@@ -203,7 +203,7 @@
       link="thigh_right_1" />
     <axis
       xyz="0 1 0" />
-      <limit lower="-0.5" upper="0.5" effort="20" velocity="50" />
+      <limit lower="-1.0" upper="1.0" effort="20" velocity="50" />
   </joint>
   <link
     name="calf_right_link_1">
@@ -256,7 +256,7 @@
       link="calf_right_link_1" />
     <axis
       xyz="0 1 0" />
-      <limit lower="-0.5" upper="0.5" effort="20" velocity="50" />
+      <limit lower="-1.0" upper="1.0" effort="20" velocity="50" />
   </joint>
   <link
     name="wheel_link_right">
@@ -361,7 +361,7 @@
       link="thigh_right_2" />
     <axis
       xyz="0 1 0" />
-      <limit lower="-0.5" upper="0.5" effort="0" velocity="50" />
+      <limit lower="-1.0" upper="1.0" effort="0" velocity="50" />
   </joint>
   <link
     name="calf_right_link_2">
@@ -414,7 +414,7 @@
       link="calf_right_link_2" />
     <axis
       xyz="0 1 0" />
-      <limit lower="-0.5" upper="0.5" effort="0" velocity="50" />
+      <limit lower="-1.0" upper="1.0" effort="0" velocity="50" />
   </joint>
   <link
     name="pad_link_left">
@@ -576,7 +576,7 @@
       link="thigh_left_1" />
     <axis
       xyz="0 1 0" />
-      <limit lower="-0.5" upper="0.5" effort="20" velocity="50" />
+      <limit lower="-1.0" upper="1.0" effort="20" velocity="50" />
   </joint>
   <link
     name="calf_left_link_1">
@@ -629,7 +629,7 @@
       link="calf_left_link_1" />
     <axis
       xyz="0 1 0" />
-      <limit lower="-0.5" upper="0.5" effort="20" velocity="50" />
+      <limit lower="-1.0" upper="1.0" effort="20" velocity="50" />
   </joint>
   <link
     name="wheel_link_left">
@@ -734,7 +734,7 @@
       link="thigh_left_2" />
     <axis
       xyz="0 1 0" />
-      <limit lower="-0.5" upper="0.5" effort="0" velocity="50" />
+      <limit lower="-1.0" upper="1.0" effort="0" velocity="50" />
   </joint>
   <link
     name="calf_left_link_2">
@@ -787,7 +787,7 @@
       link="calf_left_link_2" />
     <axis
       xyz="0 1 0" />
-      <limit lower="-0.5" upper="0.5" effort="0" velocity="50" />
+      <limit lower="-1.0" upper="1.0" effort="0" velocity="50" />
 </joint>
 
   <!-- ================================================================
