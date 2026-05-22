@@ -121,7 +121,7 @@ class ActionCfg:
             "thigh_joint_left_1",
             "calf_joint_left_1",
         ],
-        scale=10.0,
+        scale=15.0,
     )
 
     # Wheels: velocity control (policy outputs target angular velocity in rad/s)
@@ -141,11 +141,11 @@ class CommandsCfg:
     velocity_command = commands.UniformVelocityCommandCfg(
         asset_name="robot",
         resampling_time_range=(3.0, 5.0),
-        rel_standing_envs=0.3,
+        rel_standing_envs=0.5,
         heading_command=False,
         debug_vis=False,
         ranges=commands.UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(-1.5, 1.5),
+            lin_vel_x=(-1.0, 1.0),
             lin_vel_y=(0.0, 0.0),
             ang_vel_z=(-1.0, 1.0),
             heading=(0.0, 0.0),
@@ -161,7 +161,7 @@ class CommandsCfg:
         ranges=commands.UniformPoseCommandCfg.Ranges(
             pos_x=(0.0, 0.0),
             pos_y=(0.0, 0.0),
-            pos_z=(0.4, 0.6),
+            pos_z=(0.25, 0.30),
             roll=(0.0, 0.0),
             pitch=(0.0, 0.0),
             yaw=(0.0, 0.0),
@@ -282,20 +282,20 @@ class RewardCfg:
 
     track_ang_vel_z_exp = RewardTermCfg(
         func=mdp_vel.track_ang_vel_z_world_exp,
-        weight=5.0,  # tăng 2→5: yaw error 70 rad/s, cần ưu tiên hơn lin_vel
+        weight=3.0,  # tăng 2→5: yaw error 70 rad/s, cần ưu tiên hơn lin_vel
         params={"command_name": "velocity_command", "std": 0.5},
     )
 
     track_base_height_exp = RewardTermCfg(
         func=mdp.rewards.track_base_height_exp,
-        weight=2.0,
+        weight=5.0,
         params={"command_name": "height_command", "std": 0.15},  # nới std 0.05→0.15: error 0.5m quá xa
     )
 
     # ── Stability ─────────────────────────────────────────────────────────────
     upright = RewardTermCfg(
         func=mdp.rewards.rpy_alignment_imu,
-        weight=-40.0,  # tăng -20→-40: illegal_contact_left 73%, robot ngã trái liên tục
+        weight=-30.0,
         params={
             "target_rpy": (0.0, 0.0, 0.0),
             "imu_cfg": SceneEntityCfg(name="imu"),
@@ -311,11 +311,11 @@ class RewardCfg:
     #     params={"asset_cfg": SceneEntityCfg("robot", joint_names=_LEG_JOINTS)},
     # )
 
-    # joint_deviation_pad = RewardTermCfg(
-    #     func=rewards.joint_deviation_l1,
-    #     weight=-0.5,
-    #     params={"asset_cfg": SceneEntityCfg("robot", joint_names="pad_joint_.*")},
-    # )
+    joint_deviation_pad = RewardTermCfg(
+        func=rewards.joint_deviation_l1,
+        weight=-5.25,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names="pad_joint_.*")},
+    )
 
     stand_still = RewardTermCfg(
         func=mdp_vel.stand_still_joint_deviation_l1,
