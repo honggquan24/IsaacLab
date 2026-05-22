@@ -47,7 +47,7 @@ gym.register(
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
     disable_env_checker=True,
     kwargs={
-        "env_cfg_entry_point": f"{__name__}.curriculum.env_cfg:LeggedV3CurriculumEnvCfg",
+        "env_cfg_entry_point": f"{__name__}.locomotion.curriculum.env_cfg:LeggedV3CurriculumEnvCfg",
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:LeggedV3CurriculumPPORunnerCfg",
     },
 )
@@ -65,5 +65,5 @@ gym.register(
 from .legged_v3_cfg import *
 from .locomotion.legged_v3_wheel_env_cfg import *
 from .locomotion.legged_v3_leg_env_cfg import *
-from .curriculum import LeggedV3CurriculumEnvCfg
+from .locomotion.curriculum import LeggedV3CurriculumEnvCfg
 from .navigation import LeggedV3WheelNavigationEnvCfg
