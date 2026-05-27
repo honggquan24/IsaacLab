@@ -203,7 +203,7 @@ class LeggedV3CurriculumPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     experiment_name = "legged_v3_curriculum"
 
     policy = RslRlPpoActorCriticCfg(
-        init_noise_std=1.0,          # high initial exploration for wheel-only phase
+        init_noise_std=0.5,
         actor_obs_normalization=True,
         critic_obs_normalization=True,
         actor_hidden_dims=[256, 256, 256],
@@ -215,7 +215,7 @@ class LeggedV3CurriculumPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         value_loss_coef=1.0,
         use_clipped_value_loss=True,
         clip_param=0.2,
-        entropy_coef=0.01,           # higher entropy → avoid premature convergence
+        entropy_coef=0.005,
         num_learning_epochs=5,
         num_mini_batches=4,
         learning_rate=1.0e-3,

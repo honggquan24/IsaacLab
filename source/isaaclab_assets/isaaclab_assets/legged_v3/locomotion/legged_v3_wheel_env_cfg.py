@@ -161,7 +161,7 @@ class CommandsCfg:
         ranges=commands.UniformPoseCommandCfg.Ranges(
             pos_x=(0.0, 0.0),
             pos_y=(0.0, 0.0),
-            pos_z=(0.25, 0.30),
+            pos_z=(0.25, 0.27),
             roll=(0.0, 0.0),
             pitch=(0.0, 0.0),
             yaw=(0.0, 0.0),
@@ -272,30 +272,30 @@ _LEG_JOINTS = ["pad_joint_.*", "thigh_joint_.*_1", "calf_joint_.*_1"]
 class RewardCfg:
 
     # ── Primary task ──────────────────────────────────────────────────────────
-    termination_penalty = RewardTermCfg(func=rewards.is_terminated, weight=-500.0)
+    termination_penalty = RewardTermCfg(func=rewards.is_terminated, weight=-200.0)
 
     track_lin_vel_xy_exp = RewardTermCfg(
         func=mdp_vel.track_lin_vel_xy_yaw_frame_exp,
-        weight=3.0,
+        weight=5.0,
         params={"command_name": "velocity_command", "std": 0.5},
     )
 
     track_ang_vel_z_exp = RewardTermCfg(
         func=mdp_vel.track_ang_vel_z_world_exp,
-        weight=3.0,  # tăng 2→5: yaw error 70 rad/s, cần ưu tiên hơn lin_vel
+        weight=4.0,
         params={"command_name": "velocity_command", "std": 0.5},
     )
 
     track_base_height_exp = RewardTermCfg(
         func=mdp.rewards.track_base_height_exp,
-        weight=5.0,
-        params={"command_name": "height_command", "std": 0.15},  # nới std 0.05→0.15: error 0.5m quá xa
+        weight=8.0,
+        params={"command_name": "height_command", "std": 0.15},
     )
 
     # ── Stability ─────────────────────────────────────────────────────────────
     upright = RewardTermCfg(
         func=mdp.rewards.rpy_alignment_imu,
-        weight=-30.0,
+        weight=-5.0,
         params={
             "target_rpy": (0.0, 0.0, 0.0),
             "imu_cfg": SceneEntityCfg(name="imu"),
@@ -313,33 +313,33 @@ class RewardCfg:
 
     joint_deviation_pad = RewardTermCfg(
         func=rewards.joint_deviation_l1,
-        weight=-5.25,
+        weight=-50.0,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names="pad_joint_.*")},
     )
 
     stand_still = RewardTermCfg(
         func=mdp_vel.stand_still_joint_deviation_l1,
-        weight=-2.0,
+        weight=-1.5,
         params={
             "command_name": "velocity_command",
-            "command_threshold": 0.05,
+            "command_threshold": 0.2,
             "asset_cfg": SceneEntityCfg("robot", joint_names=_LEG_JOINTS),
         },
     )
 
-    # joint_acc = RewardTermCfg(
-    #     func=rewards.joint_acc_l2,
-    #     weight=-5e-5,
-    #     params={"asset_cfg": SceneEntityCfg("robot", joint_names=_LEG_JOINTS)},
-    # )
+    joint_acc = RewardTermCfg(
+        func=rewards.joint_acc_l2,
+        weight=-5e-5,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=_LEG_JOINTS)},
+    )
 
-    # joint_torques = RewardTermCfg(
-    #     func=rewards.joint_torques_l2,
-    #     weight=-1e-3,
-    #     params={"asset_cfg": SceneEntityCfg("robot", joint_names=_LEG_JOINTS)},
-    # )
+    joint_torques = RewardTermCfg(
+        func=rewards.joint_torques_l2,
+        weight=-1e-4,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=_LEG_JOINTS)},
+    )
 
-    action_rate = RewardTermCfg(func=rewards.action_rate_l2, weight=-0.01)
+    action_rate = RewardTermCfg(func=rewards.action_rate_l2, weight=-0.05)
 
 
 # ─────────────────────────── Terminations ─────────────────────────────────────

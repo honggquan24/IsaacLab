@@ -171,15 +171,15 @@ LEGGED_ROBOT_V3_CFG = ArticulationCfg(
         "pad": DelayedPDActuatorCfg(
             joint_names_expr=["pad_joint_right", "pad_joint_left"],
             effort_limit_sim=100.0,
-            stiffness=1.0,
-            damping=0.0,
+            stiffness=30.0,
+            damping=2.0,
             velocity_limit_sim=10.0,
         ),
         "thigh_active": DelayedPDActuatorCfg(
             joint_names_expr=["thigh_joint_right_1", "thigh_joint_left_1"],
             effort_limit_sim=20.0,
-            stiffness=1.0,
-            damping=0.0,
+            stiffness=20.0,
+            damping=1.0,
             velocity_limit_sim=50.0,
         ),
         # thigh_*_2 are driven by PhysxMimicJointAPI → no stiffness needed
@@ -187,10 +187,10 @@ LEGGED_ROBOT_V3_CFG = ArticulationCfg(
             joint_names_expr=["thigh_joint_right_2", "thigh_joint_left_2"],
             effort_limit_sim=20.0,
             stiffness=0.0,
-            damping=0.0,
+            damping=0.5,
             velocity_limit_sim=50.0,
         ),
-        # Wheels: velocity control → stiffness=0, damping = drivIllegal contact trái 73.7%, robot đang ngã trái liên tụce gain (N·m·s/rad)
+        # Wheels: velocity control → stiffness=0, damping = drive gain (N·m·s/rad)
         "wheel": DelayedPDActuatorCfg(
             joint_names_expr=["wheel_joint_right", "wheel_joint_left"],
             effort_limit_sim=20.0,
@@ -203,7 +203,7 @@ LEGGED_ROBOT_V3_CFG = ArticulationCfg(
                               "calf_joint_right_2", "calf_joint_left_2"],
             effort_limit_sim=5.0,
             stiffness=0.0,
-            damping=0.0,
+            damping=1.0,
             velocity_limit_sim=50.0,
         ),
     },

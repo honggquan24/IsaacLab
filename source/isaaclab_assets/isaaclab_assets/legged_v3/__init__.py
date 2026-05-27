@@ -7,7 +7,7 @@ Tasks:
   - Isaac-Legged-V3-Navigation: Hierarchical navigation (high-level over pre-trained locomotion)
 
 Train locomotion (headless):
-    ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \\
+    ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
         --task Isaac-Legged-V3-Wheel --num_envs 4096 --headless
 
 Train navigation (requires trained locomotion checkpoint):
