@@ -1,0 +1,212 @@
+% ======================================
+% File: main.tex
+% Báo cáo tổng kết NCKH Sinh viên - HUTECH
+% Cấu trúc theo HD/QT-PKHCN-NCKHSV/00
+% Compile: XeLaTeX
+% ======================================
+
+\documentclass[13pt]{extreport}
+\input{preamble}
+
+% Tên danh mục đã được ghi đè trong preamble.tex qua \addto\captionsvietnamese
+
+\begin{document}
+
+% ============================================================
+% 3.1 TRANG BÌA CHÍNH (Mẫu PL01)
+% ============================================================
+\begin{titlepage}
+    \thispagestyle{empty}
+    \begin{tikzpicture}[remember picture, overlay]
+        \draw[line width=1pt]
+            ([xshift=15mm, yshift=-15mm]current page.north west)
+            rectangle
+            ([xshift=-15mm, yshift=15mm]current page.south east);
+    \end{tikzpicture}
+
+    \centering
+    \vspace*{0.4cm}
+
+    {\small\itshape Mẫu PL01 -- Trang bìa chính báo cáo tổng kết đề tài NCKH Sinh viên}\\[0.6cm]
+
+    {\fontsize{13pt}{15pt}\selectfont BỘ GIÁO DỤC VÀ ĐÀO TẠO}\\[0.1cm]
+    {\fontsize{14pt}{16pt}\selectfont\bfseries TRƯỜNG ĐH CÔNG NGHỆ KỸ THUẬT TP.HCM}\\[2.8cm]
+
+    {\fontsize{16pt}{20pt}\selectfont\bfseries BÁO CÁO TỔNG KẾT}\\[0.4cm]
+    {\fontsize{14pt}{17pt}\selectfont\bfseries ĐỀ TÀI NGHIÊN CỨU KHOA HỌC CỦA SINH VIÊN}\\[2.4cm]
+
+    {\fontsize{14pt}{18pt}\selectfont\bfseries
+        NGHIÊN CỨU VÀ ỨNG DỤNG BỘ ĐIỀU KHIỂN PID\\[0.3cm]
+        KẾT HỢP MẠNG NƠRON NHÂN TẠO (ANN)\\[0.3cm]
+        ĐIỀU KHIỂN ROBOT BIPEDAL WHEEL\\[0.3cm]
+        SỬ DỤNG CƠ CẤU 5-BAR PARALLEL
+    }\\[0.8cm]
+
+    {\fontsize{13pt}{15pt}\selectfont Mã số đề tài: \underline{\hspace{5cm}}}\\[2.8cm]
+
+    \begin{flushleft}
+    {\fontsize{13pt}{15pt}\selectfont\bfseries Chủ nhiệm đề tài:\quad}%
+    {\fontsize{13pt}{15pt}\selectfont Trần Minh Cương}
+    \end{flushleft}
+
+    \vfill
+
+    {\fontsize{13pt}{15pt}\selectfont\bfseries TP Hồ Chí Minh, 05/2026}
+\end{titlepage}
+
+
+% ============================================================
+% 3.2 TRANG BÌA PHỤ (Mẫu PL02)
+% ============================================================
+\begin{titlepage}
+    \thispagestyle{empty}
+    \begin{tikzpicture}[remember picture, overlay]
+        \draw[line width=1pt]
+            ([xshift=15mm, yshift=-15mm]current page.north west)
+            rectangle
+            ([xshift=-15mm, yshift=15mm]current page.south east);
+    \end{tikzpicture}
+
+    \centering
+    \vspace*{0.4cm}
+
+    {\small\itshape Mẫu PL02 -- Trang bìa phụ báo cáo tổng kết đề tài NCKH Sinh viên}\\[0.6cm]
+
+    {\fontsize{13pt}{15pt}\selectfont BỘ GIÁO DỤC VÀ ĐÀO TẠO}\\[0.1cm]
+    {\fontsize{14pt}{16pt}\selectfont\bfseries TRƯỜNG ĐH CÔNG NGHỆ KỸ THUẬT TP.HCM}\\[1cm]
+
+    {\fontsize{16pt}{20pt}\selectfont\bfseries BÁO CÁO TỔNG KẾT}\\[0.4cm]
+    {\fontsize{14pt}{17pt}\selectfont\bfseries ĐỀ TÀI NGHIÊN CỨU KHOA HỌC CỦA SINH VIÊN}\\[0.8cm]
+
+    {\fontsize{14pt}{18pt}\selectfont\bfseries
+        NGHIÊN CỨU VÀ ỨNG DỤNG BỘ ĐIỀU KHIỂN PID\\[0.3cm]
+        KẾT HỢP MẠNG NƠRON NHÂN TẠO (ANN)\\[0.3cm]
+        ĐIỀU KHIỂN ROBOT BIPEDAL WHEEL\\[0.3cm]
+        SỬ DỤNG CƠ CẤU 5-BAR PARALLEL
+    }\\[0.4cm]
+
+    {\fontsize{13pt}{15pt}\selectfont Mã số đề tài: \underline{\hspace{5cm}}}\\[0.8cm]
+
+    \begin{flushleft}
+    \setlength{\parskip}{5pt}
+    {\fontsize{13pt}{15pt}\selectfont
+        Thuộc nhóm ngành khoa học: Kỹ thuật\\[0.3cm]
+        SV thực hiện: \textbf{Trần Minh Cương} \hfill Nam, Nữ: Nam\\
+        Dân tộc: Kinh\\
+        Lớp: \underline{\hspace{3.5cm}} \quad Khoa: \underline{\hspace{4.5cm}}\\
+        Năm thứ: \underline{\quad 3 \quad} /Số năm đào tạo: \underline{\quad 4 \quad}\\
+        Ngành học: \underline{\hspace{9cm}}\\[0.4cm]
+        \textit{(Ghi rõ họ và tên SV chịu trách nhiệm chính thực hiện đề tài)}\\[0.5cm]
+        Người hướng dẫn: TS. Cái Việt Anh Dũng
+    }
+    \end{flushleft}
+
+    \vfill
+
+    {\fontsize{13pt}{15pt}\selectfont\bfseries TP Hồ Chí Minh, 05/2026}
+\end{titlepage}
+
+
+% ============================================================
+% PHẦN ĐẦU — đánh số trang La Mã
+% ============================================================
+\pagenumbering{roman}
+\setcounter{page}{1}
+
+
+% ============================================================
+% LỜI CẢM ƠN
+% ============================================================
+\include{chapters/acknowledgments}
+
+
+% ============================================================
+% 3.3 MỤC LỤC
+% ============================================================
+\tableofcontents
+\newpage
+
+
+% ============================================================
+% 3.4 DANH MỤC BẢNG BIỂU
+% ============================================================
+\phantomsection
+\addcontentsline{toc}{chapter}{Danh mục hình ảnh}
+\listoffigures
+\newpage
+
+\phantomsection
+\addcontentsline{toc}{chapter}{Danh mục bảng}
+\listoftables
+\newpage
+
+
+% ============================================================
+% 3.5 DANH MỤC TỪ VIẾT TẮT
+% ============================================================
+\include{chapters/abbreviations}
+
+
+% ============================================================
+% 3.6 THÔNG TIN KẾT QUẢ NGHIÊN CỨU (Mẫu PL03)
+% ============================================================
+\include{chapters/pl03_thongtin}
+
+
+% ============================================================
+% PHẦN THÂN — đánh số trang Ả Rập bắt đầu từ 1
+% ============================================================
+\newpage
+\pagenumbering{arabic}
+\setcounter{page}{1}
+
+
+% ============================================================
+% Chương 1: MỞ ĐẦU
+% ============================================================
+\include{chapters/introduction}
+
+
+% ============================================================
+% Chương 2: CƠ SỞ LÝ THUYẾT
+% Chương 3: PHƯƠNG PHÁP THỰC HIỆN
+% Chương 4: KẾT QUẢ THỰC NGHIỆM
+% ============================================================
+\include{chapters/theoretical_background}
+\include{chapters/methodology}
+\include{chapters/experiment_results}
+
+
+% ============================================================
+% 3.9 KẾT LUẬN VÀ KIẾN NGHỊ
+% ============================================================
+% Ẩn mục con của Kết luận khỏi MỤC LỤC
+\addtocontents{toc}{\protect\setcounter{tocdepth}{0}}
+\include{chapters/conclusion}
+\addtocontents{toc}{\protect\setcounter{tocdepth}{1}}
+
+
+% ============================================================
+% 3.10 TÀI LIỆU THAM KHẢO
+% ============================================================
+\include{references}
+
+
+% ============================================================
+% 3.11 PHỤ LỤC
+% ============================================================
+\include{appendix}
+
+
+% ============================================================
+% 3.12 MINH CHỨNG SẢN PHẨM (bài báo, giấy chấp nhận đăng — nếu có)
+% ============================================================
+% \include{chapters/minhchung}
+
+
+% ============================================================
+% 3.13 STANDEE/POSTER  — đính kèm bản cứng khổ A3
+% 3.14 BẢN SAO THUYẾT MINH VÀ HỢP ĐỒNG — đính kèm bản cứng
+% ============================================================
+
+\end{document}

@@ -1,0 +1,132 @@
+% =============================================
+% File: chapters/experiment_results.tex
+% Chương 4: Kết quả thực nghiệm
+% =============================================
+
+\chapter{KẾT QUẢ THỰC NGHIỆM}
+\label{chap:ketqua}
+
+Chương này trình bày kết quả cụ thể của từng giai đoạn thực nghiệm đã được mô tả
+trong Chương~\ref{chap:phuongphap}: hàm truyền động cơ nhận dạng được, bộ tham số
+PI tối ưu, hiệu quả huấn luyện mạng ANN và kết quả đáp ứng hệ thống trên phần cứng
+ESP32.
+
+
+% ==============================================
+\section{Kết quả nhận dạng hàm truyền động cơ NF5475}
+% ==============================================
+
+\subsection{Hàm truyền xác định được}
+
+Dữ liệu thực nghiệm được đưa vào công cụ \texttt{tfest} trong MATLAB để nhận dạng
+hàm truyền. Kết quả xác định mô hình động cơ:
+
+\begin{equation}
+    G(s) = \frac{353{,}5s^3 + 81{,}55s^2 + 16{,}27s + 3{,}984}
+                {s^4 + 33s^3 + 7{,}444s^2 + 3489s + 0{,}2802}
+    \label{eq:transfer_function}
+\end{equation}
+
+Đánh giá mô hình so với dữ liệu thực:
+\begin{itemize}
+    \item Độ chính xác: \textbf{95,36\%}
+    \item FPE (Final Prediction Error): 2572
+    \item MSE (Mean Squared Error): 2562
+\end{itemize}
+
+
+% ==============================================
+\section{Kết quả tối ưu tham số PI bằng GA}
+% ==============================================
+
+\subsection{So sánh phương pháp tối ưu}
+
+Ba phương pháp tối ưu được so sánh (chi tiết quy trình xem Chương~\ref{chap:phuongphap}):
+Random gain in bounds, MATLAB PID Tuner, và Giải thuật di truyền (GA).
+GA cho kết quả vượt trội với:
+\begin{itemize}
+    \item Độ vọt lố (overshoot): $< 5\%$
+    \item Thời gian xác lập: $< 0{,}5$ s
+    \item Độ khớp với dữ liệu (fit-to-data): $\approx 95\%$
+\end{itemize}
+
+\subsection{Bộ gain tối ưu}
+
+Kết quả tối ưu hóa bằng GA tại setpoint 250 RPM:
+\begin{itemize}
+    \item $K_p^* = 0{,}185436$
+    \item $K_i^* = 5{,}288458$
+\end{itemize}
+
+Quy trình được lặp lại cho 9 mức setpoint từ 250 RPM đến 2250 RPM (bước 250 RPM),
+thu được 9 bộ gain tương ứng. Mỗi bộ gain được kiểm chứng trên dữ liệu thực
+nghiệm 10 giây (1001 mẫu).
+
+\subsection{Cài đặt bộ PI trên ESP32}
+
+Bộ PI vận tốc được cài đặt theo công thức rời rạc với $\Delta t = 0{,}01$ s:
+
+\begin{align}
+    e_{vel}(k) &= v_{req}(k) - v_{cur}(k) \\
+    \int e\,dt &\mathrel{+}= e_{vel}(k) \cdot \Delta t \\
+    u(k) &= K_p \cdot e_{vel}(k) + K_i \cdot \int e\,dt
+\end{align}
+
+Anti-windup: giới hạn tích phân trong $[-1000, 1000]$.
+Giới hạn PWM đầu ra: $u(k) \in [-255, 255]$.
+
+
+% ==============================================
+\section{Kết quả huấn luyện mạng ANN}
+% ==============================================
+
+\subsection{Tóm tắt kiến trúc và cấu hình}
+
+Kiến trúc và quy trình huấn luyện được trình bày chi tiết trong
+Chương~\ref{chap:phuongphap}. Tóm tắt:
+\begin{itemize}
+    \item Kiến trúc: $2 \to 8 \to 16 \to 2$ (Dense + L2 + ReLU + Dropout).
+    \item Optimizer: Adam, lr $= 2\times10^{-3}$, decay $= 3\times10^{-4}$.
+    \item Số epochs: 1\,000.
+\end{itemize}
+
+\subsection{Kết quả huấn luyện}
+
+Mạng ANN hội tụ sau khoảng 400 epochs. Đường cong loss huấn luyện và validation
+bám sát nhau, chứng tỏ mạng không bị overfitting nhờ L2 regularization và Dropout
+(xem Hình~\ref{fig:loss_curve}).
+
+\begin{figure}[H]
+    \centering
+    % \includegraphics[width=0.75\textwidth]{figure/training_loss.png}
+    \caption{Đường cong Training Loss và Validation Loss theo epoch}
+    \label{fig:loss_curve}
+\end{figure}
+
+\subsection{Đánh giá mô hình}
+
+Mô hình được đánh giá trên tập test (2 bộ dữ liệu chưa dùng để huấn luyện).
+Kết quả dự đoán $K_p$, $K_i$ so với giá trị tối ưu từ GA cho thấy sai số nhỏ
+và ổn định trên toàn dải setpoint 250 -- 2250 RPM.
+
+\textit{Hạn chế hiện tại:} Chưa có số liệu định lượng đầy đủ về độ chính xác dự đoán
+trên phần cứng thực; đây là hướng cần bổ sung trong giai đoạn tiếp theo.
+
+
+% ==============================================
+\section{Kết quả thực nghiệm trên phần cứng ESP32}
+% ==============================================
+
+\subsection{Kết quả thực nghiệm trên phần cứng}
+
+Hệ thống PI vận tốc hoạt động ổn định trên ESP32 với 9 mức setpoint từ 250 đến
+2250 RPM. Đáp ứng vận tốc đạt trong dải $\pm 5\%$ setpoint sau khoảng
+$t_{rise} < 0{,}5$ s ở hầu hết các mức tải thử nghiệm
+(xem Hình~\ref{fig:velocity_response}).
+
+\begin{figure}[H]
+    \centering
+    % \includegraphics[width=0.85\textwidth]{figure/velocity_response.png}
+    \caption{Đáp ứng vận tốc tại 9 mức setpoint (250 -- 2250 RPM)}
+    \label{fig:velocity_response}
+\end{figure}

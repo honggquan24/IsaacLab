@@ -1,0 +1,147 @@
+% =============================================
+% File: chapters/introduction.tex
+% MỞ ĐẦU — theo yêu cầu mục 3.7 HD/QT-PKHCN-NCKHSV
+% =============================================
+
+\chapter{MỞ ĐẦU}
+\label{chap:modau}
+
+
+% --------------------------------------------------
+\section*{1. Tổng quan tình hình nghiên cứu}
+% --------------------------------------------------
+
+Robot hai chân (bipedal robot) là một trong những hướng nghiên cứu trọng tâm của
+lĩnh vực robot di động trong những thập kỷ gần đây. Các hệ thống như Boston Dynamics
+Atlas, MIT Mini Cheetah hay Unitree H1 đã chứng minh tiềm năng ứng dụng của robot
+bipedal trong môi trường phức tạp, nơi robot bánh xe truyền thống không thể hoạt động
+hiệu quả. Tuy nhiên, chi phí nghiên cứu và phát triển những hệ thống này còn rất cao,
+gây khó khăn cho các nhóm nghiên cứu quy mô nhỏ và sinh viên.
+
+Ở phân khúc thiết kế đơn giản hóa hơn, mô hình \textit{bipedal wheel robot} —
+robot hai chân có bánh xe tại điểm cuối mỗi chân — đang được quan tâm vì cân bằng
+được giữa tính linh hoạt của chân và hiệu quả di chuyển của bánh xe. Điển hình là các
+nghiên cứu về robot Wheeled-Bipedal tại ETH Zurich và các biến thể sử dụng cơ cấu
+song song để tăng cứng vững và giảm số bậc tự do cần điều khiển.
+
+Trong lĩnh vực điều khiển, bộ điều khiển PID (Proportional–Integral–Derivative)
+vẫn là lựa chọn phổ biến nhờ tính đơn giản và hiệu quả. Song, PID truyền thống có hệ
+số cố định, dẫn đến suy giảm hiệu năng khi hệ thống hoạt động ở nhiều dải tải và vận
+tốc khác nhau. Sự kết hợp giữa PID và Mạng Nơron Nhân Tạo (ANN) để dự đoán và
+hiệu chỉnh tham số điều khiển thích nghi đang là xu hướng được nghiên cứu rộng rãi,
+cho thấy kết quả cải thiện đáng kể về độ vọt lố và thời gian xác lập.
+
+Tại Việt Nam, các nghiên cứu về điều khiển thích nghi ứng dụng mạng nơron cho
+hệ truyền động cơ DC còn khá hạn chế ở quy mô sinh viên. Việc xây dựng một hệ
+thống hoàn chỉnh từ nhận dạng mô hình động cơ, thiết kế bộ PI, huấn luyện ANN đến
+triển khai thực tế trên phần cứng nhúng là bài toán còn nhiều khoảng trống để nghiên cứu
+và đóng góp.
+
+
+% --------------------------------------------------
+\section*{2. Lý do chọn đề tài}
+% --------------------------------------------------
+
+Xuất phát từ những hạn chế của bộ điều khiển PID hệ số cố định khi áp dụng vào
+động cơ DC có tải thay đổi, cùng với tiềm năng của cơ cấu song song 5-bar trong thiết
+kế chân robot gọn nhẹ, nhóm nghiên cứu chọn đề tài:
+
+\begin{center}
+    \textbf{``Nghiên cứu và ứng dụng bộ điều khiển PID kết hợp mạng nơron nhân tạo (ANN)\\
+    điều khiển Robot Bipedal Wheel sử dụng cơ cấu 5-bar parallel''}
+\end{center}
+
+với các lý do cụ thể sau:
+
+\begin{enumerate}[leftmargin=1.5cm, label=\arabic*.]
+    \item \textbf{Tính thực tiễn cao:} Động cơ DC NF5475 và vi điều khiển ESP32 là
+    những linh kiện phổ biến, chi phí thấp, dễ tiếp cận với sinh viên. Kết quả nghiên
+    cứu có thể được triển khai trực tiếp trên phần cứng thực.
+
+    \item \textbf{Tính học thuật:} Quá trình nhận dạng hàm truyền động cơ bằng
+    MATLAB, tối ưu tham số PI bằng giải thuật di truyền (GA) và xây dựng ANN từ đầu
+    (không dùng framework có sẵn) cung cấp nền tảng lý thuyết vững chắc.
+
+    \item \textbf{Tính mở rộng:} Bộ PI--ANN cho một động cơ là cơ sở để mở rộng
+    sang điều khiển đồng thời hai động cơ trong cơ cấu 5-bar parallel, tiến tới hệ thống
+    điều khiển hoàn chỉnh cho robot bipedal wheel.
+
+    \item \textbf{Đóng góp vào nghiên cứu trong nước:} Xây dựng quy trình hoàn chỉnh
+    và có thể tái hiện (reproducible) cho bài toán điều khiển thích nghi trên nền tảng
+    nhúng, phù hợp với điều kiện nghiên cứu của sinh viên Việt Nam.
+\end{enumerate}
+
+
+% --------------------------------------------------
+\section*{3. Mục tiêu đề tài}
+% --------------------------------------------------
+
+Đề tài hướng đến các mục tiêu cụ thể sau:
+
+\begin{enumerate}[leftmargin=1.5cm, label=\arabic*.]
+    \item Nhận dạng mô hình hàm truyền của động cơ DC NF5475 thông qua thu thập
+    dữ liệu thực nghiệm và công cụ \texttt{tfest} trong MATLAB.
+
+    \item Thiết kế bộ điều khiển PI vận tốc với tham số tối ưu sử dụng giải thuật di
+    truyền (GA), đảm bảo độ vọt lố dưới 5\% và thời gian xác lập dưới 0{,}5s.
+
+    \item Xây dựng và huấn luyện mạng ANN có khả năng dự đoán tham số $K_p$, $K_i$
+    thích nghi theo trạng thái sai số của hệ thống, giảm thiểu sai số bám setpoint khi
+    vận tốc đặt thay đổi.
+
+    \item Triển khai toàn bộ hệ thống điều khiển PI--ANN trên vi điều khiển ESP32
+    WROOM, kiểm chứng hiệu năng thực nghiệm.
+
+    \item Phân tích động học (thuận và nghịch) của cơ cấu 5-bar parallel, xác định
+    không gian làm việc và Jacobian, làm nền tảng cho điều khiển quỹ đạo điểm cuối
+    chân robot.
+\end{enumerate}
+
+
+% --------------------------------------------------
+\section*{4. Phương pháp nghiên cứu}
+% --------------------------------------------------
+
+Đề tài sử dụng kết hợp các phương pháp sau:
+
+\begin{itemize}[leftmargin=1.5cm]
+    \item \textbf{Phương pháp lý thuyết:} Nghiên cứu tài liệu về lý thuyết điều khiển
+    PID, mạng nơron nhân tạo (ANN), động học cơ cấu song song và nhận dạng hệ thống.
+
+    \item \textbf{Phương pháp thực nghiệm:} Thu thập dữ liệu đặc tính động cơ trực
+    tiếp trên phần cứng; kiểm chứng bộ điều khiển qua các kịch bản thực nghiệm với
+    các mức vận tốc đặt khác nhau (250 RPM đến 2250 RPM).
+
+    \item \textbf{Phương pháp mô phỏng:} Sử dụng MATLAB/Simulink để nhận dạng hàm
+    truyền, thiết kế và kiểm tra bộ PI trước khi nạp lên phần cứng; Python để huấn
+    luyện và đánh giá mạng ANN.
+
+    \item \textbf{Phương pháp tối ưu hóa:} Áp dụng giải thuật di truyền (Genetic
+    Algorithm) để tìm tham số $K_p$, $K_i$ tối ưu trong không gian ràng buộc.
+\end{itemize}
+
+
+% --------------------------------------------------
+\section*{5. Đối tượng và phạm vi nghiên cứu}
+% --------------------------------------------------
+
+\textbf{Đối tượng nghiên cứu:}
+\begin{itemize}[leftmargin=1.5cm]
+    \item Động cơ DC Brushed NF5475 (12--24V, 33W, encoder 200 PPR).
+    \item Vi điều khiển ESP32 WROOM-32 lập trình bằng Arduino IDE.
+    \item Mạng Nơron Nhân Tạo (ANN) xây dựng bằng Python không dùng framework.
+    \item Cơ cấu 5-bar parallel với thông số: $A_1A_2 = 105$~mm,
+    $L_{act} = 100$~mm, $L_{pas} = 180$~mm.
+\end{itemize}
+
+\textbf{Phạm vi nghiên cứu:}
+\begin{itemize}[leftmargin=1.5cm]
+    \item Điều khiển vận tốc một động cơ DC trong vòng lặp kín, dải setpoint từ
+    250 đến 2250 RPM.
+    \item ANN dự đoán hai tham số $K_p$ và $K_i$; đầu vào gồm sai số vận tốc
+    ($e$) và đạo hàm sai số ($\Delta e$).
+    \item Phân tích động học phẳng 2D của cơ cấu 5-bar parallel (chưa bao gồm
+    động lực học và điều khiển toàn hệ robot).
+    \item Thực nghiệm được thực hiện trong môi trường phòng thí nghiệm, tải cố
+    định, chưa xét đến nhiễu từ ngoài.
+\end{itemize}
