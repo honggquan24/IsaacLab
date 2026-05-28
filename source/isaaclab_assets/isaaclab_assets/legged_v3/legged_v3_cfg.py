@@ -7,9 +7,28 @@ Robot structure (5-bar parallel linkage, 2 legs + wheels):
   ├── right_thigh_link_A1 → right_shin_link_B1 → right_foot_link [ACTIVE chain]
   └── right_thigh_link_A2 → right_shin_link_B2                   [PASSIVE / mimic]
 
-Closed-loop: loop joints created programmatically after URDF spawn via
-             _spawn_urdf_with_mimic_and_loops(). ExcludeFromArticulation=True
-             so PhysX enforces them as separate constraints (not in the tree).
+Actuation:
+  - hip_A1   : position-controlled by policy
+  - hip_A2   : mimic (PhysxMimicJointAPI, tracks hip_A1 1:1)
+  - knee_B1/B2: passive (stiffness=0, damped)
+  - wheel    : velocity-controlled by policy
+
+Loop closure:
+  RevoluteJoint created programmatically after URDF spawn.
+  ExcludeFromArticulation=True keeps the tree intact; PhysX enforces it
+  as a separate constraint.
+
+  Wheel geometry (URDF):
+    left_foot_link  cylinder: origin=(0, -0.0225, 0), length=0.045
+      → B1 face at Y=0  (foot_link origin = wheel_joint location)
+      → B2 face at Y=-0.045  ← loop-closure pin
+    right_foot_link cylinder: origin=(0, +0.0225, 0), length=0.045
+      → B1 face at Y=0
+      → B2 face at Y=+0.045  ← loop-closure pin
+
+  localPos0 on shin_B2 = tip of B2 (computed from world transforms).
+  localPos1 on foot_link = B2-side axle face (b2_axle_offset).
+  localRot1 = R1_world^{-1} * R0_world so joint frames align at t=0.
 """
 import os
 from collections.abc import Callable
@@ -32,39 +51,28 @@ _MIMIC_PAIRS = [
     ("left_hip_joint_A2",  "left_hip_joint_A1"),
 ]
 
-# Loop-closing joints (created programmatically, excluded from articulation).
-# pos0/rpy0: joint frame in body0 (shin_B2) local frame — from FK at q=0.
-# localPos1/localRot1 = identity (joint anchored at foot_link origin).
-_LOOP_JOINTS = [
-    {
-        "name":  "close_loop_left",
-        "body0": "left_shin_link_B2",
-        "body1": "left_foot_link",
-        "pos0":  (0.08316, -0.17891, 0.05833),
-        "rpy0":  (2.93061, -0.52798, -1.07098),
-    },
-    {
-        "name":  "close_loop_right",
-        "body0": "right_shin_link_B2",
-        "body1": "right_foot_link",
-        "pos0":  (0.08940, -0.12800, 0.01434),
-        "rpy0":  (2.90234,  0.06987, -1.03781),
-    },
+# Loop-closing revolute joints: shin_B2 tip ↔ B2-side axle face of foot_link.
+# b2_axle_offset: position of the B2-side pin in foot_link's local frame.
+#   Left : wheel spans Y=0→-0.045, B2 face at Y=-0.045
+#   Right: wheel spans Y=0→+0.045, B2 face at Y=+0.045
+_LOOP_JOINT_PAIRS = [
+    ("close_loop_left",  "left_shin_link_B2",  "left_foot_link",  (0.0, -0.045, 0.0)),
+    ("close_loop_right", "right_shin_link_B2", "right_foot_link", (0.0,  0.045, 0.0)),
 ]
 
 
-def _rpy_to_quatf(roll: float, pitch: float, yaw: float):
-    """URDF extrinsic-XYZ RPY → pxr.Gf.Quatf(w, x, y, z)."""
-    import math
-    from pxr import Gf
-    cr, sr = math.cos(roll / 2),  math.sin(roll / 2)
-    cp, sp = math.cos(pitch / 2), math.sin(pitch / 2)
-    cy, sy = math.cos(yaw / 2),   math.sin(yaw / 2)
-    w =  cr * cp * cy + sr * sp * sy
-    x =  sr * cp * cy - cr * sp * sy
-    y =  cr * sp * cy + sr * cp * sy
-    z =  cr * cp * sy - sr * sp * cy
-    return Gf.Quatf(float(w), float(x), float(y), float(z))
+def _find_prim_by_name(stage, root_path, name):
+    from pxr import Usd
+    p = stage.GetPrimAtPath(f"{root_path}/{name}")
+    if p.IsValid():
+        return p
+    root = stage.GetPrimAtPath(root_path)
+    if not root.IsValid():
+        return None
+    for prim in Usd.PrimRange(root):
+        if prim.GetName() == name:
+            return prim
+    return None
 
 
 def _spawn_urdf_with_mimic_and_loops(
@@ -74,9 +82,9 @@ def _spawn_urdf_with_mimic_and_loops(
     orientation=None,
     **kwargs,
 ):
-    """Spawn URDF, add mimic constraints on hip_A2, then create loop joints."""
+    """Spawn URDF, apply mimic on hip_A2, create loop-closing ball joints."""
     import omni.usd
-    from pxr import Usd, UsdPhysics, PhysxSchema, Gf, Sdf
+    from pxr import Usd, UsdGeom, UsdPhysics, PhysxSchema, Gf, Sdf
 
     prim = spawn_from_urdf(prim_path, cfg, translation, orientation, **kwargs)
 
@@ -84,66 +92,92 @@ def _spawn_urdf_with_mimic_and_loops(
     actual_path = str(prim.GetPath())
     print(f"[legged_v3_cfg] spawn actual_path = {actual_path}")
 
-    def _find_prim(name: str):
-        p = stage.GetPrimAtPath(f"{actual_path}/joints/{name}")
-        if p.IsValid():
-            return p
-        robot_prim = stage.GetPrimAtPath(actual_path)
-        for _p in Usd.PrimRange(robot_prim):
-            if _p.GetName() == name:
-                return _p
-        return None
-
-    # ── 1. PhysxMimicJointAPI: hip_A2 tracks hip_A1 ──────────────────────────
+    # ── 1. PhysxMimicJointAPI: hip_A2 tracks hip_A1 1:1 ─────────────────────
     with Usd.EditContext(stage, stage.GetSessionLayer()):
         for secondary_name, primary_name in _MIMIC_PAIRS:
-            primary_prim   = _find_prim(primary_name)
-            secondary_prim = _find_prim(secondary_name)
-            if primary_prim is None or secondary_prim is None:
+            pri = _find_prim_by_name(stage, f"{actual_path}/joints", primary_name) \
+               or _find_prim_by_name(stage, actual_path, primary_name)
+            sec = _find_prim_by_name(stage, f"{actual_path}/joints", secondary_name) \
+               or _find_prim_by_name(stage, actual_path, secondary_name)
+            if pri is None or sec is None:
                 print(f"[legged_v3_cfg] WARNING: mimic pair not found: {secondary_name} → {primary_name}")
                 continue
-            mimic = PhysxSchema.PhysxMimicJointAPI.Apply(secondary_prim, "rotX")
+            mimic = PhysxSchema.PhysxMimicJointAPI.Apply(sec, "rotX")
             mimic.GetGearingAttr().Set(1.0)
             mimic.GetOffsetAttr().Set(0.0)
-            mimic.GetReferenceJointRel().AddTarget(primary_prim.GetPath())
+            mimic.GetReferenceJointRel().AddTarget(pri.GetPath())
             print(f"[legged_v3_cfg] mimic: {secondary_name} → {primary_name}")
 
-    # ── 2. Create loop-closing revolute joints (excluded from articulation) ───
+    # ── 2. Loop-closing RevoluteJoints (excluded from articulation) ──────────
     with Usd.EditContext(stage, stage.GetSessionLayer()):
-        for jdef in _LOOP_JOINTS:
-            joint_path = f"{actual_path}/{jdef['name']}"
-            # Remove stale prim from a prior spawn in the same stage session
+        for joint_name, body0_name, body1_name, b2_axle_offset in _LOOP_JOINT_PAIRS:
+            body0_prim = _find_prim_by_name(stage, actual_path, body0_name)
+            body1_prim = _find_prim_by_name(stage, actual_path, body1_name)
+
+            if body0_prim is None or body1_prim is None:
+                print(f"[legged_v3_cfg] WARNING: bodies not found for {joint_name} "
+                      f"({body0_name}, {body1_name})")
+                continue
+
+            # World transforms at default time (initial pose, q=0)
+            T0_world = UsdGeom.Xformable(body0_prim).ComputeLocalToWorldTransform(
+                Usd.TimeCode.Default()
+            )
+            T1_world = UsdGeom.Xformable(body1_prim).ComputeLocalToWorldTransform(
+                Usd.TimeCode.Default()
+            )
+
+            # Pin world position = B2-side axle face on foot_link
+            # b2_axle_offset is in foot_link's local frame (not the wheel-joint face).
+            pin_world = T1_world.Transform(Gf.Vec3d(*b2_axle_offset))
+
+            # localPos0: pin position in shin_B2's local frame (= tip of shin_B2)
+            pos0 = T0_world.GetInverse().Transform(pin_world)
+
+            # localPos1: pin position in foot_link's local frame = b2_axle_offset
+            pos1 = Gf.Vec3d(*b2_axle_offset)
+
+            # localRot0 = identity  →  joint frame = shin_B2's local frame, axis Y
+            # localRot1 = R1^{-1} * R0  →  aligns body1 joint frame with body0 at t=0
+            T_10 = T1_world.GetInverse() * T0_world
+            q_10 = T_10.ExtractRotationQuat()
+            qi = q_10.GetImaginary()
+            localRot1 = Gf.Quatf(
+                float(q_10.GetReal()),
+                float(qi[0]), float(qi[1]), float(qi[2])
+            )
+
+            print(f"[legged_v3_cfg] {joint_name}: "
+                  f"localPos0=({pos0[0]:.4f},{pos0[1]:.4f},{pos0[2]:.4f})  "
+                  f"localPos1=({pos1[0]:.4f},{pos1[1]:.4f},{pos1[2]:.4f})")
+
+            joint_path = f"{actual_path}/{joint_name}"
             if stage.GetPrimAtPath(joint_path).IsValid():
                 stage.RemovePrim(joint_path)
 
+            # RevoluteJoint: 1 DOF around axis Y of joint frame.
+            # Constraint residual = 0 at t=0 because localRot1 pre-aligns the frames.
             j = UsdPhysics.RevoluteJoint.Define(stage, joint_path)
+
+            j.CreateBody0Rel().SetTargets([Sdf.Path(str(body0_prim.GetPath()))])
+            j.CreateBody1Rel().SetTargets([Sdf.Path(str(body1_prim.GetPath()))])
+
+            j.CreateLocalPos0Attr(Gf.Vec3f(float(pos0[0]), float(pos0[1]), float(pos0[2])))
+            j.CreateLocalRot0Attr(Gf.Quatf(1.0, 0.0, 0.0, 0.0))
+            j.CreateLocalPos1Attr(Gf.Vec3f(float(pos1[0]), float(pos1[1]), float(pos1[2])))
+            j.CreateLocalRot1Attr(localRot1)
             j.CreateAxisAttr("Y")
 
-            body0_path = Sdf.Path(f"{actual_path}/{jdef['body0']}")
-            body1_path = Sdf.Path(f"{actual_path}/{jdef['body1']}")
-            j.CreateBody0Rel().SetTargets([body0_path])
-            j.CreateBody1Rel().SetTargets([body1_path])
-
-            px, py, pz = jdef["pos0"]
-            j.CreateLocalPos0Attr(Gf.Vec3f(px, py, pz))
-            j.CreateLocalRot0Attr(_rpy_to_quatf(*jdef["rpy0"]))
-            j.CreateLocalPos1Attr(Gf.Vec3f(0.0, 0.0, 0.0))
-            j.CreateLocalRot1Attr(Gf.Quatf(1.0, 0.0, 0.0, 0.0))
-
-            # ±180° revolute limit (degrees in USD)
-            j.CreateLowerLimitAttr(-180.0)
-            j.CreateUpperLimitAttr(180.0)
-
-            # Exclude from articulation tree → becomes a PhysX constraint
+            # Exclude from articulation tree; PhysX enforces as separate constraint
             UsdPhysics.Joint(j.GetPrim()).GetExcludeFromArticulationAttr().Set(True)
-            print(f"[legged_v3_cfg] loop joint created: {joint_path} (excludeFromArticulation=True)")
+            print(f"[legged_v3_cfg] loop joint (revolute) created: {joint_path}")
 
     return prim
 
 
 @configclass
 class UrdfFileCfgExt(UrdfFileCfg):
-    """UrdfFileCfg with mimic + loop-joint post-processing."""
+    """UrdfFileCfg with post-spawn mimic + loop-joint processing."""
 
     func: Callable = _spawn_urdf_with_mimic_and_loops
 
@@ -184,7 +218,6 @@ LEGGED_ROBOT_V3_CFG = ArticulationCfg(
             "right_hip_joint_A1":  0.0,
             "right_knee_joint_B1": 0.0,
             "right_wheel_joint":   0.0,
-            # A2/B2 passive — mimic + loop closure determines their angles
             "left_hip_joint_A2":   0.0,
             "left_knee_joint_B2":  0.0,
             "right_hip_joint_A2":  0.0,
@@ -197,20 +230,20 @@ LEGGED_ROBOT_V3_CFG = ArticulationCfg(
         # ── Active: hip A1 (position-controlled by policy) ───────────────────
         "hip_active": DelayedPDActuatorCfg(
             joint_names_expr=["left_hip_joint_A1", "right_hip_joint_A1"],
-            effort_limit_sim=20.0,
-            stiffness=20.0,
+            effort_limit_sim=100.0,
+            stiffness=30.0,
             damping=1.0,
             velocity_limit_sim=50.0,
         ),
         # ── Mimic: hip A2 tracks hip A1 via PhysxMimicJointAPI ───────────────
         "hip_mimic": DelayedPDActuatorCfg(
             joint_names_expr=["left_hip_joint_A2", "right_hip_joint_A2"],
-            effort_limit_sim=20.0,
+            effort_limit_sim=100.0,
             stiffness=0.0,
-            damping=0.5,
+            damping=0.0,
             velocity_limit_sim=50.0,
         ),
-        # ── Passive: knee B1 — constrained by loop closure geometry ──────────
+        # ── Passive: knee B1 — loop closure provides geometric constraint ─────
         "knee_b1": DelayedPDActuatorCfg(
             joint_names_expr=["left_knee_joint_B1", "right_knee_joint_B1"],
             effort_limit_sim=20.0,
@@ -218,7 +251,7 @@ LEGGED_ROBOT_V3_CFG = ArticulationCfg(
             damping=2.0,
             velocity_limit_sim=50.0,
         ),
-        # ── Passive: knee B2 — constrained by loop closure geometry ──────────
+        # ── Passive: knee B2 — loop closure provides geometric constraint ─────
         "knee_b2": DelayedPDActuatorCfg(
             joint_names_expr=["left_knee_joint_B2", "right_knee_joint_B2"],
             effort_limit_sim=5.0,

@@ -340,13 +340,13 @@ class TerminationsCfg:
 
     time_out = TerminationTermCfg(func=terminations.time_out, time_out=True)
 
-    # bad_orientation = TerminationTermCfg(
-    #     func=terminations.bad_orientation,
-    #     params={
-    #         "limit_angle": math.pi / 2,
-    #         "asset_cfg": SceneEntityCfg(name="robot"),
-    #     },
-    # )
+    bad_orientation = TerminationTermCfg(
+        func=terminations.bad_orientation,
+        params={
+            "limit_angle": math.pi / 2,
+            "asset_cfg": SceneEntityCfg(name="robot"),
+        },
+    )
 
     # base_height = TerminationTermCfg(
     #     func=terminations.root_height_below_minimum,
@@ -356,13 +356,13 @@ class TerminationsCfg:
     #     },
     # )
 
-    # joint_vel_limit = TerminationTermCfg(
-    #     func=terminations.joint_vel_out_of_manual_limit,
-    #     params={
-    #         "max_velocity": 120.0,
-    #         "asset_cfg": SceneEntityCfg(name="robot"),
-    #     },
-    # )
+    joint_vel_limit = TerminationTermCfg(
+        func=terminations.joint_vel_out_of_manual_limit,
+        params={
+            "max_velocity": 120.0,
+            "asset_cfg": SceneEntityCfg(name="robot"),
+        },
+    )
 
     # illegal_contact_base = TerminationTermCfg(
     #     func=terminations.illegal_contact,

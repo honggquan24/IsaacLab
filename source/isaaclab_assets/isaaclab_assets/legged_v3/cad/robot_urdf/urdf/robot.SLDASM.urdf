@@ -47,7 +47,7 @@
     <parent link="base_link" />
     <child  link="left_thigh_link_A1" />
     <axis xyz="0 1 0" />
-    <limit lower="-1.0" upper="1.0" effort="20" velocity="50" />
+    <limit lower="-2.0944" upper="2.0944" effort="20" velocity="50" />
   </joint>
 
   <link name="left_shin_link_B1">
@@ -72,7 +72,7 @@
     <parent link="left_thigh_link_A1" />
     <child  link="left_shin_link_B1" />
     <axis xyz="0 1 0" />
-    <limit lower="-1.0" upper="1.0" effort="20" velocity="50" />
+    <limit lower="-2.0944" upper="2.0944" effort="20" velocity="50" />
   </joint>
 
   <link name="left_foot_link">
@@ -121,7 +121,7 @@
     <parent link="base_link" />
     <child  link="left_thigh_link_A2" />
     <axis xyz="0 1 0" />
-    <limit lower="-1.0" upper="1.0" effort="0" velocity="50" />
+    <limit lower="-2.0944" upper="2.0944" effort="0" velocity="50" />
   </joint>
 
   <link name="left_shin_link_B2">
@@ -146,7 +146,7 @@
     <parent link="left_thigh_link_A2" />
     <child  link="left_shin_link_B2" />
     <axis xyz="0 1 0" />
-    <limit lower="-1.0" upper="1.0" effort="0" velocity="50" />
+    <limit lower="-2.0944" upper="2.0944" effort="0" velocity="50" />
   </joint>
 
   <!-- ══════════════════ RIGHT LEG ══════════════════ -->
@@ -173,7 +173,7 @@
     <parent link="base_link" />
     <child  link="right_thigh_link_A1" />
     <axis xyz="0 1 0" />
-    <limit lower="-1.0" upper="1.0" effort="20" velocity="50" />
+    <limit lower="-2.0944" upper="2.0944" effort="20" velocity="50" />
   </joint>
 
   <link name="right_shin_link_B1">
@@ -198,7 +198,7 @@
     <parent link="right_thigh_link_A1" />
     <child  link="right_shin_link_B1" />
     <axis xyz="0 1 0" />
-    <limit lower="-1.0" upper="1.0" effort="20" velocity="50" />
+    <limit lower="-2.0944" upper="2.0944" effort="20" velocity="50" />
   </joint>
 
   <link name="right_foot_link">
@@ -247,7 +247,7 @@
     <parent link="base_link" />
     <child  link="right_thigh_link_A2" />
     <axis xyz="0 1 0" />
-    <limit lower="-1.0" upper="1.0" effort="0" velocity="50" />
+    <limit lower="-2.0944" upper="2.0944" effort="0" velocity="50" />
   </joint>
 
   <link name="right_shin_link_B2">
@@ -272,7 +272,7 @@
     <parent link="right_thigh_link_A2" />
     <child  link="right_shin_link_B2" />
     <axis xyz="0 1 0" />
-    <limit lower="-1.0" upper="1.0" effort="0" velocity="50" />
+    <limit lower="-2.0944" upper="2.0944" effort="0" velocity="50" />
   </joint>
 
 </robot>
