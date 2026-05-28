@@ -210,7 +210,7 @@ LEGGED_ROBOT_V3_CFG = ArticulationCfg(
     soft_joint_pos_limit_factor=0.95,
 
     init_state=ArticulationCfg.InitialStateCfg(
-        pos=(0.0, 0.0, 0.3),
+        pos=(0.0, 0.0, 0.4),
         joint_pos={
             "left_hip_joint_A1":   0.0,
             "left_knee_joint_B1":  0.0,

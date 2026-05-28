@@ -125,7 +125,7 @@ class ActionCfg:
     wheel_vel = actions.JointVelocityActionCfg(
         asset_name="robot",
         joint_names=["left_wheel_joint", "right_wheel_joint"],
-        scale=5.0,
+        scale=1.0,
     )
 
 
@@ -364,37 +364,37 @@ class TerminationsCfg:
         },
     )
 
-    # illegal_contact_base = TerminationTermCfg(
-    #     func=terminations.illegal_contact,
-    #     params={
-    #         "threshold": 100.0,
-    #         "sensor_cfg": SceneEntityCfg(name="contact_forces_base", body_names=["base_link"]),
-    #     },
-    # )
+    illegal_contact_base = TerminationTermCfg(
+        func=terminations.illegal_contact,
+        params={
+            "threshold": 100.0,
+            "sensor_cfg": SceneEntityCfg(name="contact_forces_base", body_names=["base_link"]),
+        },
+    )
 
-    # illegal_contact_right = TerminationTermCfg(
-    #     func=terminations.illegal_contact,
-    #     params={
-    #         "threshold": 100.0,
-    #         "sensor_cfg": SceneEntityCfg(
-    #             name="contact_forces_right",
-    #             body_names=["right_thigh_link_A1", "right_shin_link_B1",
-    #                         "right_thigh_link_A2", "right_shin_link_B2"],
-    #         ),
-    #     },
-    # )
+    illegal_contact_right = TerminationTermCfg(
+        func=terminations.illegal_contact,
+        params={
+            "threshold": 100.0,
+            "sensor_cfg": SceneEntityCfg(
+                name="contact_forces_right",
+                body_names=["right_thigh_link_A1", "right_shin_link_B1",
+                            "right_thigh_link_A2", "right_shin_link_B2"],
+            ),
+        },
+    )
 
-    # illegal_contact_left = TerminationTermCfg(
-    #     func=terminations.illegal_contact,
-    #     params={
-    #         "threshold": 100.0,
-    #         "sensor_cfg": SceneEntityCfg(
-    #             name="contact_forces_left",
-    #             body_names=["left_thigh_link_A1", "left_shin_link_B1",
-    #                         "left_thigh_link_A2", "left_shin_link_B2"],
-    #         ),
-    #     },
-    # )
+    illegal_contact_left = TerminationTermCfg(
+        func=terminations.illegal_contact,
+        params={
+            "threshold": 100.0,
+            "sensor_cfg": SceneEntityCfg(
+                name="contact_forces_left",
+                body_names=["left_thigh_link_A1", "left_shin_link_B1",
+                            "left_thigh_link_A2", "left_shin_link_B2"],
+            ),
+        },
+    )
 
 
 # ─────────────────────────── Env ──────────────────────────────────────────────
