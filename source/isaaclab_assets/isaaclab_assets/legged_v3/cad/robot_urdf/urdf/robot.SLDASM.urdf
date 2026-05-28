@@ -1,0 +1,617 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by Stephen Brawner (brawner@gmail.com) 
+     Commit Version: 1.6.0-4-g7f85cfe  Build Version: 1.6.7995.38578
+     For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
+<robot
+  name="robot.SLDASM">
+  <link
+    name="base_link">
+    <inertial>
+      <origin
+        xyz="0.119 -0.0078995 -0.10019"
+        rpy="0 0 0" />
+      <mass
+        value="7.3226" />
+      <inertia
+        ixx="0.031401"
+        ixy="1.2148E-17"
+        ixz="-3.5779E-18"
+        iyy="0.073434"
+        iyz="1.7517E-18"
+        izz="0.051549" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://robot.SLDASM/meshes/base_link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.79216 0.81961 0.93333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://robot.SLDASM/meshes/base_link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <link
+    name="left_thigh_link_A1">
+    <inertial>
+      <origin
+        xyz="0.0700000000000024 -0.00649999999999995 -2.26207941267376E-15"
+        rpy="0 0 0" />
+      <mass
+        value="0.116525440310417" />
+      <inertia
+        ixx="2.45877499995411E-05"
+        ixy="-7.11607766294997E-21"
+        ixz="9.65617559869902E-20"
+        iyy="0.000338559690951383"
+        iyz="1.25830842650063E-21"
+        izz="0.000317254074187252" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://robot.SLDASM/meshes/left_thigh_link_A1.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://robot.SLDASM/meshes/left_thigh_link_A1.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="left_hip_joint_A1"
+    type="revolute">
+    <origin
+      xyz="0.316 0.054 -0.06"
+      rpy="3.1416 0.93114 -1.5708" />
+    <parent
+      link="base_link" />
+    <child
+      link="left_thigh_link_A1" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="left_shin_link_B1">
+    <inertial>
+      <origin
+        xyz="-0.0899999999999959 -0.00650000000000001 2.91433543964104E-15"
+        rpy="0 0 0" />
+      <mass
+        value="0.142525440310417" />
+      <inertia
+        ixx="3.03705833328744E-05"
+        ixy="-3.41385246021882E-21"
+        ixz="5.0821976835258E-21"
+        iyy="0.000603757766611385"
+        iyz="-1.42293469730327E-21"
+        izz="0.000577401649847254" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://robot.SLDASM/meshes/left_shin_link_B1.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://robot.SLDASM/meshes/left_shin_link_B1.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="left_knee_joint_B1"
+    type="revolute">
+    <origin
+      xyz="0.14 -0.013 0"
+      rpy="3.1416 1.4115 3.1416" />
+    <parent
+      link="left_thigh_link_A1" />
+    <child
+      link="left_shin_link_B1" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="left_foot_link">
+    <inertial>
+      <origin
+        xyz="-1.66533453693773E-16 -0.015 -1.35447209004269E-14"
+        rpy="0 0 0" />
+      <mass
+        value="0.234111484545512" />
+      <inertia
+        ixx="0.00016481448512004"
+        ixy="-1.32690051411216E-21"
+        ixz="5.2218507070405E-40"
+        iyy="0.000294512247558254"
+        iyz="-2.10584729793552E-35"
+        izz="0.00016481448512004" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://robot.SLDASM/meshes/left_foot_link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://robot.SLDASM/meshes/left_foot_link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="left_wheel_joint"
+    type="continuous">
+    <origin
+      xyz="-0.18 0 0"
+      rpy="0 -0.77181 3.1416" />
+    <parent
+      link="left_shin_link_B1" />
+    <child
+      link="left_foot_link" />
+    <axis
+      xyz="0 1 0" />
+  </joint>
+  <link
+    name="left_thigh_link_A2">
+    <inertial>
+      <origin
+        xyz="0.0700000000000071 -0.00650000000000001 -1.29063426612674E-14"
+        rpy="0 0 0" />
+      <mass
+        value="0.116525440310417" />
+      <inertia
+        ixx="2.45877499995411E-05"
+        ixy="-5.563654511942E-21"
+        ixz="1.43995601033231E-20"
+        iyy="0.000338559690951383"
+        iyz="1.34702180498065E-21"
+        izz="0.000317254074187252" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://robot.SLDASM/meshes/left_thigh_link_A2.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://robot.SLDASM/meshes/left_thigh_link_A2.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="left_hip_joint_A2"
+    type="revolute">
+    <origin
+      xyz="0.298 0.156 -0.06"
+      rpy="0 1.0252 1.5708" />
+    <parent
+      link="base_link" />
+    <child
+      link="left_thigh_link_A2" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="left_shin_link_B2">
+    <inertial>
+      <origin
+        xyz="-0.0899999999999941 0.00650000000000001 4.9960036108132E-15"
+        rpy="0 0 0" />
+      <mass
+        value="0.142525440310417" />
+      <inertia
+        ixx="3.03705833328744E-05"
+        ixy="6.86450353833041E-21"
+        ixz="-6.95414049695781E-19"
+        iyy="0.000603757766611385"
+        iyz="-3.90583193183651E-21"
+        izz="0.000577401649847254" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://robot.SLDASM/meshes/left_shin_link_B2.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://robot.SLDASM/meshes/left_shin_link_B2.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="left_knee_joint_B2"
+    type="revolute">
+    <origin
+      xyz="0.14 0 0"
+      rpy="3.1416 -1.3743 3.1416" />
+    <parent
+      link="left_thigh_link_A2" />
+    <child
+      link="left_shin_link_B2" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="right_thigh_link_A1">
+    <inertial>
+      <origin
+        xyz="0.0700000000000161 0.00649999999999999 -9.10382880192628E-15"
+        rpy="0 0 0" />
+      <mass
+        value="0.116525440310417" />
+      <inertia
+        ixx="2.4587749999541E-05"
+        ixy="-2.65568568604582E-20"
+        ixz="1.16043513773839E-19"
+        iyy="0.000338559690951382"
+        iyz="-7.08180932887359E-22"
+        izz="0.000317254074187251" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://robot.SLDASM/meshes/right_thigh_link_A1.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://robot.SLDASM/meshes/right_thigh_link_A1.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="right_hip_joint_A1"
+    type="revolute">
+    <origin
+      xyz="-0.078 0.054 -0.06"
+      rpy="3.1416 1.1505 -1.5708" />
+    <parent
+      link="base_link" />
+    <child
+      link="right_thigh_link_A1" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="right_shin_link_B1">
+    <inertial>
+      <origin
+        xyz="-0.0899999999999934 0.00650000000000001 1.36002320516582E-15"
+        rpy="0 0 0" />
+      <mass
+        value="0.142525440310417" />
+      <inertia
+        ixx="3.03705833328743E-05"
+        ixy="-3.2088621656105E-21"
+        ixz="3.04931861011548E-20"
+        iyy="0.000603757766611383"
+        iyz="-4.60414956120792E-21"
+        izz="0.000577401649847252" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://robot.SLDASM/meshes/right_shin_link_B1.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://robot.SLDASM/meshes/right_shin_link_B1.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="right_knee_joint_B1"
+    type="revolute">
+    <origin
+      xyz="0.14 0.013 0"
+      rpy="3.1416 1.2092 3.1416" />
+    <parent
+      link="right_thigh_link_A1" />
+    <child
+      link="right_shin_link_B1" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="right_foot_link">
+    <inertial>
+      <origin
+        xyz="-6.93889390390723E-15 0.015 -7.16787740273617E-14"
+        rpy="0 0 0" />
+      <mass
+        value="0.234111484545512" />
+      <inertia
+        ixx="0.00016481448512004"
+        ixy="-1.65600539287963E-21"
+        ixz="0"
+        iyy="0.000294512247558254"
+        iyz="8.07137974919034E-21"
+        izz="0.00016481448512004" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://robot.SLDASM/meshes/right_foot_link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://robot.SLDASM/meshes/right_foot_link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="right_wheel_joint"
+    type="continuous">
+    <origin
+      xyz="-0.18 0 0"
+      rpy="0 -0.43363 3.1416" />
+    <parent
+      link="right_shin_link_B1" />
+    <child
+      link="right_foot_link" />
+    <axis
+      xyz="0 1 0" />
+  </joint>
+  <link
+    name="right_thigh_link_A2">
+    <inertial>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <mass
+        value="0" />
+      <inertia
+        ixx="0"
+        ixy="0"
+        ixz="0"
+        iyy="0"
+        iyz="0"
+        izz="0" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://robot.SLDASM/meshes/right_thigh_link_A2.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://robot.SLDASM/meshes/right_thigh_link_A2.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="right_hip_joint_A2"
+    type="revolute">
+    <origin
+      xyz="-0.06 0.156 -0.06"
+      rpy="0 0.95304 1.5708" />
+    <parent
+      link="base_link" />
+    <child
+      link="right_thigh_link_A2" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="right_shin_link_B2">
+    <inertial>
+      <origin
+        xyz="-0.0900000000000098 -0.00649999999999996 1.11022302462516E-14"
+        rpy="0 0 0" />
+      <mass
+        value="0.142525440310417" />
+      <inertia
+        ixx="3.03705833328745E-05"
+        ixy="2.06043085938575E-20"
+        ixz="3.17637355220363E-19"
+        iyy="0.000603757766611384"
+        iyz="-2.45920277178712E-22"
+        izz="0.000577401649847253" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://robot.SLDASM/meshes/right_shin_link_B2.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://robot.SLDASM/meshes/right_shin_link_B2.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="right_knee_joint_B2"
+    type="revolute">
+    <origin
+      xyz="0.14 0 0"
+      rpy="3.1416 -1.2928 3.1416" />
+    <parent
+      link="right_thigh_link_A2" />
+    <child
+      link="right_shin_link_B2" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+  </joint>
+</robot>
