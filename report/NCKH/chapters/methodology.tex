@@ -6,117 +6,134 @@
 \chapter{PHƯƠNG PHÁP THỰC HIỆN}
 \label{chap:phuongphap}
 
-Chương này trình bày toàn bộ quy trình và phương pháp cụ thể được áp dụng để
-thực hiện đề tài, gồm: thiết kế thực nghiệm thu thập dữ liệu, nhận dạng hàm
-truyền, tối ưu hóa tham số PI bằng giải thuật di truyền, xây dựng và huấn
-luyện mạng ANN, phân tích động học cơ cấu 5-bar, và triển khai hệ thống trên
-vi điều khiển ESP32.
+Chương này trình bày toàn bộ quy trình và phương pháp thực hiện đề tài theo hai
+nhánh song song: (1)~điều khiển PI--ANN thích nghi trên phần cứng thực (ESP32 +
+động cơ NF5475), và (2)~huấn luyện bộ điều khiển cân bằng bằng học tăng cường
+(RL) trong môi trường mô phỏng NVIDIA Isaac Lab. Cả hai nhánh đều được xây dựng
+trên cùng nền tảng cơ khí robot Legged V3 sử dụng cơ cấu 5-bar parallel.
 
 
 % ==============================================
-\section{Quy trình nghiên cứu tổng quan}
+\section{Mô tả hệ thống robot Legged V3}
 % ==============================================
 
-Nghiên cứu được thực hiện theo quy trình tuần tự gồm 5 giai đoạn chính:
+\subsection{Kiến trúc tổng thể}
 
-\begin{enumerate}
-    \item \textbf{Giai đoạn 1 — Thu thập dữ liệu:} Vận hành động cơ NF5475 ở
-    các mức PWM khác nhau, đọc phản hồi vận tốc qua encoder và ghi log về máy
-    tính qua cổng Serial.
+Robot Legged V3 là robot hai chân có bánh xe (\textit{wheeled bipedal robot}),
+trong đó mỗi chân được dẫn động bởi cơ cấu song song 5-bar. Bánh xe được gắn
+tại điểm cuối chân (end-effector), cho phép robot vừa di chuyển bằng bánh vừa
+thay đổi chiều cao thân thông qua điều khiển góc khớp.
 
-    \item \textbf{Giai đoạn 2 — Nhận dạng mô hình:} Đưa dữ liệu vào MATLAB,
-    sử dụng công cụ \texttt{tfest} để xác định hàm truyền $G(s)$ của động cơ,
-    sau đó kiểm chứng độ chính xác mô hình.
+\begin{figure}[H]
+    \centering
+    % \includegraphics[width=0.80\textwidth]{figure/legged_v3_overview.png}
+    \caption{Kiến trúc tổng thể robot Legged V3}
+    \label{fig:robot_overview}
+\end{figure}
 
-    \item \textbf{Giai đoạn 3 — Tối ưu tham số PI:} Áp dụng giải thuật di
-    truyền (GA) trên mô hình $G(s)$ để tìm cặp $(K_p^*, K_i^*)$ tối ưu tại
-    mỗi mức setpoint vận tốc.
+Hệ thống được chia thành ba cấp:
+\begin{itemize}
+    \item \textbf{Cấp cơ khí:} Khung nhôm, hai cơ cấu 5-bar parallel, trục bánh xe.
+    \item \textbf{Cấp dẫn động:} Bốn động cơ DC NF5475 (hai chủ động mỗi chân)
+    kết hợp encoder quang học 200 PPR.
+    \item \textbf{Cấp điều khiển:} Vi điều khiển ESP32 WROOM-32, mạch driver
+    L298N, giao tiếp Serial/UART với máy tính.
+\end{itemize}
 
-    \item \textbf{Giai đoạn 4 — Huấn luyện ANN:} Sử dụng 9 bộ $(K_p^*, K_i^*)$
-    làm nhãn, cùng dữ liệu sai số vận tốc, huấn luyện mạng ANN có khả năng dự
-    đoán tham số PI thích nghi theo trạng thái thực tế.
+\subsection{Cơ cấu 5-bar parallel}
 
-    \item \textbf{Giai đoạn 5 — Triển khai và kiểm chứng:} Cài đặt bộ điều
-    khiển PI trên ESP32, thực hiện thực nghiệm vận tốc và đánh giá đáp ứng hệ
-    thống.
-\end{enumerate}
+Mỗi chân sử dụng cơ cấu 5-bar parallel phẳng với các thông số hình học:
+\begin{itemize}
+    \item Khoảng cách hai khớp chủ động cố định: $A_1A_2 = 105$ mm.
+    \item Chiều dài thanh chủ động: $L_{act} = 100$ mm.
+    \item Chiều dài thanh bị động: $L_{pas} = 180$ mm.
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    % \includegraphics[width=0.70\textwidth]{figure/five_bar_cad.png}
+    \caption{Bản vẽ kỹ thuật cơ cấu 5-bar parallel một chân}
+    \label{fig:five_bar_cad}
+\end{figure}
+
+Ưu điểm của cơ cấu này so với chân nối tiếp: (i)~độ cứng vững cao hơn do tải
+được phân phối trên hai thanh bị động, (ii)~khối lượng phần chuyển động nhỏ vì
+động cơ đặt tại gốc cố định, (iii)~giảm số bậc tự do cần điều khiển.
+
+\subsection{Danh sách linh kiện}
+
+\begin{table}[H]
+    \centering
+    \caption{Danh sách linh kiện hệ thống robot Legged V3}
+    \label{tab:bom}
+    \begin{tabular}{|c|p{5cm}|c|p{4.5cm}|}
+    \hline
+    \textbf{STT} & \textbf{Linh kiện} & \textbf{SL} & \textbf{Thông số chính} \\
+    \hline
+    1 & Động cơ DC NF5475 & 4 & 12--24V, 33W, encoder 200 PPR \\
+    \hline
+    2 & Vi điều khiển ESP32 WROOM-32 & 1 & 240 MHz, Wi-Fi, BT \\
+    \hline
+    3 & Mạch driver L298N & 2 & 2A/kênh, 2 chiều \\
+    \hline
+    4 & Khung nhôm định hình & -- & Cắt CNC theo bản vẽ \\
+    \hline
+    5 & Nguồn 12V / 5A & 1 & Cấp cho động cơ \\
+    \hline
+    6 & Module hạ áp LM2596 & 1 & 12V $\to$ 5V cho ESP32 \\
+    \hline
+    \end{tabular}
+\end{table}
 
 
 % ==============================================
 \section{Thiết kế thực nghiệm thu thập dữ liệu}
 % ==============================================
 
-\subsection{Sơ đồ phần cứng}
-
-Hệ thống phần cứng thực nghiệm gồm các thành phần:
-\begin{itemize}
-    \item Vi điều khiển \textbf{ESP32 WROOM-32}: xử lý điều khiển, đọc encoder,
-    xuất PWM và giao tiếp Serial.
-    \item Động cơ \textbf{NF5475}: đối tượng điều khiển, tích hợp encoder quang
-    học 200 PPR.
-    \item Mạch cầu H \textbf{TB6612FNG}: khuếch đại tín hiệu PWM để dẫn động
-    động cơ theo hai chiều.
-    \item Nguồn cấp 12 V/3 A cho động cơ, 3,3 V cho ESP32.
-\end{itemize}
-
 \subsection{Quy trình thu thập}
 
-Dữ liệu được thu thập theo giao thức kích thích bậc thang (step input):
+Dữ liệu đặc tính động cơ được thu thập theo giao thức kích thích bậc thang
+(step input). ESP32 lần lượt cấp 5 mức PWM: 20\%, 40\%, 60\%, 80\%, 100\%
+(tương ứng 51--255 đơn vị 8-bit), mỗi mức duy trì \textbf{10 giây}.
 
-\begin{enumerate}
-    \item Cấp lần lượt 5 mức PWM: 20\%, 40\%, 60\%, 80\%, 100\% của PWM tối đa
-    (255 đơn vị 8-bit). Mỗi mức duy trì \textbf{10 giây}.
-    \item ESP32 đọc xung encoder mỗi $\Delta t = 0{,}01$ s, tính vận tốc theo
-    công thức:
-    \begin{equation}
-        v_{cur}(k) = \frac{n_{xung}(k)}{200} \cdot \frac{60}{\Delta t}
-        \quad [\text{RPM}]
-        \label{eq:vel_calc}
-    \end{equation}
-    trong đó $n_{xung}(k)$ là số xung encoder tích lũy trong khoảng $\Delta t$.
-    \item Xuất dữ liệu $(t,\; v_{cur},\; \text{PWM})$ qua cổng Serial với tốc độ
-    115\,200 baud, lưu vào file CSV trên máy tính.
-\end{enumerate}
+Vận tốc tức thời được tính sau mỗi $\Delta t = 0{,}01$ s:
+\begin{equation}
+    v_{cur}(k) = \frac{n_{xung}(k)}{200} \cdot \frac{60}{\Delta t}
+    \quad [\text{RPM}]
+    \label{eq:vel_calc}
+\end{equation}
+trong đó $n_{xung}(k)$ là số xung encoder tích lũy trong khoảng $\Delta t$.
 
-Kết quả thu được 5 file CSV, mỗi file tương ứng một mức kích thích, tổng cộng
-khoảng 5\,000 mẫu dữ liệu thô.
+Dữ liệu $(t,\; v_{cur},\; \text{PWM})$ được xuất qua cổng Serial (115\,200
+baud) và lưu thành file CSV trên máy tính. Kết quả thu được 5 file CSV,
+tổng khoảng 5\,000 mẫu dữ liệu thô.
 
 
 % ==============================================
 \section{Nhận dạng hàm truyền bằng MATLAB}
 % ==============================================
 
-\subsection{Chuẩn bị dữ liệu đầu vào}
+\subsection{Chuẩn bị dữ liệu}
 
-Dữ liệu từ 5 file CSV được ghép thành một \texttt{iddata} object trong MATLAB
-với:
-\begin{itemize}
-    \item \textbf{Đầu vào ($u$):} mức PWM tương ứng (giá trị 0--1 sau chuẩn hóa).
-    \item \textbf{Đầu ra ($y$):} vận tốc $v_{cur}$ (RPM).
-    \item \textbf{Chu kỳ lấy mẫu:} $T_s = 0{,}01$ s.
-\end{itemize}
+Dữ liệu 5 file CSV được ghép thành một \texttt{iddata} object trong MATLAB với
+đầu vào $u$ là mức PWM (chuẩn hóa 0--1) và đầu ra $y$ là vận tốc (RPM),
+chu kỳ lấy mẫu $T_s = 0{,}01$ s.
 
 \subsection{Lựa chọn bậc mô hình và nhận dạng}
 
-Hàm \texttt{tfest(data, np, nz)} được sử dụng với tham số:
+Hàm \texttt{tfest(data, np, nz)} được thử với $n_p \in \{2,3,4,5\}$ cực và
+$n_z \in \{n_p{-}2,\, n_p{-}1\}$ không. Mô hình được chọn theo tiêu chí:
 \begin{itemize}
-    \item $n_p$: số cực (pole) của mô hình — thử từ bậc 2 đến bậc 5.
-    \item $n_z$: số không (zero) của mô hình — thử từ $n_p - 2$ đến $n_p - 1$.
-\end{itemize}
-
-Mô hình được chọn dựa trên tiêu chí:
-\begin{itemize}
-    \item \textbf{Fit-to-data} cao nhất trên tập kiểm chứng.
-    \item \textbf{FPE} (Final Prediction Error) nhỏ.
-    \item \textbf{MSE} (Mean Squared Error) nhỏ.
-    \item Đặc tính cực -- không không có cực không ổn định (phần thực dương).
+    \item \textbf{Fit-to-data} cao nhất trên tập kiểm chứng độc lập.
+    \item \textbf{FPE} và \textbf{MSE} nhỏ.
+    \item Không có cực không ổn định (phần thực dương).
 \end{itemize}
 
 \subsection{Kiểm chứng mô hình}
 
-Mô hình được kiểm chứng bằng cách so sánh đầu ra mô phỏng với dữ liệu thực
-nghiệm trên tập dữ liệu không dùng để nhận dạng. Hàm \texttt{compare} trong
-MATLAB Toolbox System Identification được sử dụng để vẽ và tính chỉ số khớp.
+Mô hình được kiểm chứng bằng hàm \texttt{compare} trong MATLAB System
+Identification Toolbox, so sánh đầu ra mô phỏng với dữ liệu thực nghiệm
+trên tập dữ liệu không tham gia nhận dạng.
 
 
 % ==============================================
@@ -125,124 +142,177 @@ MATLAB Toolbox System Identification được sử dụng để vẽ và tính c
 
 \subsection{Phát biểu bài toán tối ưu}
 
-Cho hàm truyền $G(s)$ và setpoint vận tốc $v_{req}$, bài toán tối ưu là tìm
-cặp $(K_p, K_i)$ sao cho hệ thống vòng kín đáp ứng tốt nhất về:
-\begin{itemize}
-    \item Độ vọt lố (overshoot) $\leq 5\%$.
-    \item Thời gian xác lập (settling time) $\leq 0{,}5$ s.
-    \item Sai số xác lập (steady-state error) gần bằng 0.
-\end{itemize}
-
-\subsection{Cấu hình giải thuật di truyền}
-
-GA được triển khai trong MATLAB với cấu hình:
-\begin{itemize}
-    \item \textbf{Cá thể (chromosome):} vector $[K_p,\; K_i]$ với
-    $K_p \in [0,\; 2]$, $K_i \in [0,\; 20]$.
-    \item \textbf{Kích thước quần thể:} 50 cá thể.
-    \item \textbf{Số thế hệ tối đa:} 100.
-    \item \textbf{Xác suất lai ghép:} 0,8.
-    \item \textbf{Xác suất đột biến:} 0,05.
-\end{itemize}
-
-\subsection{Hàm thích nghi (Fitness function)}
-
-Hàm thích nghi đánh giá chất lượng đáp ứng bước nhảy của hệ thống vòng kín
-$G_c(s) = \frac{K_p s + K_i}{s} \cdot G(s)$ thông qua mô phỏng:
-
+Cho hàm truyền $G(s)$ và setpoint $v_{req}$, bài toán là tìm $(K_p, K_i)$ để
+cực tiểu hóa hàm thích nghi:
 \begin{equation}
     f(K_p, K_i) = w_1 \cdot OS + w_2 \cdot T_s + w_3 \cdot |e_{ss}|
     \label{eq:fitness}
 \end{equation}
+trong đó $OS$~(\%) là độ vọt lố, $T_s$~(s) là thời gian xác lập, $e_{ss}$
+là sai số xác lập, $w_1,w_2,w_3$ là trọng số thực nghiệm.
 
-trong đó $OS$ là overshoot (\%), $T_s$ là settling time (s), $e_{ss}$ là sai số
-xác lập, và $w_1, w_2, w_3$ là trọng số được điều chỉnh thực nghiệm.
-GA tìm $(K_p, K_i)$ để \textbf{cực tiểu hóa} hàm $f$.
+\subsection{Cấu hình giải thuật di truyền}
 
-\subsection{Áp dụng cho 9 mức setpoint}
+\begin{itemize}
+    \item \textbf{Chromosome:} $[K_p,\; K_i]$ với $K_p \in [0,\,2]$,
+    $K_i \in [0,\,20]$.
+    \item \textbf{Quần thể:} 50 cá thể; \textbf{Số thế hệ:} 100.
+    \item \textbf{Xác suất lai ghép / đột biến:} 0,8 / 0,05.
+\end{itemize}
 
-Quy trình GA được lặp lại độc lập cho 9 mức setpoint: 250, 500, 750, 1000,
-1250, 1500, 1750, 2000, 2250 RPM. Kết quả thu được 9 cặp $(K_p^*, K_i^*)$
-tương ứng, phản ánh sự phụ thuộc của tham số tối ưu vào điểm hoạt động.
+Quy trình GA được lặp lại độc lập cho 9 mức setpoint từ 250 đến 2250 RPM
+(bước 250 RPM), thu được 9 cặp $(K_p^*, K_i^*)$ tương ứng.
 
 
 % ==============================================
 \section{Xây dựng tập dữ liệu và huấn luyện mạng ANN}
 % ==============================================
 
-\subsection{Xây dựng tập dữ liệu huấn luyện}
-
-Từ 9 bộ thực nghiệm (mỗi bộ 1\,001 mẫu, 10 giây), tập dữ liệu ANN được xây
-dựng với:
+\subsection{Đặc trưng và nhãn}
 
 \begin{itemize}
-    \item \textbf{Đặc trưng đầu vào (X):}
-    \begin{itemize}
-        \item \texttt{error\_vel} $= v_{req} - v_{cur}$: sai số vận tốc tức thời.
-        \item \texttt{delta\_error\_vel} $= e_{vel}(k) - e_{vel}(k{-}1)$:
-        đạo hàm sai số (biến thiên).
-    \end{itemize}
-    \item \textbf{Nhãn đầu ra (Y):}
-    \begin{itemize}
-        \item \texttt{gain\_bestKp}: giá trị $K_p^*$ tối ưu tương ứng với
-        setpoint của bộ dữ liệu đó.
-        \item \texttt{gain\_bestKi}: giá trị $K_i^*$ tương ứng.
-    \end{itemize}
+    \item \textbf{Đầu vào:} sai số vận tốc $e = v_{req} - v_{cur}$ và
+    biến thiên sai số $\Delta e = e(k) - e(k{-}1)$.
+    \item \textbf{Đầu ra (nhãn):} cặp $(K_p^*, K_i^*)$ tối ưu từ GA tại
+    setpoint tương ứng.
+    \item \textbf{Phân chia:} 7/9 bộ làm train (với 15\% validation),
+    2/9 bộ làm test độc lập.
 \end{itemize}
 
-\textbf{Phân chia tập dữ liệu:}
-\begin{itemize}
-    \item Train set: 7 bộ (77,7\%) — gộp và xáo trộn ngẫu nhiên.
-    \item Validation set: trích 15\% từ train set.
-    \item Test set: 2 bộ còn lại (22,3\%) — không tham gia huấn luyện.
-\end{itemize}
-
-\subsection{Chuẩn hóa dữ liệu}
-
-Đặc trưng đầu vào được chuẩn hóa theo Z-score trước khi đưa vào mạng:
+Đặc trưng đầu vào được chuẩn hóa Z-score (thống kê tính chỉ từ train set):
 \begin{equation}
-    X_{norm} = \frac{X - \mu_{train}}{\sigma_{train} + \varepsilon},
-    \quad \varepsilon = 10^{-8}
+    X_{norm} = \frac{X - \mu_{train}}{\sigma_{train} + 10^{-8}}
     \label{eq:zscore}
 \end{equation}
 
-Các thống kê $\mu_{train}$, $\sigma_{train}$ được tính \textit{chỉ từ tập train}
-và được lưu lại để áp dụng nhất quán cho validation và test.
+\subsection{Kiến trúc và cấu hình huấn luyện}
 
-\subsection{Kiến trúc mạng ANN}
-
-Mạng ANN được xây dựng hoàn toàn bằng Python thuần (không dùng TensorFlow,
-PyTorch) để nắm vững cơ chế lan truyền ngược. Kiến trúc gồm:
-
+Mạng ANN được lập trình bằng Python thuần (không dùng framework) với kiến trúc:
 \begin{equation}
-    \text{Input}(2) \to \text{Dense}(8){+}\text{L2} \to \text{ReLU}
-    \to \text{Dropout}(0{,}1) \to \text{Dense}(16){+}\text{L2}
-    \to \text{ReLU} \to \text{Dropout}(0{,}1) \to \text{Dense}(2)
+    \text{Input}(2) \to \text{Dense}(8){+}\text{L2}
+    \to \text{ReLU} \to \text{Dropout}(0{,}1)
+    \to \text{Dense}(16){+}\text{L2}
+    \to \text{ReLU} \to \text{Dropout}(0{,}1)
+    \to \text{Dense}(2)
     \label{eq:ann_arch}
 \end{equation}
 
-Các lựa chọn thiết kế:
+Cấu hình huấn luyện: optimizer Adam ($\alpha = 2\times10^{-3}$, decay
+$= 3\times10^{-4}$), hàm loss MSE, 1\,000 epochs, dừng sớm nếu validation
+loss không cải thiện sau 50 epochs liên tiếp.
+
+
+% ==============================================
+\section{Triển khai bộ điều khiển PI trên ESP32}
+% ==============================================
+
+\subsection{Rời rạc hóa và anti-windup}
+
+Bộ PI được rời rạc hóa bằng Euler tiến ($\Delta t = 0{,}01$ s):
+\begin{align}
+    e_{vel}(k) &= v_{req}(k) - v_{cur}(k) \\
+    I(k) &= \mathrm{clamp}\bigl(I(k{-}1) + e_{vel}(k)\cdot\Delta t,\;
+            -1000,\;+1000\bigr) \\
+    u(k) &= \mathrm{clamp}\bigl(K_p\cdot e_{vel}(k) + K_i\cdot I(k),\;
+            -255,\;+255\bigr)
+\end{align}
+
+\subsection{Vòng điều khiển thời gian thực}
+
+Encoder được đọc qua ngắt phần cứng (\texttt{attachInterrupt}, sườn lên kênh A)
+để không mất xung. Vòng lặp chính dùng \texttt{millis()} thay cho
+\texttt{delay()} để không chặn ISR:
+\begin{enumerate}
+    \item Kiểm tra $millis() - t_{prev} \geq 10$ ms.
+    \item Tính $v_{cur}$ từ bộ đếm xung, reset bộ đếm.
+    \item Tính sai số, cập nhật tích phân, tính $u$.
+    \item Ghi $u$ ra PWM + chiều quay (L298N).
+    \item Xuất log qua Serial; cập nhật $t_{prev}$.
+\end{enumerate}
+
+
+% ==============================================
+\section{Huấn luyện điều khiển cân bằng bằng Isaac Lab}
+% ==============================================
+
+\subsection{Nền tảng mô phỏng}
+
+Môi trường huấn luyện được xây dựng trên \textbf{NVIDIA Isaac Sim} thông qua
+framework \textbf{Isaac Lab}, cho phép chạy song song hàng nghìn môi trường
+trên GPU để tăng tốc thu thập dữ liệu. Task được đăng ký với tên
+\texttt{Isaac-Legged-V3-Wheel}.
+
+\begin{figure}[H]
+    \centering
+    % \includegraphics[width=0.85\textwidth]{figure/isaaclab_env.png}
+    \caption{Môi trường huấn luyện robot Legged V3 trong NVIDIA Isaac Sim}
+    \label{fig:isaaclab_env}
+\end{figure}
+
+\subsection{Cấu hình môi trường}
+
+Môi trường sử dụng kiến trúc \texttt{ManagerBasedRLEnv} của Isaac Lab với
+4\,096 môi trường song song trên một GPU. Địa hình là mặt phẳng phẳng
+(\texttt{terrain\_type = "plane"}). Các cảm biến gồm:
 \begin{itemize}
-    \item \textbf{L2 regularization} ($\lambda = 5\times 10^{-4}$): giảm
-    overfitting bằng cách phạt trọng số lớn.
-    \item \textbf{Dropout} ($p = 0{,}1$): ngẫu nhiên vô hiệu hóa 10\% neuron
-    trong mỗi batch để tăng tính tổng quát.
-    \item \textbf{ReLU} ($f(x) = \max(0, x)$): hàm kích hoạt phi tuyến, tránh
-    vanishing gradient.
-    \item \textbf{Linear output}: đầu ra không bị ràng buộc, phù hợp với bài
-    toán hồi quy liên tục dự đoán $K_p$, $K_i$.
+    \item \textbf{IMU} (\texttt{ImuCfg}): gia tốc và vận tốc góc thân robot.
+    \item \textbf{Contact Sensor} (\texttt{ContactSensorCfg}): tiếp xúc bánh
+    xe với mặt đất.
 \end{itemize}
 
-\subsection{Cấu hình huấn luyện}
+\subsection{Không gian quan sát và hành động}
 
+\textbf{Quan sát} (\textit{observation}) bao gồm:
 \begin{itemize}
-    \item \textbf{Hàm loss:} MSE $= \frac{1}{N}\sum_{i=1}^{N}(y_i - \hat{y}_i)^2$.
-    \item \textbf{Optimizer:} Adam với learning rate $\alpha = 2\times 10^{-3}$,
-    learning rate decay $= 3\times 10^{-4}$.
-    \item \textbf{Số epochs:} 1\,000; đánh giá validation sau mỗi epoch.
-    \item \textbf{Điều kiện dừng sớm:} nếu validation loss không giảm sau 50
-    epochs liên tiếp.
+    \item Lệnh vận tốc đặt $(v_x, v_y, \omega_z)$.
+    \item Góc nghiêng và vận tốc góc thân (từ IMU).
+    \item Góc và vận tốc góc các khớp chủ động.
+    \item Hành động ở bước trước.
 \end{itemize}
+
+\textbf{Hành động} (\textit{action}): mô-men xoắn đặt tại các khớp chủ động
+của cơ cấu 5-bar và khớp bánh xe.
+
+\subsection{Hàm phần thưởng}
+
+Hàm phần thưởng tổng hợp nhiều thành phần:
+\begin{equation}
+    r = w_{vel}\,r_{vel} + w_{bal}\,r_{bal}
+      + w_{eng}\,r_{eng} + w_{pen}\,r_{pen}
+    \label{eq:reward_total}
+\end{equation}
+trong đó:
+\begin{itemize}
+    \item $r_{vel}$: thưởng bám vận tốc đặt (theo lệnh $v_x$, $\omega_z$).
+    \item $r_{bal}$: thưởng giữ thân thẳng đứng (phạt góc nghiêng lớn).
+    \item $r_{eng}$: phạt tiêu thụ năng lượng quá mức.
+    \item $r_{pen}$: phạt khi tiếp xúc bất thường hoặc robot ngã.
+\end{itemize}
+
+\subsection{Thuật toán và quy trình huấn luyện}
+
+Thuật toán \textbf{PPO} (Proximal Policy Optimization) được sử dụng thông qua
+thư viện \texttt{rsl\_rl}. Lệnh huấn luyện:
+
+\begin{lstlisting}[language=bash]
+./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
+    --task Isaac-Legged-V3-Wheel \
+    --num_envs 4096 --headless
+\end{lstlisting}
+
+Sau khi huấn luyện, chính sách được kiểm tra bằng lệnh:
+\begin{lstlisting}[language=bash]
+./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
+    --task Isaac-Legged-V3-Wheel \
+    --num_envs 4
+\end{lstlisting}
+
+\begin{figure}[H]
+    \centering
+    % \includegraphics[width=0.75\textwidth]{figure/rl_training_curve.png}
+    \caption{Đường cong phần thưởng trong quá trình huấn luyện PPO}
+    \label{fig:rl_curve}
+\end{figure}
 
 
 % ==============================================
@@ -251,36 +321,27 @@ Các lựa chọn thiết kế:
 
 \subsection{Thiết lập hệ tọa độ}
 
-Cơ cấu 5-bar parallel được phân tích trong mặt phẳng 2D với:
-\begin{itemize}
-    \item Gốc tọa độ tại tâm khớp chủ động thứ nhất $A_1 = (0, 0)$.
-    \item Tâm khớp chủ động thứ hai $A_2 = (d, 0)$, với $d = A_1A_2 = 105$ mm.
-    \item Hai góc khớp chủ động $\theta_1$, $\theta_2$ đo từ trục $x$ dương.
-    \item Điểm cuối chân (end-effector) $P = (x_P, y_P)$.
-\end{itemize}
+Phân tích trong mặt phẳng 2D với gốc tọa độ tại $A_1 = (0, 0)$,
+$A_2 = (d, 0)$ ($d = 105$ mm), hai góc khớp chủ động $\theta_1$, $\theta_2$
+đo từ trục $x$ dương.
 
-\subsection{Phương pháp giải động học thuận}
+\subsection{Động học thuận}
 
-Từ $(\theta_1, \theta_2)$ đã biết, tính vị trí đầu khâu bị động:
+Từ $(\theta_1, \theta_2)$ tính vị trí đầu khâu bị động:
 \begin{align}
     B_1 &= \bigl(L_{act}\cos\theta_1,\;\; L_{act}\sin\theta_1\bigr) \\
     B_2 &= \bigl(d + L_{act}\cos\theta_2,\;\; L_{act}\sin\theta_2\bigr)
 \end{align}
 
-Điểm $P$ là giao điểm của hai đường tròn bán kính $L_{pas}$ tâm $B_1$ và $B_2$,
-xác định bằng giải hệ phương trình vô hướng:
-\begin{equation}
-    (x_P - B_{1x})^2 + (y_P - B_{1y})^2 = L_{pas}^2
-\end{equation}
-\begin{equation}
-    (x_P - B_{2x})^2 + (y_P - B_{2y})^2 = L_{pas}^2
-\end{equation}
+Điểm cuối $P$ là giao hai đường tròn bán kính $L_{pas}$ tâm $B_1$, $B_2$:
+\begin{align}
+    (x_P - B_{1x})^2 + (y_P - B_{1y})^2 &= L_{pas}^2 \\
+    (x_P - B_{2x})^2 + (y_P - B_{2y})^2 &= L_{pas}^2
+\end{align}
 
-\subsection{Phương pháp giải động học nghịch}
+\subsection{Động học nghịch}
 
-Từ vị trí đặt trước $P = (x_P, y_P)$, sử dụng định lý cosin để tính
-$\theta_1$, $\theta_2$:
-
+Từ $P = (x_P, y_P)$ đặt trước, dùng định lý cosin:
 \begin{align}
     \theta_1 &= \mathrm{atan2}(B_{1y}, B_{1x})
     - \arccos\!\left(\frac{L_{act}^2 + |A_1P|^2 - L_{pas}^2}
@@ -290,78 +351,18 @@ $\theta_1$, $\theta_2$:
     {2\,L_{act}\,|A_2P|}\right)
 \end{align}
 
-\subsection{Xác định ma trận Jacobian}
+\subsection{Ma trận Jacobian}
 
-Ma trận Jacobian $J \in \mathbb{R}^{2\times2}$ liên hệ vận tốc khớp với vận
-tốc điểm cuối:
+Jacobian $J \in \mathbb{R}^{2\times2}$ liên hệ vận tốc khớp với vận tốc
+điểm cuối:
 \begin{equation}
-    \dot{P} = J(\theta)\,\dot{\Theta},
-    \quad \dot{P} = \begin{pmatrix}\dot{x}_P \\ \dot{y}_P\end{pmatrix},\;
-    \dot{\Theta} = \begin{pmatrix}\dot{\theta}_1 \\ \dot{\theta}_2\end{pmatrix}
-    \label{eq:jacobian}
-\end{equation}
-
-$J$ được tính bằng vi phân hàm động học thuận theo $\theta_1$, $\theta_2$:
-\begin{equation}
+    \dot{P} = J(\theta)\,\dot{\Theta}, \qquad
     J = \begin{pmatrix}
         \partial x_P/\partial\theta_1 & \partial x_P/\partial\theta_2 \\
         \partial y_P/\partial\theta_1 & \partial y_P/\partial\theta_2
     \end{pmatrix}
+    \label{eq:jacobian}
 \end{equation}
 
-$J^{-1}$ được dùng để tính vận tốc khớp từ vận tốc điểm cuối mong muốn, phục
-vụ bài toán điều khiển quỹ đạo sau này.
-
-
-% ==============================================
-\section{Triển khai bộ điều khiển PI trên ESP32}
-% ==============================================
-
-\subsection{Rời rạc hóa bộ điều khiển PI}
-
-Bộ PI liên tục được rời rạc hóa bằng phương pháp Euler tiến (forward Euler)
-với chu kỳ $\Delta t = 0{,}01$ s:
-
-\begin{align}
-    e_{vel}(k) &= v_{req}(k) - v_{cur}(k) \label{eq:pi_err}\\
-    I(k) &= I(k{-}1) + e_{vel}(k)\cdot\Delta t \label{eq:pi_int}\\
-    u(k) &= K_p\cdot e_{vel}(k) + K_i\cdot I(k) \label{eq:pi_out}
-\end{align}
-
-\subsection{Chiến lược anti-windup}
-
-Để tránh tích phân bão hòa (integral windup) khi động cơ bị chặn hoặc khi
-setpoint thay đổi đột ngột, tích phân $I(k)$ được giới hạn cứng:
-\begin{equation}
-    I(k) \leftarrow \mathrm{clamp}\bigl(I(k),\; -1000,\; +1000\bigr)
-\end{equation}
-
-Tương tự, tín hiệu điều khiển đầu ra bị giới hạn trong dải PWM hợp lệ:
-\begin{equation}
-    u(k) \leftarrow \mathrm{clamp}\bigl(u(k),\; -255,\; +255\bigr)
-\end{equation}
-
-\subsection{Đọc encoder bằng ngắt phần cứng}
-
-Để đảm bảo không mất xung, encoder được đọc qua ngắt phần cứng
-(\texttt{attachInterrupt}):
-\begin{itemize}
-    \item Ngắt kích hoạt trên \textbf{sườn lên} của kênh A.
-    \item Trong ISR (\texttt{encoderISR}): đọc trạng thái kênh B để xác định
-    chiều quay và cập nhật bộ đếm xung.
-    \item Bộ đếm được reset về 0 sau mỗi chu kỳ điều khiển $\Delta t$.
-\end{itemize}
-
-\subsection{Vòng điều khiển thời gian thực}
-
-Vòng lặp chính (\texttt{loop}) sử dụng \texttt{millis()} để đảm bảo chu kỳ
-đúng $\Delta t = 10$ ms mà không dùng \texttt{delay()} (tránh chặn ISR):
-
-\begin{enumerate}
-    \item Kiểm tra $millis() - t_{prev} \geq 10$.
-    \item Tính $v_{cur}$ từ bộ đếm xung.
-    \item Thực hiện bước PI: tính $e$, cập nhật $I$, tính $u$.
-    \item Ghi $u$ ra PWM và chiều quay (TB6612FNG).
-    \item Xuất $(t,\; v_{cur},\; v_{req},\; e)$ qua Serial để logging.
-    \item Cập nhật $t_{prev} = millis()$.
-\end{enumerate}
+$J^{-1}$ được dùng để tính vận tốc khớp từ vận tốc điểm cuối mong muốn,
+phục vụ bài toán điều khiển quỹ đạo chân trong các giai đoạn sau.

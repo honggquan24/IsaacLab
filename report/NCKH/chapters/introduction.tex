@@ -6,9 +6,8 @@
 \chapter{MỞ ĐẦU}
 \label{chap:modau}
 
-
 % --------------------------------------------------
-\section*{1. Tổng quan tình hình nghiên cứu}
+\section{Tổng quan tình hình nghiên cứu}
 % --------------------------------------------------
 
 Robot hai chân (bipedal robot) là một trong những hướng nghiên cứu trọng tâm của
@@ -37,43 +36,73 @@ thống hoàn chỉnh từ nhận dạng mô hình động cơ, thiết kế b�
 triển khai thực tế trên phần cứng nhúng là bài toán còn nhiều khoảng trống để nghiên cứu
 và đóng góp.
 
+% --------------------------------------------------
+\section{Tính cấp thiết của đề tài}
+% --------------------------------------------------
+
+Trong bối cảnh Cách mạng công nghiệp 4.0, các lĩnh vực tự động hóa, robot thông minh
+và trí tuệ nhân tạo đang phát triển mạnh mẽ, tạo ra nhiều hướng nghiên cứu mới trong
+thiết kế và điều khiển các hệ thống robot di động. Trong đó, robot tự cân bằng là một
+hướng nghiên cứu quan trọng vì có khả năng duy trì ổn định trong quá trình di chuyển,
+đồng thời làm nền tảng cho các hệ robot tự hành, robot dịch vụ và phương tiện di chuyển
+thông minh.
+
+Hiện nay, phần lớn các mô hình robot tự cân bằng vẫn tập trung vào dạng hai bánh truyền
+thống và sử dụng các thuật toán điều khiển như PID, LQR hoặc Fuzzy Logic. Các phương pháp
+này có ưu điểm là đơn giản và dễ triển khai, tuy nhiên còn hạn chế khi hệ thống có nhiều
+bậc tự do, đặc tính phi tuyến mạnh hoặc chịu tác động của môi trường thay đổi. Vì vậy,
+việc nghiên cứu xe robot tự cân bằng đa bậc tự do kết hợp với trí tuệ nhân tạo và học
+tăng cường có ý nghĩa quan trọng, giúp robot có khả năng tự học, thích nghi và nâng cao
+độ ổn định trong quá trình vận hành.
+
+Đề tài ``Xe robot tự cân bằng đa bậc tự do'' được thực hiện nhằm xây dựng nền tảng nghiên
+cứu cho hệ robot di động thông minh, kết hợp giữa mô hình cơ khí, cảm biến, điều khiển
+nhúng, mô phỏng vật lý và thuật toán AI. Kết quả của đề tài không chỉ có ý nghĩa trong
+nghiên cứu học thuật mà còn có tiềm năng ứng dụng trong robot dịch vụ, robot giao hàng,
+xe tự hành mini và các mô hình đào tạo về điều khiển -- trí tuệ nhân tạo. Đồng thời, đề
+tài giúp sinh viên rèn luyện tư duy thiết kế hệ thống, lập trình điều khiển và tối ưu
+hóa robot trong thời kỳ chuyển đổi số.
 
 % --------------------------------------------------
-\section*{2. Lý do chọn đề tài}
+\section{Lý do chọn đề tài}
 % --------------------------------------------------
 
-Xuất phát từ những hạn chế của bộ điều khiển PID hệ số cố định khi áp dụng vào
-động cơ DC có tải thay đổi, cùng với tiềm năng của cơ cấu song song 5-bar trong thiết
-kế chân robot gọn nhẹ, nhóm nghiên cứu chọn đề tài:
+Xuất phát từ nhu cầu nghiên cứu và phát triển các hệ robot di động thông minh có khả
+năng tự cân bằng, thích nghi và hoạt động ổn định trong nhiều điều kiện khác nhau,
+nhóm nghiên cứu chọn đề tài:
 
 \begin{center}
-    \textbf{``Nghiên cứu và ứng dụng bộ điều khiển PID kết hợp mạng nơron nhân tạo (ANN)\\
-    điều khiển Robot Bipedal Wheel sử dụng cơ cấu 5-bar parallel''}
+    \textbf{``Xe robot tự cân bằng đa bậc tự do''}
 \end{center}
 
 với các lý do cụ thể sau:
 
 \begin{enumerate}[leftmargin=1.5cm, label=\arabic*.]
-    \item \textbf{Tính thực tiễn cao:} Động cơ DC NF5475 và vi điều khiển ESP32 là
-    những linh kiện phổ biến, chi phí thấp, dễ tiếp cận với sinh viên. Kết quả nghiên
-    cứu có thể được triển khai trực tiếp trên phần cứng thực.
+    \item \textbf{Tính thực tiễn cao:} Robot tự cân bằng là nền tảng quan trọng cho
+    các hệ thống robot di động, xe tự hành mini, robot dịch vụ và robot hỗ trợ con người.
+    Việc nghiên cứu mô hình xe robot tự cân bằng đa bậc tự do giúp tạo cơ sở để phát triển
+    các hệ robot linh hoạt, có khả năng di chuyển ổn định và thích nghi tốt hơn.
 
-    \item \textbf{Tính học thuật:} Quá trình nhận dạng hàm truyền động cơ bằng
-    MATLAB, tối ưu tham số PI bằng giải thuật di truyền (GA) và xây dựng ANN từ đầu
-    (không dùng framework có sẵn) cung cấp nền tảng lý thuyết vững chắc.
+    \item \textbf{Tính học thuật:} Đề tài kết hợp nhiều kiến thức quan trọng như mô hình
+    động học, động lực học, cảm biến quán tính, điều khiển cân bằng, điều khiển động cơ,
+    trí tuệ nhân tạo và học tăng cường. Qua đó, đề tài giúp xây dựng nền tảng nghiên cứu
+    toàn diện cho hệ robot phi tuyến và nhiều bậc tự do.
 
-    \item \textbf{Tính mở rộng:} Bộ PI--ANN cho một động cơ là cơ sở để mở rộng
-    sang điều khiển đồng thời hai động cơ trong cơ cấu 5-bar parallel, tiến tới hệ thống
-    điều khiển hoàn chỉnh cho robot bipedal wheel.
+    \item \textbf{Tính mới và khả năng mở rộng:} Khác với các mô hình robot tự cân bằng
+    hai bánh truyền thống, robot tự cân bằng đa bậc tự do có khả năng mở rộng về cơ cấu,
+    chuyển động và chiến lược điều khiển. Việc kết hợp mô phỏng vật lý với học tăng cường
+    giúp robot có khả năng tự học cách cân bằng và di chuyển trong môi trường mô phỏng
+    trước khi triển khai trên phần cứng thực tế.
 
-    \item \textbf{Đóng góp vào nghiên cứu trong nước:} Xây dựng quy trình hoàn chỉnh
-    và có thể tái hiện (reproducible) cho bài toán điều khiển thích nghi trên nền tảng
-    nhúng, phù hợp với điều kiện nghiên cứu của sinh viên Việt Nam.
+    \item \textbf{Đóng góp vào nghiên cứu trong nước:} Đề tài góp phần xây dựng một hướng
+    nghiên cứu phù hợp với điều kiện sinh viên Việt Nam, kết hợp giữa thiết kế cơ khí,
+    điều khiển nhúng, mô phỏng và trí tuệ nhân tạo. Kết quả nghiên cứu có thể làm nền tảng
+    cho các đề tài tiếp theo về robot di động thông minh, robot dịch vụ và hệ thống tự hành.
 \end{enumerate}
 
 
 % --------------------------------------------------
-\section*{3. Mục tiêu đề tài}
+\section{Mục tiêu đề tài}
 % --------------------------------------------------
 
 Đề tài hướng đến các mục tiêu cụ thể sau:
@@ -95,11 +124,13 @@ với các lý do cụ thể sau:
     \item Phân tích động học (thuận và nghịch) của cơ cấu 5-bar parallel, xác định
     không gian làm việc và Jacobian, làm nền tảng cho điều khiển quỹ đạo điểm cuối
     chân robot.
+    
+    \item Triển khai thuật toán học tăng cường (Reinforcement Learning) nhằm giúp mô hình học được khả năng tự cân bằng và di chuyển trong quá trình vận hành.
 \end{enumerate}
 
 
 % --------------------------------------------------
-\section*{4. Phương pháp nghiên cứu}
+\section{Phương pháp nghiên cứu}
 % --------------------------------------------------
 
 Đề tài sử dụng kết hợp các phương pháp sau:
@@ -113,16 +144,19 @@ với các lý do cụ thể sau:
     các mức vận tốc đặt khác nhau (250 RPM đến 2250 RPM).
 
     \item \textbf{Phương pháp mô phỏng:} Sử dụng MATLAB/Simulink để nhận dạng hàm
-    truyền, thiết kế và kiểm tra bộ PI trước khi nạp lên phần cứng; Python để huấn
-    luyện và đánh giá mạng ANN.
+    truyền, thiết kế và kiểm tra bộ điều khiển PI trước khi nạp lên phần cứng; sử dụng
+    Python để huấn luyện và đánh giá mạng ANN; sử dụng Isaac Sim/Isaac Lab để mô phỏng
+    môi trường vật lý và huấn luyện học tăng cường trước khi triển khai trên phần cứng.
 
     \item \textbf{Phương pháp tối ưu hóa:} Áp dụng giải thuật di truyền (Genetic
-    Algorithm) để tìm tham số $K_p$, $K_i$ tối ưu trong không gian ràng buộc.
+    Algorithm) để tìm bộ tham số $K_p$, $K_i$ tối ưu trong không gian ràng buộc. Đồng thời,
+    tận dụng khả năng tính toán của GPU để huấn luyện học tăng cường song song nhiều môi trường mô phỏng,
+    nhằm rút ngắn thời gian huấn luyện và đánh giá thuật toán.
 \end{itemize}
 
 
 % --------------------------------------------------
-\section*{5. Đối tượng và phạm vi nghiên cứu}
+\section{Đối tượng và phạm vi nghiên cứu}
 % --------------------------------------------------
 
 \textbf{Đối tượng nghiên cứu:}
@@ -132,6 +166,8 @@ với các lý do cụ thể sau:
     \item Mạng Nơron Nhân Tạo (ANN) xây dựng bằng Python không dùng framework.
     \item Cơ cấu 5-bar parallel với thông số: $A_1A_2 = 105$~mm,
     $L_{act} = 100$~mm, $L_{pas} = 180$~mm.
+    \item Thuật toán học tăng cường sử dụng thuật toán Proximal Policy Optimization (PPO),
+    được mô phỏng và huấn luyện trên phần mềm mô phỏng Isaac Sim kết hợp với nền tảng Isaac Lab.
 \end{itemize}
 
 \textbf{Phạm vi nghiên cứu:}
