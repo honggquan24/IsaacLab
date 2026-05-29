@@ -158,7 +158,7 @@ class CommandsCfg:
         ranges=commands.UniformPoseCommandCfg.Ranges(
             pos_x=(0.0, 0.0),
             pos_y=(0.0, 0.0),
-            pos_z=(0.25, 0.27),
+            pos_z=(0.28, 0.33),
             roll=(0.0, 0.0),
             pitch=(0.0, 0.0),
             yaw=(0.0, 0.0),
@@ -283,10 +283,10 @@ class RewardCfg:
         params={"command_name": "velocity_command", "std": 0.5},
     )
 
-    track_base_height_exp = RewardTermCfg(
-        func=mdp.rewards.track_base_height_exp,
-        weight=8.0,
-        params={"command_name": "height_command", "std": 0.15},
+    track_base_height_l2 = RewardTermCfg(
+        func=mdp.rewards.track_base_height_l2,
+        weight=-20.0,
+        params={"command_name": "height_command"},
     )
 
     # ── Stability ─────────────────────────────────────────────────────────────
@@ -343,7 +343,7 @@ class TerminationsCfg:
     bad_orientation = TerminationTermCfg(
         func=terminations.bad_orientation,
         params={
-            "limit_angle": math.pi / 2,
+            "limit_angle": math.pi / 5,
             "asset_cfg": SceneEntityCfg(name="robot"),
         },
     )
@@ -367,7 +367,7 @@ class TerminationsCfg:
     illegal_contact_base = TerminationTermCfg(
         func=terminations.illegal_contact,
         params={
-            "threshold": 100.0,
+            "threshold": 15.0,
             "sensor_cfg": SceneEntityCfg(name="contact_forces_base", body_names=["base_link"]),
         },
     )
@@ -375,7 +375,7 @@ class TerminationsCfg:
     illegal_contact_right = TerminationTermCfg(
         func=terminations.illegal_contact,
         params={
-            "threshold": 100.0,
+            "threshold": 15.0,
             "sensor_cfg": SceneEntityCfg(
                 name="contact_forces_right",
                 body_names=["right_thigh_link_A1", "right_shin_link_B1",
@@ -387,7 +387,7 @@ class TerminationsCfg:
     illegal_contact_left = TerminationTermCfg(
         func=terminations.illegal_contact,
         params={
-            "threshold": 100.0,
+            "threshold": 15.0,
             "sensor_cfg": SceneEntityCfg(
                 name="contact_forces_left",
                 body_names=["left_thigh_link_A1", "left_shin_link_B1",
