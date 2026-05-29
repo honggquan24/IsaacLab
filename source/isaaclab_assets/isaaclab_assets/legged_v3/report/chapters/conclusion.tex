@@ -1,0 +1,131 @@
+% =============================================
+% File: chapters/conclusion.tex
+% KẾT LUẬN VÀ KIẾN NGHỊ
+% =============================================
+
+\chapter*{KẾT LUẬN VÀ KIẾN NGHỊ}
+\addcontentsline{toc}{chapter}{Kết luận và kiến nghị}
+\label{chap:ketluan}
+
+
+% --------------------------------------------------
+\section*{1. Kết luận}
+% --------------------------------------------------
+
+Đề tài \textit{``Nghiên cứu và ứng dụng bộ điều khiển PID kết hợp mạng nơron
+nhân tạo (ANN) điều khiển Robot Bipedal Wheel sử dụng cơ cấu 5-bar parallel''}
+đã được thực hiện theo hai hướng song song: \textbf{điều khiển cổ điển kết hợp
+học máy} và \textbf{học tăng cường trong mô phỏng vật lý}. Các kết quả đạt được:
+
+\begin{enumerate}[leftmargin=1.5cm, label=\arabic*.]
+    \item \textbf{Nhận dạng hàm truyền động cơ NF5475.}
+    Thực nghiệm trên sáu mẫu động cơ, sử dụng công cụ \texttt{tfest} (MATLAB)
+    với cấu trúc bậc 4/3. Hàm truyền đại diện $G_1(s)$ đạt độ chính xác
+    95{,}36\%, hệ số khuếch đại DC trung bình $\bar{K}_{DC} = 14{,}23$
+    với độ phân tán $\pm 2\%$ qua 6 mẫu — xác nhận tính đồng đều của lô
+    động cơ và phản ánh các hiệu ứng hao mòn chổi than theo tuổi thọ sử dụng.
+
+    \item \textbf{Tối ưu bộ điều khiển cascade PID bằng giải thuật di truyền (GA).}
+    GA với 80 cá thể, 80 thế hệ, 20 lần chạy độc lập và hàm phạt ràng buộc
+    cho phép tìm bộ tham số $\{K_{pv}^*, K_{iv}^*\}$ tại 9 mức setpoint
+    (250--2250~RPM). Kết quả: overshoot $\leq 5\%$, thời gian xác lập
+    $\leq 0{,}65\,$s, sai số xác lập $< 4\,$RPM — vượt trội so với Random
+    và MATLAB PID Tuner.
+
+    \item \textbf{Xây dựng mạng ANN dự đoán tham số PI thích nghi.}
+    Mạng $2 \to 8 \to 16 \to 2$ (ReLU, Dropout, L2-regularization)
+    được huấn luyện thuần túy bằng Python (không dùng framework),
+    hội tụ sau $\approx 400$ epochs trên 9 cặp dữ liệu GA.
+    Mạng học được quan hệ đơn điệu setpoint $\to$ tham số PI và
+    có khả năng nội suy cho setpoint chưa thấy trong huấn luyện.
+
+    \item \textbf{Triển khai bộ điều khiển PI trên vi điều khiển ESP32 WROOM-32.}
+    Vòng PI rời rạc (Tustin, $\Delta t = 10\,$ms) với anti-windup hoạt động
+    ổn định ở toàn dải setpoint thử nghiệm, đáp ứng vận tốc đạt trong
+    $\pm 5\%$ sau $t_{rise} < 0{,}5\,$s.
+
+    \item \textbf{Phân tích động học cơ cấu 5-bar parallel của robot Legged~V3.}
+    Xác định động học thuận, động học nghịch và ma trận Jacobian với thông số
+    thực tế ($A_1A_2 = 105\,$mm, $L_{act} = 100\,$mm, $L_{pas} = 180\,$mm),
+    làm cơ sở cho điều khiển quỹ đạo điểm cuối chân.
+
+    \item \textbf{Huấn luyện chính sách điều khiển toàn thân bằng PPO trong Isaac Lab.}
+    Môi trường mô phỏng song song (4\,096 env, GPU RTX~3070) được xây dựng
+    với cơ cấu 5-bar, IMU, encoder bánh xe và curriculum 3~pha dựa trên EMA
+    hiệu suất. Chính sách Actor--Critic bất đối xứng ([256,256,256] ELU)
+    học phối hợp 4~DOF (2~khớp hông + 2~bánh xe) để bám lệnh vận tốc
+    và duy trì chiều cao thân. Trọng số Actor được xuất sang ONNX
+    chuẩn bị triển khai thực tế.
+\end{enumerate}
+
+Những kết quả trên chứng minh tính khả thi của việc kết hợp hai hướng nghiên
+cứu: điều khiển cổ điển tối ưu bằng GA với ANN thích nghi (phù hợp phần cứng
+nhúng chi phí thấp) và học tăng cường trong mô phỏng vật lý quy mô lớn
+(phù hợp robot có động học phức tạp như cơ cấu 5-bar). Cả hai cung cấp
+góc nhìn bổ trợ và tạo nền tảng cho robot hai chân có bánh xe hoạt động tự
+chủ trong thực tế.
+
+
+% --------------------------------------------------
+\section*{2. Hạn chế}
+% --------------------------------------------------
+
+\begin{enumerate}[leftmargin=1.5cm, label=\arabic*.]
+    \item \textbf{Chưa kiểm chứng ANN trực tuyến trên phần cứng.}
+    Mạng ANN hiện chỉ được đánh giá offline; chưa nhúng lên ESP32 để đo
+    thời gian suy luận và độ chính xác dự đoán trong điều kiện thời gian thực.
+
+    \item \textbf{Thực nghiệm động cơ ở tải cố định.}
+    Thực nghiệm thu thập dữ liệu và kiểm chứng PI được thực hiện với tải
+    trục cố định; chưa khảo sát hiệu năng khi tải thay đổi đột ngột
+    hoặc có nhiễu ngoài (rung, va chạm).
+
+    \item \textbf{Khoảng cách mô phỏng--thực tế (sim-to-real gap) chưa được
+    kiểm chứng.}
+    Chính sách PPO được huấn luyện trong Isaac Lab với vật lý PhysX lý tưởng;
+    chưa thực nghiệm triển khai ONNX lên phần cứng robot thực để đánh giá
+    ảnh hưởng của ma sát, độ trễ cảm biến và sai số mô hình.
+
+    \item \textbf{Mô hình ANN chỉ bao phủ một động cơ đơn.}
+    Chưa mở rộng sang điều khiển đồng thời hai động cơ trong cơ cấu 5-bar
+    với ràng buộc động học chuỗi kín.
+
+    \item \textbf{Chỉ có termination ``time\_out'' trong môi trường RL.}
+    Các điều kiện kết thúc sớm (góc nghiêng quá lớn, tiếp xúc bất hợp lệ)
+    đang bị tắt để tạo điều kiện khám phá; điều này có thể dẫn đến chính
+    sách chưa đủ mạnh khi gặp nhiễu lớn trong thực tế.
+\end{enumerate}
+
+
+% --------------------------------------------------
+\section*{3. Kiến nghị và hướng phát triển}
+% --------------------------------------------------
+
+\begin{enumerate}[leftmargin=1.5cm, label=\arabic*.]
+    \item \textbf{Nhúng ANN lên ESP32 và kiểm chứng real-time.}
+    Lượng tử hóa hoặc chuyển đổi mô hình sang định dạng nhẹ (fixed-point),
+    nhúng lên ESP32 và đo thời gian suy luận, so sánh đầu ra với bảng tra GA.
+
+    \item \textbf{Triển khai ONNX Actor lên phần cứng robot thực.}
+    Chạy suy luận ONNX trên máy tính nhúng (Raspberry Pi / Jetson Nano) kết
+    nối với ESP32 qua UART, đánh giá sim-to-real gap và áp dụng kỹ thuật
+    domain randomization hoặc system identification thực tế nếu cần.
+
+    \item \textbf{Bật lại điều kiện kết thúc sớm trong RL.}
+    Kích hoạt \texttt{bad\_orientation} và \texttt{illegal\_contact} sau khi
+    chính sách đã ổn định ở Pha~2, kết hợp với domain randomization
+    (ma sát, khối lượng, độ trễ) để tăng tính bền vững.
+
+    \item \textbf{Mở rộng bộ điều khiển PI--ANN sang hai động cơ.}
+    Tích hợp IK và Jacobian 5-bar để điều khiển quỹ đạo điểm cuối chân,
+    bổ sung điều khiển hai động cơ trong mỗi cụm chân.
+
+    \item \textbf{Tích hợp cảm biến thực tế vào vòng phản hồi.}
+    Gắn IMU thực (ví dụ MPU-6050) lên thân robot, xử lý tín hiệu và đưa
+    vào vòng điều khiển thay thế mô phỏng, chuẩn bị cho điều khiển cân bằng
+    động toàn thân.
+
+    \item \textbf{Công bố kết quả khoa học.}
+    Hoàn thiện số liệu thực nghiệm sim-to-real và chuẩn bị bài báo gửi
+    tạp chí / hội nghị kỹ thuật trong nước phù hợp (ví dụ: VCCA, REV).
+\end{enumerate}
