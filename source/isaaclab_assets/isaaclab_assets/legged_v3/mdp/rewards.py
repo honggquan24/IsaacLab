@@ -145,3 +145,15 @@ def track_base_height_exp(
 
     height_error_sq = torch.square(current_height - target_height)
     return torch.exp(-height_error_sq / (std ** 2))
+
+
+def track_base_height_l2(
+    env: ManagerBasedRLEnv,
+    command_name: str,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Penalty L2 cho sai lệch chiều cao (trả về giá trị âm, dùng weight âm)."""
+    asset: Articulation = env.scene[asset_cfg.name]
+    target_height  = env.command_manager.get_command(command_name)[:, 2]
+    current_height = asset.data.root_pos_w[:, 2]
+    return torch.square(current_height - target_height)

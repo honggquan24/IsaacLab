@@ -137,33 +137,49 @@ def _spawn_urdf_with_mimic_and_loops(
             # localPos1: pin position in foot_link's local frame = b2_axle_offset
             pos1 = Gf.Vec3d(*b2_axle_offset)
 
-            # localRot0 = identity  →  joint frame = shin_B2's local frame, axis Y
-            # localRot1 = R1^{-1} * R0  →  aligns body1 joint frame with body0 at t=0
-            T_10 = T1_world.GetInverse() * T0_world
-            q_10 = T_10.ExtractRotationQuat()
-            qi = q_10.GetImaginary()
-            localRot1 = Gf.Quatf(
-                float(q_10.GetReal()),
-                float(qi[0]), float(qi[1]), float(qi[2])
-            )
+            # Wheel rotation axis in world = foot_link's Y axis (wheel_joint uses Y).
+            # Express it in body0 (shin_B2) frame → used as joint axis in body0 frame.
+            import math as _math
+            wheel_axis_world = T1_world.TransformDir(Gf.Vec3d(0, 1, 0))
+            wheel_axis_in_b0 = T0_world.GetInverse().TransformDir(wheel_axis_world)
+            n = wheel_axis_in_b0.GetLength()
+            if n > 1e-6:
+                wheel_axis_in_b0 = wheel_axis_in_b0 / n
+
+            # localRot0: rotate joint Y → wheel_axis_in_b0 (so joint Y = wheel axis in B0)
+            y = Gf.Vec3d(0, 1, 0)
+            dot = max(-1.0, min(1.0, Gf.Dot(y, wheel_axis_in_b0)))
+            cross = Gf.Cross(y, wheel_axis_in_b0)
+            if cross.GetLength() < 1e-6:
+                localRot0 = Gf.Quatf(1, 0, 0, 0) if dot > 0 else Gf.Quatf(0, 1, 0, 0)
+            else:
+                ang = _math.acos(dot)
+                ax  = cross / cross.GetLength()
+                s   = _math.sin(ang / 2)
+                localRot0 = Gf.Quatf(_math.cos(ang / 2),
+                                     float(ax[0])*s, float(ax[1])*s, float(ax[2])*s)
+
+            # localRot1 = identity: joint Y = foot_link's Y = wheel rotation axis.
+            localRot1 = Gf.Quatf(1, 0, 0, 0)
 
             print(f"[legged_v3_cfg] {joint_name}: "
                   f"localPos0=({pos0[0]:.4f},{pos0[1]:.4f},{pos0[2]:.4f})  "
-                  f"localPos1=({pos1[0]:.4f},{pos1[1]:.4f},{pos1[2]:.4f})")
+                  f"axis_in_b0=({wheel_axis_in_b0[0]:.3f},{wheel_axis_in_b0[1]:.3f},{wheel_axis_in_b0[2]:.3f})")
 
             joint_path = f"{actual_path}/{joint_name}"
             if stage.GetPrimAtPath(joint_path).IsValid():
                 stage.RemovePrim(joint_path)
 
-            # RevoluteJoint: 1 DOF around axis Y of joint frame.
-            # Constraint residual = 0 at t=0 because localRot1 pre-aligns the frames.
+            # RevoluteJoint: 1 DOF around joint Y axis.
+            # localRot0 aligns joint Y with the wheel rotation axis in shin_B2's frame.
+            # localRot1=identity: joint Y = foot_link's Y = wheel axis. No initial violation.
             j = UsdPhysics.RevoluteJoint.Define(stage, joint_path)
 
             j.CreateBody0Rel().SetTargets([Sdf.Path(str(body0_prim.GetPath()))])
             j.CreateBody1Rel().SetTargets([Sdf.Path(str(body1_prim.GetPath()))])
 
             j.CreateLocalPos0Attr(Gf.Vec3f(float(pos0[0]), float(pos0[1]), float(pos0[2])))
-            j.CreateLocalRot0Attr(Gf.Quatf(1.0, 0.0, 0.0, 0.0))
+            j.CreateLocalRot0Attr(localRot0)
             j.CreateLocalPos1Attr(Gf.Vec3f(float(pos1[0]), float(pos1[1]), float(pos1[2])))
             j.CreateLocalRot1Attr(localRot1)
             j.CreateAxisAttr("Y")
@@ -210,7 +226,7 @@ LEGGED_ROBOT_V3_CFG = ArticulationCfg(
     soft_joint_pos_limit_factor=0.95,
 
     init_state=ArticulationCfg.InitialStateCfg(
-        pos=(0.0, 0.0, 0.4),
+        pos=(0.0, 0.0, 0.5),
         joint_pos={
             "left_hip_joint_A1":   0.0,
             "left_knee_joint_B1":  0.0,
@@ -248,7 +264,7 @@ LEGGED_ROBOT_V3_CFG = ArticulationCfg(
             joint_names_expr=["left_knee_joint_B1", "right_knee_joint_B1"],
             effort_limit_sim=20.0,
             stiffness=0.0,
-            damping=2.0,
+            damping=0.0,
             velocity_limit_sim=50.0,
         ),
         # ── Passive: knee B2 — loop closure provides geometric constraint ─────
@@ -256,7 +272,7 @@ LEGGED_ROBOT_V3_CFG = ArticulationCfg(
             joint_names_expr=["left_knee_joint_B2", "right_knee_joint_B2"],
             effort_limit_sim=5.0,
             stiffness=0.0,
-            damping=2.0,
+            damping=0.0,
             velocity_limit_sim=50.0,
         ),
         # ── Active: wheels (velocity-controlled by policy) ────────────────────
