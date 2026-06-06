@@ -117,8 +117,11 @@
 \setlength{\cftbeforelottitleskip}{0pt}
 \setlength{\cftafterlottitleskip}{16pt}
 
+% Helper: eat \numberline argument (ẩn số chương trong TOC)
+\newcommand{\hidenumberline}[1]{}
+
 % Font 13pt tường minh cho tất cả entry trong TOC
-\renewcommand{\cftchapfont}{\fontsize{13pt}{15.6pt}\selectfont\bfseries}
+\renewcommand{\cftchapfont}{\let\numberline\hidenumberline\fontsize{13pt}{15.6pt}\selectfont\bfseries}
 \renewcommand{\cftchappagefont}{\fontsize{13pt}{15.6pt}\selectfont\bfseries}
 \renewcommand{\cftsecfont}{\fontsize{13pt}{15.6pt}\selectfont}
 \renewcommand{\cftsecpagefont}{\fontsize{13pt}{15.6pt}\selectfont}
@@ -141,6 +144,13 @@
 \renewcommand{\cftfigpagefont}{\fontsize{13pt}{15.6pt}\selectfont}
 \renewcommand{\cfttabfont}{\fontsize{13pt}{15.6pt}\selectfont}
 \renewcommand{\cfttabpagefont}{\fontsize{13pt}{15.6pt}\selectfont}
+
+% Indent và numwidth cho danh mục hình/bảng
+% numwidth 3.2em đủ cho số 4 ký tự như "3.10"
+\setlength{\cftfigindent}{0pt}
+\setlength{\cftfignumwidth}{3.2em}
+\setlength{\cfttabindent}{0pt}
+\setlength{\cfttabnumwidth}{3.2em}
 
 % Khoảng cách giữa các mục
 \setlength{\cftbeforechapskip}{6pt}
