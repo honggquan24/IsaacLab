@@ -32,7 +32,7 @@ print(f"Bodies  ({env.scene['robot'].num_bodies}): {env.scene['robot'].data.body
 print("=" * 60 + "\n")
 
 # ── Zero-action loop ──────────────────────────────────────────────────────────
-zero_action = torch.zeros(1, env.action_manager.total_action_dim, device="cuda:0")
+zero_action = torch.randn(1, env.action_manager.total_action_dim, device="cuda:0")
 
 episode      = 0
 step_in_ep   = 0
@@ -48,7 +48,7 @@ while simulation_app.is_running():
     pos   = robot.data.root_pos_w[0].cpu()           # (3,)
     eye   = (pos[0].item() + 2.0, pos[1].item() + 2.0, pos[2].item() + 1.5)
     target = (pos[0].item(), pos[1].item(), pos[2].item())
-    env.sim.set_camera_view(eye=eye, target=target)
+    # env.sim.set_camera_view(eye=eye, target=target)
 
     # Print state every 30 env steps
     if step_in_ep % 30 == 0:

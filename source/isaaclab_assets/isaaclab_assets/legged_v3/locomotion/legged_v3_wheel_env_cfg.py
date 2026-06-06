@@ -60,8 +60,8 @@ class LeggedV3SceneCfg(InteractiveSceneCfg):
         physics_material=sim_utils.RigidBodyMaterialCfg(
             friction_combine_mode="multiply",
             restitution_combine_mode="multiply",
-            static_friction=1.5,
-            dynamic_friction=1.3,
+            static_friction=0.85,
+            dynamic_friction=0.65,
         ),
         debug_vis=False,
     )
@@ -118,14 +118,14 @@ class ActionCfg:
     hip_pos = actions.JointPositionActionCfg(
         asset_name="robot",
         joint_names=["left_hip_joint_A1", "right_hip_joint_A1"],
-        scale=1.0,
+        scale=0.5,
     )
 
     # Wheels: velocity control (2 DOF)
     wheel_vel = actions.JointVelocityActionCfg(
         asset_name="robot",
         joint_names=["left_wheel_joint", "right_wheel_joint"],
-        scale=1.0,
+        scale=5.0,
     )
 
 
@@ -158,7 +158,7 @@ class CommandsCfg:
         ranges=commands.UniformPoseCommandCfg.Ranges(
             pos_x=(0.0, 0.0),
             pos_y=(0.0, 0.0),
-            pos_z=(0.28, 0.33),
+            pos_z=(0.20, 0.26),
             roll=(0.0, 0.0),
             pitch=(0.0, 0.0),
             yaw=(0.0, 0.0),
@@ -364,35 +364,14 @@ class TerminationsCfg:
         },
     )
 
-    illegal_contact_base = TerminationTermCfg(
-        func=terminations.illegal_contact,
-        params={
-            "threshold": 15.0,
-            "sensor_cfg": SceneEntityCfg(name="contact_forces_base", body_names=["base_link"]),
-        },
-    )
+    # Base contact disabled — base_link naturally sits 23mm above ground at q=0;
+    # with 18° structural tilt the corner touches. Use bad_orientation instead.
 
-    illegal_contact_right = TerminationTermCfg(
-        func=terminations.illegal_contact,
+    base_height = TerminationTermCfg(
+        func=terminations.root_height_below_minimum,
         params={
-            "threshold": 15.0,
-            "sensor_cfg": SceneEntityCfg(
-                name="contact_forces_right",
-                body_names=["right_thigh_link_A1", "right_shin_link_B1",
-                            "right_thigh_link_A2", "right_shin_link_B2"],
-            ),
-        },
-    )
-
-    illegal_contact_left = TerminationTermCfg(
-        func=terminations.illegal_contact,
-        params={
-            "threshold": 15.0,
-            "sensor_cfg": SceneEntityCfg(
-                name="contact_forces_left",
-                body_names=["left_thigh_link_A1", "left_shin_link_B1",
-                            "left_thigh_link_A2", "left_shin_link_B2"],
-            ),
+            "minimum_height": 0.10,
+            "asset_cfg": SceneEntityCfg(name="robot"),
         },
     )
 
