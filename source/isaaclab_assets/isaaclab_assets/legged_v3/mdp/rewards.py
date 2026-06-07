@@ -57,18 +57,18 @@ def equal_effort_leg_when_cmd(
     left_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
     right_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
 ) -> torch.Tensor:
-    """Phạt khớp chân 2 bên xuất lực không đều nhau khi đang chạy (loại trừ bánh xe).
+    """Penalty for asymmetric leg torques during active motion (wheels excluded).
 
-    "Đều nhau" = tổng lực chân trái ≈ tổng lực chân phải.
-    So sánh từng khớp tương ứng: |left_hip - right_hip| + |left_thigh - right_thigh| + ...
-    Trả về tổng sai lệch (dương) → dùng với weight âm.
+    Compares each paired joint left-to-right: |left_hip - right_hip| + ...
+    Returns the total absolute imbalance (positive) — use with a negative weight.
+    Applied only when a velocity command is present (norm > command_threshold).
 
     Args:
-        command_name: Tên velocity command.
-        command_threshold: Ngưỡng để xác định "có lệnh".
-        left_cfg: SceneEntityCfg với joint_names = các khớp chân TRÁI (không gồm bánh xe).
-        right_cfg: SceneEntityCfg với joint_names = các khớp chân PHẢI (không gồm bánh xe).
-                   Thứ tự khớp phải tương ứng với left_cfg (hip→thigh→knee).
+        command_name: Name of the velocity command in CommandManager.
+        command_threshold: Minimum command magnitude to activate the penalty.
+        left_cfg: SceneEntityCfg whose joint_names list the LEFT leg joints (no wheel).
+        right_cfg: SceneEntityCfg whose joint_names list the RIGHT leg joints (no wheel).
+                   Joint order must correspond to left_cfg (hip → thigh → knee).
     """
     asset: Articulation = env.scene[left_cfg.name]
     cmd = env.command_manager.get_command(command_name)  # (num_envs, 3)
@@ -90,18 +90,18 @@ def equal_effort_all_when_still(
     left_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
     right_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
 ) -> torch.Tensor:
-    """Phạt tất cả khớp 2 bên (kể cả bánh xe) xuất lực không đều nhau khi đứng yên.
+    """Penalty for asymmetric torques across all joints (including wheels) when standing still.
 
-    "Đều nhau" = tổng lực chân trái ≈ tổng lực chân phải (kể cả bánh xe).
-    So sánh từng khớp tương ứng: hip + thigh + knee + wheel.
-    Trả về tổng sai lệch (dương) → dùng với weight âm.
+    Compares each paired joint left-to-right: hip + thigh + knee + wheel.
+    Returns the total absolute imbalance (positive) — use with a negative weight.
+    Applied only when the velocity command is below command_threshold (robot should be still).
 
     Args:
-        command_name: Tên velocity command.
-        command_threshold: Ngưỡng để xác định "dừng".
-        left_cfg: SceneEntityCfg với joint_names = tất cả khớp bên TRÁI (leg + wheel).
-        right_cfg: SceneEntityCfg với joint_names = tất cả khớp bên PHẢI (leg + wheel).
-                   Thứ tự khớp phải tương ứng với left_cfg (hip→thigh→knee→wheel).
+        command_name: Name of the velocity command in CommandManager.
+        command_threshold: Maximum command magnitude that counts as "standing still".
+        left_cfg: SceneEntityCfg whose joint_names list ALL LEFT joints (leg + wheel).
+        right_cfg: SceneEntityCfg whose joint_names list ALL RIGHT joints (leg + wheel).
+                   Joint order must correspond to left_cfg (hip → thigh → knee → wheel).
     """
     asset: Articulation = env.scene[left_cfg.name]
     cmd = env.command_manager.get_command(command_name)
@@ -122,20 +122,20 @@ def track_base_height_exp(
     std: float = 0.05,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
 ) -> torch.Tensor:
-    """Reward robot đứng đúng độ cao được yêu cầu (exp-kernel).
+    """Reward for matching the commanded base height (Gaussian kernel).
 
-    Đọc target height từ UniformPoseCommand[:, 2] (pos_z) và so sánh
-    với độ cao thực tế của root trong world frame.
+    Reads target height from UniformPoseCommand[:, 2] (pos_z) and compares it
+    to the robot root height in the world frame.
 
     Returns:
-        Tensor (num_envs,) trong khoảng (0, 1].
-        = 1.0 khi height_error = 0, giảm dần khi sai lệch tăng.
+        Tensor shape (num_envs,) in range (0, 1].
+        1.0 when height error is zero; decays toward 0 as error grows.
 
     Args:
-        command_name: Tên command trong CommandManager (ví dụ "height_command").
-        std:          Độ nhạy — sai lệch bằng std thì reward ≈ 0.37.
-                      std=0.05 m → phạt nặng khi sai > 5 cm.
-        asset_cfg:    Config của robot asset.
+        command_name: Key in CommandManager, e.g. "height_command".
+        std: Sensitivity — reward ≈ 0.37 when |error| == std.
+             std=0.05 m penalises errors larger than ~5 cm heavily.
+        asset_cfg: Config of the robot articulation.
     """
     asset: Articulation = env.scene[asset_cfg.name]
 
@@ -152,7 +152,7 @@ def track_base_height_l2(
     command_name: str,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
 ) -> torch.Tensor:
-    """Penalty L2 cho sai lệch chiều cao (trả về giá trị âm, dùng weight âm)."""
+    """Squared height-tracking error (use with a negative reward weight)."""
     asset: Articulation = env.scene[asset_cfg.name]
     target_height  = env.command_manager.get_command(command_name)[:, 2]
     current_height = asset.data.root_pos_w[:, 2]

@@ -170,6 +170,13 @@ class CommandsCfg:
 
 @configclass
 class ObservationsCfg:
+    """Observation groups for policy and critic.
+
+    Policy group uses only onboard sensors (IMU + encoders + last action + commands)
+    so the trained network can be deployed on the real robot without extra infrastructure.
+    Critic group adds privileged simulator state (root velocity, joint effort, episode time)
+    that is available during training but not at deployment.
+    """
 
     @configclass
     class PolicyCfg(ObservationGroupCfg):
@@ -231,6 +238,12 @@ class ObservationsCfg:
 
 @configclass
 class EventCfg:
+    """Reset events applied at episode boundaries.
+
+    Joints are perturbed by a small offset so the policy learns to recover
+    from imperfect initial poses. Root position and yaw are randomized over a
+    wide area to prevent the policy from exploiting a fixed spawn location.
+    """
 
     reset_joints = EventTermCfg(
         func=events.reset_joints_by_offset,
@@ -267,6 +280,12 @@ _LEG_JOINTS = [".*_hip_joint_A1"]  # only active hip joints used in reward shapi
 
 @configclass
 class RewardCfg:
+    """Reward shaping for wheeled balance locomotion.
+
+    Primary task rewards (positive weights): velocity tracking (linear + angular) and
+    base height tracking. Stability and smoothness penalties (negative weights) discourage
+    tilting, jerky joint accelerations, high torques, and rapid action changes.
+    """
 
     # ── Primary task ──────────────────────────────────────────────────────────
     termination_penalty = RewardTermCfg(func=rewards.is_terminated, weight=-200.0)
@@ -337,6 +356,14 @@ class RewardCfg:
 
 @configclass
 class TerminationsCfg:
+    """Termination conditions for the wheeled locomotion task.
+
+    Episodes end early on timeout, excessive tilt (>36°), dangerously high joint
+    velocity, or the base dropping below a minimum height — a proxy for falling.
+    Base contact detection is not used because the structural tilt of the chassis
+    causes a corner to briefly touch the ground at q=0; bad_orientation handles
+    genuine falls more robustly.
+    """
 
     time_out = TerminationTermCfg(func=terminations.time_out, time_out=True)
 
@@ -380,6 +407,11 @@ class TerminationsCfg:
 
 @configclass
 class LeggedV3WheelEnvCfg(ManagerBasedRLEnvCfg):
+    """Full environment config for Isaac-Legged-V3-Wheel.
+
+    Simulation runs at 200 Hz; the control policy runs at 50 Hz (decimation=4).
+    Episode length is 60 s. Viewer is positioned for a side-angle overview.
+    """
 
     scene:        LeggedV3SceneCfg = LeggedV3SceneCfg(num_envs=1, env_spacing=2.0)
     observations: ObservationsCfg  = ObservationsCfg()

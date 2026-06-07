@@ -86,6 +86,7 @@ def expand_velocity_command_range(env: ManagerBasedRLEnv, env_ids: torch.Tensor)
 
 
 def _set_phase(env: ManagerBasedRLEnv, new_phase: int) -> None:
+    """Mutate the velocity command ranges in-place and advance the global phase counter."""
     global _phase
 
     cmd_term = env.command_manager._terms["velocity_command"]

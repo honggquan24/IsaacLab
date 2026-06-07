@@ -14,9 +14,10 @@ Actuation:
   - wheel    : velocity-controlled by policy
 
 Loop closure:
-  RevoluteJoint created programmatically after URDF spawn.
-  ExcludeFromArticulation=True keeps the tree intact; PhysX enforces it
-  as a separate constraint.
+  D6 joint (position spring drive) created programmatically after URDF spawn.
+  Using spring drives (stiffness=100000 N/m) instead of rigid SphericalJoint so
+  any small geometry gap at q=0 is handled gracefully without impulse explosion.
+  ExcludeFromArticulation=True keeps the articulation tree intact.
 
   Wheel geometry (URDF):
     left_foot_link  cylinder: origin=(0, -0.0225, 0), length=0.045
@@ -25,16 +26,12 @@ Loop closure:
     right_foot_link cylinder: origin=(0, +0.0225, 0), length=0.045
       → B1 face at Y=0
       → B2 face at Y=+0.045  ← loop-closure pin
-
-  localPos0 on shin_B2 = tip of B2 (computed from world transforms).
-  localPos1 on foot_link = B2-side axle face (b2_axle_offset).
-  localRot1 = R1_world^{-1} * R0_world so joint frames align at t=0.
 """
 import os
 from collections.abc import Callable
 
 import isaaclab.sim as sim_utils
-from isaaclab.actuators import DelayedPDActuatorCfg
+from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.assets import ArticulationCfg
 from isaaclab.sim.spawners.from_files import UrdfFileCfg
 from isaaclab.sim.spawners.from_files.from_files import spawn_from_urdf
@@ -51,14 +48,19 @@ _MIMIC_PAIRS = [
     ("left_hip_joint_A2",  "left_hip_joint_A1"),
 ]
 
-# Loop-closing revolute joints: shin_B2 tip ↔ B2-side axle face of foot_link.
+# Loop-closing D6 spring joints: shin_B2 tip ↔ B2-side axle face of foot_link.
 # b2_axle_offset: position of the B2-side pin in foot_link's local frame.
-#   Left : wheel spans Y=0→-0.045, B2 face at Y=-0.045
-#   Right: wheel spans Y=0→+0.045, B2 face at Y=+0.045
+#   Left : wheel cylinder origin=(0,-0.0225,0), B2 face at Y=-0.045
+#   Right: wheel cylinder origin=(0,+0.0225,0), B2 face at Y=+0.045
 _LOOP_JOINT_PAIRS = [
     ("close_loop_left",  "left_shin_link_B2",  "left_foot_link",  (0.0, -0.045, 0.0)),
     ("close_loop_right", "right_shin_link_B2", "right_foot_link", (0.0,  0.045, 0.0)),
 ]
+
+# Spring parameters for compliant loop closure
+# High enough to maintain constraint under gravity loads, no hard impulse at init
+_LOOP_SPRING_STIFFNESS = 100_000.0   # N/m — 0.5mm error under 50N load
+_LOOP_SPRING_DAMPING   =   2_000.0   # N·s/m — critically damp ~5Hz oscillation
 
 
 def _find_prim_by_name(stage, root_path, name):
@@ -82,7 +84,7 @@ def _spawn_urdf_with_mimic_and_loops(
     orientation=None,
     **kwargs,
 ):
-    """Spawn URDF, apply mimic on hip_A2, create loop-closing ball joints."""
+    """Spawn URDF, apply mimic on hip_A2, create compliant loop-closing joints."""
     import omni.usd
     from pxr import Usd, UsdGeom, UsdPhysics, PhysxSchema, Gf, Sdf
 
@@ -108,9 +110,10 @@ def _spawn_urdf_with_mimic_and_loops(
             mimic.GetReferenceJointRel().AddTarget(pri.GetPath())
             print(f"[legged_v3_cfg] mimic: {secondary_name} → {primary_name}")
 
-    # ── 2. Loop-closing joints — DISABLED (geometry gap at q=0 causes impulse)
-    if False:
-     with Usd.EditContext(stage, stage.GetSessionLayer()):
+    # ── 2. Compliant loop-closing joints (D6 + spring drive) ─────────────────
+    # Uses spring drives instead of rigid constraints to tolerate geometry gap.
+    # At init, spring force = stiffness × gap_distance (no impulse).
+    with Usd.EditContext(stage, stage.GetSessionLayer()):
         for joint_name, body0_name, body1_name, b2_axle_offset in _LOOP_JOINT_PAIRS:
             body0_prim = _find_prim_by_name(stage, actual_path, body0_name)
             body1_prim = _find_prim_by_name(stage, actual_path, body1_name)
@@ -128,14 +131,13 @@ def _spawn_urdf_with_mimic_and_loops(
                 Usd.TimeCode.Default()
             )
 
-            # Pin world position = B2-side axle face on foot_link
-            # b2_axle_offset is in foot_link's local frame (not the wheel-joint face).
+            # Pin world position = B2-side axle face on foot_link (A-chain side)
             pin_world = T1_world.Transform(Gf.Vec3d(*b2_axle_offset))
 
-            # localPos0: pin position in shin_B2's local frame (= tip of shin_B2)
+            # localPos0: where pin_world lands in shin_B2's local frame (B-chain tip)
             pos0 = T0_world.GetInverse().Transform(pin_world)
 
-            # localPos1: pin position in foot_link's local frame = b2_axle_offset
+            # localPos1: B2-axle face in foot_link local frame
             pos1 = Gf.Vec3d(*b2_axle_offset)
 
             print(f"[legged_v3_cfg] {joint_name}: "
@@ -146,10 +148,9 @@ def _spawn_urdf_with_mimic_and_loops(
             if stage.GetPrimAtPath(joint_path).IsValid():
                 stage.RemovePrim(joint_path)
 
-            # SphericalJoint: constrains position only (3 translational DOF).
-            # No rotational constraint → immune to frame-convention errors.
-            # Physically correct for a pin joint in a 5-bar parallel linkage.
-            j = UsdPhysics.SphericalJoint.Define(stage, joint_path)
+            # D6 joint: all rotational DOF free, translational DOF spring-driven
+            # to target position = 0 (enforce coincidence of localPos0 and localPos1)
+            j = UsdPhysics.Joint.Define(stage, joint_path)
 
             j.CreateBody0Rel().SetTargets([Sdf.Path(str(body0_prim.GetPath()))])
             j.CreateBody1Rel().SetTargets([Sdf.Path(str(body1_prim.GetPath()))])
@@ -159,9 +160,17 @@ def _spawn_urdf_with_mimic_and_loops(
             j.CreateLocalPos1Attr(Gf.Vec3f(float(pos1[0]), float(pos1[1]), float(pos1[2])))
             j.CreateLocalRot1Attr(Gf.Quatf(1.0, 0.0, 0.0, 0.0))
 
-            # Exclude from articulation tree; PhysX enforces as separate constraint
+            # Spring drives on all 3 translational axes — target=0 means enforce coincidence
+            for dof in ("transX", "transY", "transZ"):
+                drive = UsdPhysics.DriveAPI.Apply(j.GetPrim(), dof)
+                drive.CreateTypeAttr("force")
+                drive.CreateTargetPositionAttr(0.0)
+                drive.CreateStiffnessAttr(_LOOP_SPRING_STIFFNESS)
+                drive.CreateDampingAttr(_LOOP_SPRING_DAMPING)
+
+            # Exclude from articulation tree; PhysX enforces as a separate constraint
             UsdPhysics.Joint(j.GetPrim()).GetExcludeFromArticulationAttr().Set(True)
-            print(f"[legged_v3_cfg] loop joint (revolute) created: {joint_path}")
+            print(f"[legged_v3_cfg] loop joint (D6 spring) created: {joint_path}")
 
     return prim
 
@@ -193,15 +202,15 @@ LEGGED_ROBOT_V3_CFG = ArticulationCfg(
         ),
         articulation_props=sim_utils.ArticulationRootPropertiesCfg(
             enabled_self_collisions=False,
-            solver_position_iteration_count=8,
-            solver_velocity_iteration_count=1,
+            solver_position_iteration_count=16,   # higher for loop closure stability
+            solver_velocity_iteration_count=4,
         ),
     ),
 
     soft_joint_pos_limit_factor=0.95,
 
     init_state=ArticulationCfg.InitialStateCfg(
-        pos=(0.0, 0.0, 0.5),
+        pos=(0.0, 0.0, 0.40),
         joint_pos={
             "left_hip_joint_A1":   0.0,
             "left_knee_joint_B1":  0.0,
@@ -218,16 +227,16 @@ LEGGED_ROBOT_V3_CFG = ArticulationCfg(
     ),
 
     actuators={
-        # ── Active: hip A1 (position-controlled by policy) ───────────────────
-        "hip_active": DelayedPDActuatorCfg(
+        # ── Active: hip A1 (effort mode — custom PID applied via set_joint_effort_target)
+        "hip_active": ImplicitActuatorCfg(
             joint_names_expr=["left_hip_joint_A1", "right_hip_joint_A1"],
             effort_limit_sim=100.0,
-            stiffness=30.0,
-            damping=1.0,
+            stiffness=0.0,
+            damping=0.5,
             velocity_limit_sim=50.0,
         ),
         # ── Mimic: hip A2 tracks hip A1 via PhysxMimicJointAPI ───────────────
-        "hip_mimic": DelayedPDActuatorCfg(
+        "hip_mimic": ImplicitActuatorCfg(
             joint_names_expr=["left_hip_joint_A2", "right_hip_joint_A2"],
             effort_limit_sim=100.0,
             stiffness=0.0,
@@ -235,28 +244,28 @@ LEGGED_ROBOT_V3_CFG = ArticulationCfg(
             velocity_limit_sim=50.0,
         ),
         # ── Passive: knee B1 — loop closure provides geometric constraint ─────
-        "knee_b1": DelayedPDActuatorCfg(
+        "knee_b1": ImplicitActuatorCfg(
             joint_names_expr=["left_knee_joint_B1", "right_knee_joint_B1"],
             effort_limit_sim=20.0,
             stiffness=0.0,
-            damping=0.0,
+            damping=0.5,
             velocity_limit_sim=50.0,
         ),
-        # ── Passive: knee B2 — loop closure provides geometric constraint ─────
-        "knee_b2": DelayedPDActuatorCfg(
+        # ── Passive: knee B2 — held by spring loop-closure joint ─────────────
+        "knee_b2": ImplicitActuatorCfg(
             joint_names_expr=["left_knee_joint_B2", "right_knee_joint_B2"],
-            effort_limit_sim=5.0,
+            effort_limit_sim=20.0,
             stiffness=0.0,
-            damping=0.0,
+            damping=0.5,
             velocity_limit_sim=50.0,
         ),
-        # ── Active: wheels (velocity-controlled by policy) ────────────────────
-        "wheel": DelayedPDActuatorCfg(
+        # ── Active: wheels (effort mode + back-EMF damping) ──────────────────
+        "wheel": ImplicitActuatorCfg(
             joint_names_expr=["left_wheel_joint", "right_wheel_joint"],
             effort_limit_sim=20.0,
             stiffness=0.0,
-            damping=5.0,
-            velocity_limit_sim=100.0,
+            damping=1.0,
+            velocity_limit_sim=30.0,
         ),
     },
 )

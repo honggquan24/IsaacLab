@@ -1,0 +1,1 @@
+from .inner_tilt_env_cfg import BipedInnerTiltEnvCfg
