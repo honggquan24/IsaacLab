@@ -136,3 +136,39 @@ def all_joint_acc(
     """Gia tốc tất cả joints (finite diff). Shape (N, N_joints)."""
     asset: Articulation = env.scene[asset_cfg.name]
     return asset.data.joint_acc
+
+
+# ── Outer loop observations ────────────────────────────────────────────────────
+
+def base_lin_vel_b(
+    env: "ManagerBasedRLEnv",
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Vận tốc tịnh tiến trong body frame [vx, vy, vz]. Shape (N, 3)."""
+    asset: Articulation = env.scene[asset_cfg.name]
+    return asset.data.root_lin_vel_b
+
+
+def velocity_command(
+    env: "ManagerBasedRLEnv",
+    command_name: str,
+) -> torch.Tensor:
+    """Velocity setpoint từ command manager [vx_des, vy_des, yaw_rate_des]. Shape (N, 3)."""
+    return env.command_manager.get_command(command_name)
+
+
+def velocity_error(
+    env: "ManagerBasedRLEnv",
+    command_name: str,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Sai lệch vận tốc [vx_err, vy_err, yaw_rate_err]. Shape (N, 3)."""
+    asset: Articulation = env.scene[asset_cfg.name]
+    cmd = env.command_manager.get_command(command_name)
+    lin_vel_b = asset.data.root_lin_vel_b
+    ang_vel_b = asset.data.root_ang_vel_b
+    return torch.stack([
+        cmd[:, 0] - lin_vel_b[:, 0],
+        cmd[:, 1] - lin_vel_b[:, 1],
+        cmd[:, 2] - ang_vel_b[:, 2],
+    ], dim=-1)

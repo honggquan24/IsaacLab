@@ -12,6 +12,23 @@ if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
 
 
+def upright_exp(
+    env: ManagerBasedRLEnv,
+    std: float = 0.3,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Thưởng đứng thẳng — Gaussian kernel trên projected gravity.
+
+    = 1.0 khi hoàn toàn thẳng đứng, decay về 0 khi nghiêng.
+    Dùng với weight dương để tạo gradient bootstrap balance từ đầu training.
+    std=0.3 rad: reward ≈ 0.37 khi nghiêng ~17°.
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+    grav_b = asset.data.projected_gravity_b   # (N, 3), unit vector
+    tilt_sq = grav_b[:, 0] ** 2 + grav_b[:, 1] ** 2
+    return torch.exp(-tilt_sq / (std ** 2))
+
+
 def rpy_alignment_imu(
     env: ManagerBasedRLEnv,
     target_rpy: tuple[float, float, float] = (0.0, 0.0, 0.0),
@@ -145,6 +162,56 @@ def track_base_height_exp(
 
     height_error_sq = torch.square(current_height - target_height)
     return torch.exp(-height_error_sq / (std ** 2))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Velocity step-response quality
+# ══════════════════════════════════════════════════════════════════════════════
+
+def velocity_settling_bonus(
+    env: ManagerBasedRLEnv,
+    command_name: str,
+    band_vel: float = 0.10,
+    band_yaw: float = 0.15,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Bonus khi vx_err VÀ yaw_rate_err đều nằm trong dải sai số nhỏ (đã ổn định).
+
+    = 1.0 khi cả hai sai lệch trong band, = 0.0 khi ngoài.
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+    cmd = env.command_manager.get_command(command_name)
+    vx_err  = cmd[:, 0] - asset.data.root_lin_vel_b[:, 0]
+    yr_err  = cmd[:, 2] - asset.data.root_ang_vel_b[:, 2]
+    return (
+        (torch.abs(vx_err) < band_vel) &
+        (torch.abs(yr_err) < band_yaw)
+    ).float()
+
+
+def velocity_overshoot_penalty(
+    env: ManagerBasedRLEnv,
+    command_name: str,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Penalty khi vận tốc vượt qua setpoint (sign flip trên error).
+
+    Trả về |error| tại thời điểm sign flip — dùng với weight âm.
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+    cmd = env.command_manager.get_command(command_name)
+    vx_err = cmd[:, 0] - asset.data.root_lin_vel_b[:, 0]
+    yr_err = cmd[:, 2] - asset.data.root_ang_vel_b[:, 2]
+
+    for attr, err in [("_prev_vx_err_sign", vx_err), ("_prev_yr_err_sign", yr_err)]:
+        sign_now = torch.sign(err)
+        if not hasattr(env, attr):
+            setattr(env, attr, sign_now.clone())
+        setattr(env, attr, sign_now.clone())
+
+    vx_cross = (torch.sign(vx_err) * getattr(env, "_prev_vx_err_sign", torch.sign(vx_err))) < 0
+    yr_cross = (torch.sign(yr_err) * getattr(env, "_prev_yr_err_sign", torch.sign(yr_err))) < 0
+    return torch.abs(vx_err) * vx_cross.float() + torch.abs(yr_err) * yr_cross.float()
 
 
 def track_base_height_l2(

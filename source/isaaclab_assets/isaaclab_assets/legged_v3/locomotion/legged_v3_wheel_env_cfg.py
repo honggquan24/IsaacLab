@@ -4,13 +4,13 @@ Robot: 2-legged wheeled robot (5-bar parallel linkage per leg)
 Task: Track velocity commands using wheel-based locomotion while maintaining balance.
 
 Train:
-    ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \\
-        --task Isaac-Legged-V3-Wheel \\
+    ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
+        --task Isaac-Legged-V3-Wheel \
         --num_envs 4096 --headless
 
 Play:
-    ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \\
-        --task Isaac-Legged-V3-Wheel \\
+    ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
+        --task Isaac-Legged-V3-Wheel \
         --num_envs 4
 """
 
@@ -60,8 +60,8 @@ class LeggedV3SceneCfg(InteractiveSceneCfg):
         physics_material=sim_utils.RigidBodyMaterialCfg(
             friction_combine_mode="multiply",
             restitution_combine_mode="multiply",
-            static_friction=0.85,
-            dynamic_friction=0.65,
+            static_friction=2.0,
+            dynamic_friction=1.8,
         ),
         debug_vis=False,
     )
@@ -78,28 +78,13 @@ class LeggedV3SceneCfg(InteractiveSceneCfg):
         debug_vis=False,
     )
 
-    # URDF with merge_fixed_joints → all links flat under /Robot/.
-    # Three separate sensors to avoid body-count mismatch.
-
-    contact_forces_base = ContactSensorCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/base_link",
-        update_period=0.0,
-        debug_vis=False,
-    )
-
-    contact_forces_right = ContactSensorCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/.*right.*",
+    # Contact sensor on all body links — used for illegal_contact termination.
+    # Covers thigh/shin links (should never touch ground) + base_link.
+    # foot_links hold the wheels and are expected to contact the ground.
+    contact_forces_body = ContactSensorCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/.*",
         update_period=0.0,
         history_length=3,
-        track_air_time=True,
-        debug_vis=False,
-    )
-
-    contact_forces_left = ContactSensorCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/.*left.*",
-        update_period=0.0,
-        history_length=3,
-        track_air_time=True,
         debug_vis=False,
     )
 
@@ -118,14 +103,14 @@ class ActionCfg:
     hip_pos = actions.JointPositionActionCfg(
         asset_name="robot",
         joint_names=["left_hip_joint_A1", "right_hip_joint_A1"],
-        scale=0.5,
+        scale=1.0,
     )
 
     # Wheels: velocity control (2 DOF)
     wheel_vel = actions.JointVelocityActionCfg(
         asset_name="robot",
         joint_names=["left_wheel_joint", "right_wheel_joint"],
-        scale=5.0,
+        scale=1.0,
     )
 
 
@@ -195,6 +180,14 @@ class ObservationsCfg:
             func=observations.generated_commands,
             params={"command_name": "height_command"},
         )
+        # Sai lệch vận tốc thực so với setpoint — policy biết cần tăng/giảm bao nhiêu
+        # Có thể deploy được: ước lượng từ encoder bánh xe + kinematic trên robot thật
+        velocity_error = ObservationTermCfg(
+            func=mdp.observations.velocity_error,
+            params={"command_name": "velocity_command"},
+        )
+        # Tốc độ góc 2 bánh xe — feedback trực tiếp từ encoder
+        wheel_vel = ObservationTermCfg(func=mdp.observations.wheel_angular_velocity)
 
         def __post_init__(self) -> None:
             self.enable_corruption = False
@@ -309,13 +302,12 @@ class RewardCfg:
     )
 
     # ── Stability ─────────────────────────────────────────────────────────────
-    upright = RewardTermCfg(
-        func=mdp.rewards.rpy_alignment_imu,
-        weight=-5.0,
-        params={
-            "target_rpy": (0.0, 0.0, 0.0),
-            "imu_cfg": SceneEntityCfg(name="imu"),
-        },
+    # Gaussian kernel: = 1 khi thẳng đứng, decay về 0 khi nghiêng.
+    # Weight dương tạo gradient liên tục bootstrap balance từ đầu training.
+    upright_exp = RewardTermCfg(
+        func=mdp.rewards.upright_exp,
+        weight=5.0,
+        params={"std": 0.3},
     )
 
     # lin_vel_z_l2 = RewardTermCfg(func=rewards.lin_vel_z_l2, weight=-1.0)
@@ -351,6 +343,21 @@ class RewardCfg:
 
     action_rate = RewardTermCfg(func=rewards.action_rate_l2, weight=-0.05)
 
+    # ── Step-response quality ─────────────────────────────────────────────────
+    # Bonus khi vx và yaw_rate đã ổn định trong dải sai số (settling time ngắn)
+    velocity_settling = RewardTermCfg(
+        func=mdp.rewards.velocity_settling_bonus,
+        weight=2.0,
+        params={"command_name": "velocity_command", "band_vel": 0.10, "band_yaw": 0.15},
+    )
+
+    # Penalty khi vận tốc vượt qua setpoint — giảm overshoot
+    velocity_overshoot = RewardTermCfg(
+        func=mdp.rewards.velocity_overshoot_penalty,
+        weight=-3.0,
+        params={"command_name": "velocity_command"},
+    )
+
 
 # ─────────────────────────── Terminations ─────────────────────────────────────
 
@@ -358,7 +365,7 @@ class RewardCfg:
 class TerminationsCfg:
     """Termination conditions for the wheeled locomotion task.
 
-    Episodes end early on timeout, excessive tilt (>36°), dangerously high joint
+    Episodes end early on timeout, excessive tilt (>45°), dangerously high joint
     velocity, or the base dropping below a minimum height — a proxy for falling.
     Base contact detection is not used because the structural tilt of the chassis
     causes a corner to briefly touch the ground at q=0; bad_orientation handles
@@ -370,7 +377,7 @@ class TerminationsCfg:
     bad_orientation = TerminationTermCfg(
         func=terminations.bad_orientation,
         params={
-            "limit_angle": math.pi / 5,
+            "limit_angle": math.pi / 4,
             "asset_cfg": SceneEntityCfg(name="robot"),
         },
     )
@@ -386,18 +393,27 @@ class TerminationsCfg:
     joint_vel_limit = TerminationTermCfg(
         func=terminations.joint_vel_out_of_manual_limit,
         params={
-            "max_velocity": 120.0,
-            "asset_cfg": SceneEntityCfg(name="robot"),
+            "max_velocity": 60.0,
+            "asset_cfg": SceneEntityCfg(name="robot", joint_names=[".*_hip_joint.*", ".*_knee_joint.*"]),
         },
     )
 
-    # Base contact disabled — base_link naturally sits 23mm above ground at q=0;
-    # with 18° structural tilt the corner touches. Use bad_orientation instead.
+    # Shin (knee) links must never touch ground.
+    illegal_contact = TerminationTermCfg(
+        func=terminations.illegal_contact,
+        params={
+            "threshold": 0.5,
+            "sensor_cfg": SceneEntityCfg(
+                "contact_forces_body",
+                body_names=[".*_shin_link.*"],
+            ),
+        },
+    )
 
     base_height = TerminationTermCfg(
         func=terminations.root_height_below_minimum,
         params={
-            "minimum_height": 0.10,
+            "minimum_height": 0.05,
             "asset_cfg": SceneEntityCfg(name="robot"),
         },
     )

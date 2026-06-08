@@ -1,27 +1,31 @@
-"""Biped-Inner-Tilt — Train vòng TRONG của cascade (bước 1).
+"""Biped-Outer-Vel-PID — Outer loop: velocity command → velocity PID → tilt setpoint → inner.
 
-RL → 7 × [kp, ki, kd] = 21 outputs:
-    4 hip  position PIDs → tau_hip
-    2 wheel velocity PIDs → tau_balance
-    1 yaw  PID            → tau_yaw
-    tau_left = tau_balance_L + tau_yaw
-    tau_right= tau_balance_R - tau_yaw
+Kiến trúc:
+    vel_cmd (vx, vy, yaw_rate)
+        └─ Outer RL (9 gains) ──► Velocity PID ──► (roll_des, pitch_des, yaw_des)
+                                                         └─ Inner TiltPIDAction (fixed gains)
+                                                                └─ torque
 
-Nhiệm vụ: bám cmd_tilt (roll_des, pitch_des, yaw_des) — step input ngẫu nhiên.
+RL outputs 9 gains: [[kp,ki,kd], [kp,ki,kd], [kp,ki,kd]]
+  PID 0: vy_err  → roll_des   (lean forward/back để đạt tốc độ)
+  PID 1: vx_err  → pitch_des  (lateral)
+  PID 2: yaw_rate_err → yaw_rate_cmd → integrate → yaw_des
 
-Obs (40-dim):
-    tilt_error(3) + ang_vel_b(3) + projected_gravity(3)
-    + hip_pos_error(4) + hip_vel(4) + wheel_vel(2) + last_action(21)
+Inner TiltPIDAction chạy với reference gains (không RL-tune).
+Outer ghi đè target_tilt command mỗi bước.
 
-Action (21-dim): 7 × [kp_raw, ki_raw, kd_raw] ∈ [-1,1]
+Obs (23-dim):
+    velocity_command(3) + velocity_error(3) + base_lin_vel_b(3)
+    + ang_vel_b(3) + projected_gravity(3) + wheel_vel(2) + last_action(9) - 1 (pad)
+    = thực tế 26-dim (xem ObservationsCfg)
 
 Train:
     ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \\
-        --task Biped-Inner-Tilt --num_envs 512 --headless
+        --task Biped-Outer-Vel-PID --num_envs 1024 --headless
 
 Play:
     ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \\
-        --task Biped-Inner-Tilt --num_envs 4
+        --task Biped-Outer-Vel-PID --num_envs 4
 """
 from __future__ import annotations
 import math
@@ -49,7 +53,7 @@ from isaaclab_assets.biped import mdp
 # ─────────────────────────── Scene ────────────────────────────────────────────
 
 @configclass
-class InnerTiltSceneCfg(InteractiveSceneCfg):
+class OuterVelPIDSceneCfg(InteractiveSceneCfg):
 
     num_envs: int           = 512
     replicate_physics: bool = True
@@ -66,8 +70,8 @@ class InnerTiltSceneCfg(InteractiveSceneCfg):
         physics_material=sim_utils.RigidBodyMaterialCfg(
             friction_combine_mode="multiply",
             restitution_combine_mode="multiply",
-            static_friction=2.0,
-            dynamic_friction=1.8,
+            static_friction=1.0,
+            dynamic_friction=0.8,
         ),
         debug_vis=False,
     )
@@ -79,12 +83,17 @@ class InnerTiltSceneCfg(InteractiveSceneCfg):
 
 @configclass
 class ActionCfg:
-    """21 outputs = 7 × [kp, ki, kd]."""
+    """9 outer gains + embedded inner TiltPIDAction (fixed reference gains)."""
 
-    tilt_pid = mdp.TiltPIDActionCfg(
-        asset_name="robot",
+    outer_pid = mdp.OuterVelPIDActionCfg(
+        vel_command_name="velocity_cmd",
+        tilt_command_name="target_tilt",
         action_scale=2.0,
-        command_name="target_tilt",
+        inner_cfg=mdp.TiltPIDActionCfg(
+            asset_name="robot",
+            action_scale=0.0,           # inner gains frozen at bias
+            command_name="target_tilt",
+        ),
     )
 
 
@@ -92,14 +101,22 @@ class ActionCfg:
 
 @configclass
 class CommandsCfg:
-    """Step input: random tilt setpoint."""
 
+    # Velocity setpoint — outer RL's tracking objective
+    velocity_cmd = mdp.VelocityCommandCfg(
+        resampling_time_range=(4.0, 8.0),
+        vx_range=(-0.3, 0.3),
+        vy_range=(-0.5, 0.5),
+        yaw_rate_range=(-1.0, 1.0),
+    )
+
+    # Tilt setpoint — written by outer action each step, read by embedded inner
     target_tilt = mdp.TargetTiltCommandCfg(
         asset_name="robot",
-        resampling_time_range=(5.0, 10.0),
-        roll_range=(-0.15,  0.15),
-        pitch_range=(-0.0, 0.0),
-        yaw_delta_range=(-0.3, 0.3),
+        resampling_time_range=(1e9, 1e9),   # never auto-resample; outer owns it
+        roll_range=(0.0, 0.0),
+        pitch_range=(0.0, 0.0),
+        yaw_delta_range=(0.0, 0.0),
     )
 
 
@@ -107,38 +124,27 @@ class CommandsCfg:
 
 @configclass
 class ObservationsCfg:
-    """Obs 74-dim:
-    tilt_error(3) + imu_quat(4) + imu_lin_acc_b(3) + ang_vel_b(3)
-    + projected_gravity(3) + hip_pos_error(4) + hip_vel(4) + wheel_vel(2)
-    + all_joint_pos(10) + all_joint_vel(10) + all_joint_acc(10) + last_action(21)
+    """Obs 26-dim:
+    velocity_command(3) + velocity_error(3) + base_lin_vel_b(3)
+    + ang_vel_b(3) + projected_gravity(3) + wheel_vel(2) + last_action(9)
     """
 
     @configclass
     class PolicyCfg(ObservationGroupCfg):
 
-        # Tilt setpoint error
-        tilt_error = ObservationTermCfg(
-            func=mdp.tilt_error,
-            params={"command_name": "target_tilt"},
+        velocity_command  = ObservationTermCfg(
+            func=mdp.velocity_command,
+            params={"command_name": "velocity_cmd"},
         )
-        # IMU
-        imu_quat      = ObservationTermCfg(func=mdp.imu_quat)
-        imu_lin_acc_b = ObservationTermCfg(func=mdp.imu_lin_acc_b)
-        ang_vel_b     = ObservationTermCfg(func=observations.base_ang_vel)
+        velocity_error    = ObservationTermCfg(
+            func=mdp.velocity_error,
+            params={"command_name": "velocity_cmd"},
+        )
+        base_lin_vel_b    = ObservationTermCfg(func=mdp.base_lin_vel_b)
+        ang_vel_b         = ObservationTermCfg(func=observations.base_ang_vel)
         projected_gravity = ObservationTermCfg(func=observations.projected_gravity)
-        # Hip tracking error
-        hip_pos_error = ObservationTermCfg(
-            func=mdp.hip_pos_error,
-            params={"command_name": "target_tilt"},
-        )
-        hip_vel   = ObservationTermCfg(func=mdp.hip_velocity)
-        wheel_vel = ObservationTermCfg(func=mdp.wheel_angular_velocity)
-        # Tất cả joints (10 joints)
-        all_joint_pos = ObservationTermCfg(func=mdp.all_joint_pos_rel)
-        all_joint_vel = ObservationTermCfg(func=mdp.all_joint_vel)
-        all_joint_acc = ObservationTermCfg(func=mdp.all_joint_acc)
-        # Last action
-        last_action = ObservationTermCfg(func=observations.last_action)
+        wheel_vel         = ObservationTermCfg(func=mdp.wheel_angular_velocity)
+        last_action       = ObservationTermCfg(func=observations.last_action)
 
         def __post_init__(self):
             self.enable_corruption = False
@@ -158,14 +164,16 @@ class EventCfg:
         params={
             "asset_cfg": SceneEntityCfg("robot"),
             "pose_range": {
-                "x":     (-0.05, 0.05),
-                "y":     (-0.05, 0.05),
-                "z":     (0.0,   0.0),
-                "roll":  (-0.05, 0.05),
-                "pitch": (-0.05, 0.05),
+                "x":     (-0.1, 0.1),
+                "y":     (-0.1, 0.1),
+                "z":     (0.0,  0.0),
+                "roll":  (-0.10, 0.10),
+                "pitch": (-0.10, 0.10),
                 "yaw":   (-math.pi, math.pi),
             },
-            "velocity_range": {"x": (0.0, 0.0), "y": (0.0, 0.0), "z": (0.0, 0.0)},
+            "velocity_range": {
+                "x": (-0.1, 0.1), "y": (-0.1, 0.1), "z": (0.0, 0.0),
+            },
         },
     )
 
@@ -175,7 +183,7 @@ class EventCfg:
         params={
             "asset_cfg": SceneEntityCfg("robot"),
             "position_range": (-0.02, 0.02),
-            "velocity_range": (-0.1,  0.1),
+            "velocity_range": (-0.05, 0.05),
         },
     )
 
@@ -184,53 +192,34 @@ class EventCfg:
 
 @configclass
 class RewardCfg:
-    """Chất lượng bám tilt — dựa trên đặc tính biểu đồ đáp ứng."""
 
-    termination_penalty = RewardTermCfg(func=rewards.is_terminated, weight=-200.0)
+    termination_penalty = RewardTermCfg(func=rewards.is_terminated, weight=-300.0)
 
-    # Primary tracking
-    tilt_tracking_exp = RewardTermCfg(
-        func=mdp.rewards.tilt_tracking_exp,
-        weight=10.0,
-        params={"command_name": "target_tilt", "std": 0.05},
+    # Primary: bám tốc độ
+    velocity_tracking = RewardTermCfg(
+        func=mdp.rewards.velocity_tracking_exp,
+        weight=8.0,
+        params={"command_name": "velocity_cmd", "std": 0.3},
     )
-    yaw_tracking_exp = RewardTermCfg(
-        func=mdp.rewards.yaw_tracking_exp,
+    yaw_rate_tracking = RewardTermCfg(
+        func=mdp.rewards.yaw_rate_tracking_exp,
         weight=3.0,
-        params={"command_name": "target_tilt", "std": 0.1},
+        params={"command_name": "velocity_cmd", "std": 0.3},
     )
-    tilt_tracking_l2 = RewardTermCfg(
-        func=mdp.rewards.tilt_tracking_l2,
-        weight=-2.0,
-        params={"command_name": "target_tilt"},
-    )
-
-    # Step response
-    settling_bonus = RewardTermCfg(
-        func=mdp.rewards.settling_bonus,
-        weight=5.0,
-        params={"command_name": "target_tilt", "band_roll_pitch": 0.03, "band_yaw": 0.05},
-    )
-    overshoot_penalty = RewardTermCfg(
-        func=mdp.rewards.overshoot_penalty,
-        weight=-3.0,
-        params={"command_name": "target_tilt"},
-    )
-    oscillation_penalty = RewardTermCfg(
-        func=mdp.rewards.oscillation_penalty,
-        weight=-2.0,
-        params={"command_name": "target_tilt", "near_band": 0.05},
+    lin_vel_l2 = RewardTermCfg(
+        func=mdp.rewards.lin_vel_l2,
+        weight=-1.0,
+        params={"command_name": "velocity_cmd"},
     )
 
-    # Không nghiêng pitch
-    pitch_upright = RewardTermCfg(
-        func=mdp.rewards.pitch_penalty,
-        weight=3.0,
-        params={"std": 0.1},
+    # Secondary: giữ thẳng
+    upright = RewardTermCfg(
+        func=mdp.rewards.upright_exp,
+        weight=2.0,
+        params={"std": 0.2},
     )
 
     # Smoothness
-    hip_torque   = RewardTermCfg(func=mdp.rewards.hip_torque_l2,   weight=-1e-4)
     wheel_torque = RewardTermCfg(func=mdp.rewards.wheel_torque_l2, weight=-1e-4)
     action_rate  = RewardTermCfg(func=mdp.rewards.action_rate_l2,  weight=-0.01)
 
@@ -256,23 +245,23 @@ class TerminationsCfg:
 # ─────────────────────────── Env ──────────────────────────────────────────────
 
 @configclass
-class BipedInnerTiltEnvCfg(ManagerBasedRLEnvCfg):
-    """Env cho Biped-Inner-Tilt.
+class BipedOuterVelPIDEnvCfg(ManagerBasedRLEnvCfg):
+    """Outer loop: velocity command → velocity PID gains → tilt_cmd → inner TiltPID.
 
-    Sim: 200 Hz. Policy: 50 Hz (decimation=4). Episode: 15 s.
+    Sim 200 Hz. Policy (outer) 50 Hz (decimation=4). Episode 20 s.
     """
 
-    scene:        InnerTiltSceneCfg = InnerTiltSceneCfg(num_envs=512, env_spacing=2.0)
-    observations: ObservationsCfg   = ObservationsCfg()
-    actions:      ActionCfg         = ActionCfg()
-    commands:     CommandsCfg       = CommandsCfg()
-    events:       EventCfg          = EventCfg()
-    rewards:      RewardCfg         = RewardCfg()
-    terminations: TerminationsCfg   = TerminationsCfg()
+    scene:        OuterVelPIDSceneCfg = OuterVelPIDSceneCfg(num_envs=512, env_spacing=2.5)
+    observations: ObservationsCfg     = ObservationsCfg()
+    actions:      ActionCfg           = ActionCfg()
+    commands:     CommandsCfg         = CommandsCfg()
+    events:       EventCfg            = EventCfg()
+    rewards:      RewardCfg           = RewardCfg()
+    terminations: TerminationsCfg     = TerminationsCfg()
 
     def __post_init__(self):
-        self.decimation          = 1      # policy 200 Hz = sim rate (inner loop)
-        self.episode_length_s    = 15.0
+        self.decimation          = 4
+        self.episode_length_s    = 20.0
         self.sim.dt              = 1 / 200.0
         self.sim.render_interval = self.decimation
         self.viewer.eye    = (3.0, 3.0, 2.0)

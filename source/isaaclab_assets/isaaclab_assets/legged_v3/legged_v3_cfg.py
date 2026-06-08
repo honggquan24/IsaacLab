@@ -31,7 +31,7 @@ import os
 from collections.abc import Callable
 
 import isaaclab.sim as sim_utils
-from isaaclab.actuators import ImplicitActuatorCfg
+from isaaclab.actuators import IdealPDActuatorCfg, IdealPDActuatorCfg
 from isaaclab.assets import ArticulationCfg
 from isaaclab.sim.spawners.from_files import UrdfFileCfg
 from isaaclab.sim.spawners.from_files.from_files import spawn_from_urdf
@@ -227,16 +227,16 @@ LEGGED_ROBOT_V3_CFG = ArticulationCfg(
     ),
 
     actuators={
-        # ── Active: hip A1 (effort mode — custom PID applied via set_joint_effort_target)
-        "hip_active": ImplicitActuatorCfg(
+        # ── Active: hip A1 — position control, stiffness drives stance maintenance
+        "hip_active": IdealPDActuatorCfg(
             joint_names_expr=["left_hip_joint_A1", "right_hip_joint_A1"],
-            effort_limit_sim=100.0,
-            stiffness=0.0,
-            damping=0.5,
+            effort_limit_sim=150.0,
+            stiffness=20.0,
+            damping=1.0,
             velocity_limit_sim=50.0,
         ),
         # ── Mimic: hip A2 tracks hip A1 via PhysxMimicJointAPI ───────────────
-        "hip_mimic": ImplicitActuatorCfg(
+        "hip_mimic": IdealPDActuatorCfg(
             joint_names_expr=["left_hip_joint_A2", "right_hip_joint_A2"],
             effort_limit_sim=100.0,
             stiffness=0.0,
@@ -244,28 +244,21 @@ LEGGED_ROBOT_V3_CFG = ArticulationCfg(
             velocity_limit_sim=50.0,
         ),
         # ── Passive: knee B1 — loop closure provides geometric constraint ─────
-        "knee_b1": ImplicitActuatorCfg(
-            joint_names_expr=["left_knee_joint_B1", "right_knee_joint_B1"],
-            effort_limit_sim=20.0,
+        "knee": IdealPDActuatorCfg(
+            joint_names_expr=["left_knee_joint_B1", "right_knee_joint_B1", "left_knee_joint_B2", "right_knee_joint_B2"],
+            effort_limit_sim=200.0,
             stiffness=0.0,
             damping=0.5,
             velocity_limit_sim=50.0,
         ),
-        # ── Passive: knee B2 — held by spring loop-closure joint ─────────────
-        "knee_b2": ImplicitActuatorCfg(
-            joint_names_expr=["left_knee_joint_B2", "right_knee_joint_B2"],
-            effort_limit_sim=20.0,
-            stiffness=0.0,
-            damping=0.5,
-            velocity_limit_sim=50.0,
-        ),
-        # ── Active: wheels (effort mode + back-EMF damping) ──────────────────
-        "wheel": ImplicitActuatorCfg(
+        # ── Active: wheels — IdealPD velocity control ─────────────────────────
+        # stiffness=0: no position hold; damping=X: torque = X*(vel_target - vel_current)
+        "wheel": IdealPDActuatorCfg(
             joint_names_expr=["left_wheel_joint", "right_wheel_joint"],
-            effort_limit_sim=20.0,
+            effort_limit=12.0,
             stiffness=0.0,
             damping=1.0,
-            velocity_limit_sim=30.0,
+            velocity_limit=30.0,
         ),
     },
 )

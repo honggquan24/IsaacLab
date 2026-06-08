@@ -165,3 +165,134 @@ def action_rate_l2(env: "ManagerBasedRLEnv") -> torch.Tensor:
     return torch.sum(
         (env.action_manager.action - env.action_manager.prev_action) ** 2, dim=-1
     )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Outer loop: velocity tracking
+# ══════════════════════════════════════════════════════════════════════════════
+
+def velocity_tracking_exp(
+    env: "ManagerBasedRLEnv",
+    command_name: str,
+    std: float = 0.3,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Gaussian trên sai lệch vx/vy. = 1 khi bám tốc độ hoàn hảo."""
+    asset: Articulation = env.scene[asset_cfg.name]
+    cmd = env.command_manager.get_command(command_name)
+    lin_vel_b = asset.data.root_lin_vel_b
+    vx_err = cmd[:, 0] - lin_vel_b[:, 0]
+    vy_err = cmd[:, 1] - lin_vel_b[:, 1]
+    return torch.exp(-(vx_err**2 + vy_err**2) / (std**2))
+
+
+def yaw_rate_tracking_exp(
+    env: "ManagerBasedRLEnv",
+    command_name: str,
+    std: float = 0.3,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Gaussian trên sai lệch yaw_rate."""
+    asset: Articulation = env.scene[asset_cfg.name]
+    cmd = env.command_manager.get_command(command_name)
+    yaw_rate = asset.data.root_ang_vel_b[:, 2]
+    return torch.exp(-((cmd[:, 2] - yaw_rate) ** 2) / (std**2))
+
+
+def upright_exp(
+    env: "ManagerBasedRLEnv",
+    std: float = 0.2,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Thưởng đứng thẳng — projected gravity gần [0,0,-1]."""
+    asset: Articulation = env.scene[asset_cfg.name]
+    # projected_gravity = R^T * [0,0,-1] — khi thẳng đứng = [0,0,-9.81]
+    grav_b = asset.data.projected_gravity_b   # (N, 3), normalized
+    tilt_sq = grav_b[:, 0] ** 2 + grav_b[:, 1] ** 2
+    return torch.exp(-tilt_sq / (std**2))
+
+
+def rpy_alignment(
+    env: "ManagerBasedRLEnv",
+    std_roll: float = 0.1,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Thưởng RPY alignment — phạt nghiêng thân theo góc roll (trục cân bằng Segway).
+
+    Robot 2 bánh chỉ có bậc tự do roll → chỉ penalize roll.
+    = 1.0 khi roll = 0 (đứng thẳng hoàn toàn).
+    """
+    from isaaclab.utils.math import euler_xyz_from_quat
+    asset: Articulation = env.scene[asset_cfg.name]
+    roll, _, _ = euler_xyz_from_quat(asset.data.root_quat_w)
+    return torch.exp(-(roll ** 2) / (std_roll ** 2))
+
+
+def pitch_penalty(
+    env: "ManagerBasedRLEnv",
+    std: float = 0.1,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Phạt nghiêng trục pitch (Y) — Gaussian, = 1 khi pitch = 0."""
+    from isaaclab.utils.math import euler_xyz_from_quat
+    asset: Articulation = env.scene[asset_cfg.name]
+    _, pitch, _ = euler_xyz_from_quat(asset.data.root_quat_w)
+    return torch.exp(-(pitch ** 2) / (std ** 2))
+
+
+def lin_vel_l2(
+    env: "ManagerBasedRLEnv",
+    command_name: str,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """L2 sai lệch vx/vy (dùng với weight âm)."""
+    asset: Articulation = env.scene[asset_cfg.name]
+    cmd = env.command_manager.get_command(command_name)
+    lin_vel_b = asset.data.root_lin_vel_b
+    return (cmd[:, 0] - lin_vel_b[:, 0]) ** 2 + (cmd[:, 1] - lin_vel_b[:, 1]) ** 2
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Outer loop: step-response quality (velocity)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def velocity_settling_bonus(
+    env: "ManagerBasedRLEnv",
+    command_name: str,
+    band_vel: float = 0.05,
+    band_yaw: float = 0.1,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Bonus khi vy_err VÀ yaw_rate_err đều nằm trong dải sai số nhỏ."""
+    asset: Articulation = env.scene[asset_cfg.name]
+    cmd = env.command_manager.get_command(command_name)
+    vy_err  = cmd[:, 1] - asset.data.root_lin_vel_b[:, 1]
+    yr_err  = cmd[:, 2] - asset.data.root_ang_vel_b[:, 2]
+    return (
+        (torch.abs(vy_err) < band_vel) &
+        (torch.abs(yr_err) < band_yaw)
+    ).float()
+
+
+def velocity_overshoot_penalty(
+    env: "ManagerBasedRLEnv",
+    command_name: str,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Penalty khi vận tốc vượt qua setpoint (sign flip trên error)."""
+    asset: Articulation = env.scene[asset_cfg.name]
+    cmd = env.command_manager.get_command(command_name)
+    vy_err = cmd[:, 1] - asset.data.root_lin_vel_b[:, 1]
+    yr_err = cmd[:, 2] - asset.data.root_ang_vel_b[:, 2]
+
+    for attr, err in [("_prev_vy_err_sign", vy_err), ("_prev_yr_err_sign", yr_err)]:
+        sign_now = torch.sign(err)
+        if not hasattr(env, attr):
+            setattr(env, attr, sign_now.clone())
+        prev = getattr(env, attr)
+        setattr(env, attr, sign_now.clone())
+        _ = prev  # mark used
+
+    vy_cross = (torch.sign(vy_err) * getattr(env, "_prev_vy_err_sign", torch.sign(vy_err))) < 0
+    yr_cross = (torch.sign(yr_err) * getattr(env, "_prev_yr_err_sign", torch.sign(yr_err))) < 0
+    return torch.abs(vy_err) * vy_cross.float() + torch.abs(yr_err) * yr_cross.float()

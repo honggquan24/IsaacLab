@@ -59,7 +59,7 @@ BIPED_CFG = LEGGED_ROBOT_V3_CFG.replace(
         # Wheels: effort mode + back-EMF damping to prevent runaway spin
         "wheel": ImplicitActuatorCfg(
             joint_names_expr=["left_wheel_joint", "right_wheel_joint"],
-            effort_limit_sim=120.0,
+            effort_limit_sim=200.0,
             stiffness=0.0,
             damping=1.0,
             velocity_limit_sim=30.0,

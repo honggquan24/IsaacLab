@@ -31,6 +31,10 @@ from isaaclab.envs import ManagerBasedRLEnv
 env_cfg = BipedInnerTiltEnvCfg()
 env_cfg.scene.num_envs = 1
 env_cfg.sim.device = "cuda:0"
+# Zero command: kiểm tra balance thuần túy (không có setpoint nghiêng ngẫu nhiên)
+env_cfg.commands.target_tilt.roll_range       = (0.0, 0.0)
+env_cfg.commands.target_tilt.pitch_range      = (0.0, 0.0)
+env_cfg.commands.target_tilt.yaw_delta_range  = (0.0, 0.0)
 
 env = ManagerBasedRLEnv(cfg=env_cfg)
 obs, _ = env.reset()
