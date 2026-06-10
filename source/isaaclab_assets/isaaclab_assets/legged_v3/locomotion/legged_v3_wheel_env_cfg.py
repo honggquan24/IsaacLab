@@ -58,10 +58,11 @@ class LeggedV3SceneCfg(InteractiveSceneCfg):
         max_init_terrain_level=None,
         collision_group=-1,
         physics_material=sim_utils.RigidBodyMaterialCfg(
-            friction_combine_mode="multiply",
-            restitution_combine_mode="multiply",
-            static_friction=2.0,
-            dynamic_friction=1.8,
+            friction_combine_mode="max",
+            restitution_combine_mode="min",
+            static_friction=1.2,
+            dynamic_friction=0.7,
+            restitution=0.0,
         ),
         debug_vis=False,
     )
@@ -70,19 +71,25 @@ class LeggedV3SceneCfg(InteractiveSceneCfg):
         prim_path="{ENV_REGEX_NS}/Robot",
     )
 
-    # IMU on base_link (URDF root after URDF conversion).
+    # IMU on base_link — offset để match vị trí IMU thực tế trên robot:
+    #   - Dịch +Y = 0.10m (base_width/2 = 0.20/2)
+    #   - Xoay -90° quanh Z: q = (cos(-π/4), 0, 0, sin(-π/4)) = (0.7071, 0, 0, -0.7071)
     imu = ImuCfg(
         prim_path="{ENV_REGEX_NS}/Robot/base_link",
         update_period=0.01,
         gravity_bias=(0.0, 0.0, 0.0),
         debug_vis=False,
+        offset=ImuCfg.OffsetCfg(
+            pos=(0.0, 0.0, 0.0),
+            rot=(0.7071, 0.0, 0.0, -0.7071),
+        ),
     )
 
     # Contact sensor on all body links — used for illegal_contact termination.
     # Covers thigh/shin links (should never touch ground) + base_link.
     # foot_links hold the wheels and are expected to contact the ground.
     contact_forces_body = ContactSensorCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/.*",
+        prim_path="{ENV_REGEX_NS}/Robot/.*_link.*",
         update_period=0.0,
         history_length=3,
         debug_vis=False,
@@ -118,7 +125,7 @@ class ActionCfg:
 
 @configclass
 class CommandsCfg:
-    """Velocity + height commands."""
+    """Velocity commands."""
 
     velocity_command = commands.UniformVelocityCommandCfg(
         asset_name="robot",
@@ -127,28 +134,28 @@ class CommandsCfg:
         heading_command=False,
         debug_vis=False,
         ranges=commands.UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(-1.0, 1.0),
+            lin_vel_x=(-0.5, 0.5),
             lin_vel_y=(0.0, 0.0),
             ang_vel_z=(-1.0, 1.0),
             heading=(0.0, 0.0),
         ),
     )
 
-    height_command = commands.UniformPoseCommandCfg(
-        asset_name="robot",
-        body_name="base_link",
-        resampling_time_range=(3.0, 6.0),
-        make_quat_unique=False,
-        debug_vis=False,
-        ranges=commands.UniformPoseCommandCfg.Ranges(
-            pos_x=(0.0, 0.0),
-            pos_y=(0.0, 0.0),
-            pos_z=(0.20, 0.26),
-            roll=(0.0, 0.0),
-            pitch=(0.0, 0.0),
-            yaw=(0.0, 0.0),
-        ),
-    )
+    # height_command = commands.UniformPoseCommandCfg(
+    #     asset_name="robot",
+    #     body_name="base_link",
+    #     resampling_time_range=(3.0, 6.0),
+    #     make_quat_unique=False,
+    #     debug_vis=False,
+    #     ranges=commands.UniformPoseCommandCfg.Ranges(
+    #         pos_x=(0.0, 0.0),
+    #         pos_y=(0.0, 0.0),
+    #         pos_z=(0.32, 0.32),
+    #         roll=(0.0, 0.0),
+    #         pitch=(0.0, 0.0),
+    #         yaw=(0.0, 0.0),
+    #     ),
+    # )
 
 
 # ─────────────────────────── Observations ─────────────────────────────────────
@@ -176,10 +183,10 @@ class ObservationsCfg:
             func=observations.generated_commands,
             params={"command_name": "velocity_command"},
         )
-        height_cmd = ObservationTermCfg(
-            func=observations.generated_commands,
-            params={"command_name": "height_command"},
-        )
+        # height_cmd = ObservationTermCfg(
+        #     func=observations.generated_commands,
+        #     params={"command_name": "height_command"},
+        # )
         # Sai lệch vận tốc thực so với setpoint — policy biết cần tăng/giảm bao nhiêu
         # Có thể deploy được: ước lượng từ encoder bánh xe + kinematic trên robot thật
         velocity_error = ObservationTermCfg(
@@ -212,10 +219,10 @@ class ObservationsCfg:
             func=observations.generated_commands,
             params={"command_name": "velocity_command"},
         )
-        height_cmd = ObservationTermCfg(
-            func=observations.generated_commands,
-            params={"command_name": "height_command"},
-        )
+        # height_cmd = ObservationTermCfg(
+        #     func=observations.generated_commands,
+        #     params={"command_name": "height_command"},
+        # )
         current_time   = ObservationTermCfg(func=observations.current_time_s)
         remaining_time = ObservationTermCfg(func=observations.remaining_time_s)
 
@@ -243,8 +250,8 @@ class EventCfg:
         mode="reset",
         params={
             "asset_cfg": SceneEntityCfg(name="robot"),
-            "position_range": (-0.02, 0.02),
-            "velocity_range": (-0.02, 0.02),
+            "position_range": (-0.005, 0.005),
+            "velocity_range": (-0.005, 0.005),
         },
     )
 
@@ -281,11 +288,12 @@ class RewardCfg:
     """
 
     # ── Primary task ──────────────────────────────────────────────────────────
-    termination_penalty = RewardTermCfg(func=rewards.is_terminated, weight=-200.0)
+    # Giảm từ -200 → -50: vẫn đủ lớn để discourage ngã nhưng không át gradient balance.
+    termination_penalty = RewardTermCfg(func=rewards.is_terminated, weight=-50.0)
 
     track_lin_vel_xy_exp = RewardTermCfg(
         func=mdp_vel.track_lin_vel_xy_yaw_frame_exp,
-        weight=5.0,
+        weight=15.0,
         params={"command_name": "velocity_command", "std": 0.5},
     )
 
@@ -295,22 +303,31 @@ class RewardCfg:
         params={"command_name": "velocity_command", "std": 0.5},
     )
 
-    track_base_height_l2 = RewardTermCfg(
-        func=mdp.rewards.track_base_height_l2,
-        weight=-20.0,
-        params={"command_name": "height_command"},
-    )
+    # track_base_height_l2 = RewardTermCfg(
+    #     func=mdp.rewards.track_base_height_l2,
+    #     weight=-20.0,
+    #     params={"command_name": "height_command"},
+    # )
 
     # ── Stability ─────────────────────────────────────────────────────────────
-    # Gaussian kernel: = 1 khi thẳng đứng, decay về 0 khi nghiêng.
-    # Weight dương tạo gradient liên tục bootstrap balance từ đầu training.
-    upright_exp = RewardTermCfg(
-        func=mdp.rewards.upright_exp,
-        weight=5.0,
-        params={"std": 0.3},
+    # +1.0/step khi không bị kết thúc sớm — gradient trực tiếp để không ngã.
+    flat_survival = RewardTermCfg(func=rewards.is_alive, weight=2.0)
+
+    rpy_align = RewardTermCfg(
+        func=mdp.rewards.rpy_alignment_imu,
+        weight=-10.0,
+        params={"target_rpy": (0.0, 0.0, 0.0)},
     )
 
-    # lin_vel_z_l2 = RewardTermCfg(func=rewards.lin_vel_z_l2, weight=-1.0)
+    # Phạt khi robot thấp hơn target_height — ngăn "ngồi xuống" local minimum.
+    # target_height = 0.35m ≈ giữa spawn (0.383m) và ngưỡng terminate (0.28m).
+    # base_height = RewardTermCfg(
+    #     func=rewards.base_height_l2,
+    #     weight=-5.0,
+    #     params={"target_height": 0.3},
+    # )
+
+    lin_vel_z_l2 = RewardTermCfg(func=rewards.lin_vel_z_l2, weight=-1.0)
 
     # ── Joint / action smoothness ─────────────────────────────────────────────
     # dof_pos_limits = RewardTermCfg(
@@ -321,7 +338,7 @@ class RewardCfg:
 
     stand_still = RewardTermCfg(
         func=mdp_vel.stand_still_joint_deviation_l1,
-        weight=-1.5,
+        weight=-0.5,
         params={
             "command_name": "velocity_command",
             "command_threshold": 0.2,
@@ -341,7 +358,7 @@ class RewardCfg:
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=_LEG_JOINTS)},
     )
 
-    action_rate = RewardTermCfg(func=rewards.action_rate_l2, weight=-0.05)
+    action_rate = RewardTermCfg(func=rewards.action_rate_l2, weight=-0.01)
 
     # ── Step-response quality ─────────────────────────────────────────────────
     # Bonus khi vx và yaw_rate đã ổn định trong dải sai số (settling time ngắn)
@@ -377,46 +394,40 @@ class TerminationsCfg:
     bad_orientation = TerminationTermCfg(
         func=terminations.bad_orientation,
         params={
-            "limit_angle": math.pi / 4,
+            "limit_angle": math.pi / 6,
             "asset_cfg": SceneEntityCfg(name="robot"),
         },
     )
 
-    # base_height = TerminationTermCfg(
-    #     func=terminations.root_height_below_minimum,
-    #     params={
-    #         "minimum_height": 0.05,
-    #         "asset_cfg": SceneEntityCfg(name="robot"),
-    #     },
-    # )
+    # Bắt robot sụp chân / nằm sát đất. Spawn height = 0.383m.
+    # 0.20m ≈ 52% spawn: robot ở mức này đã mất khả năng balance, reset sớm.
+    base_height_min = TerminationTermCfg(
+        func=terminations.root_height_below_minimum,
+        params={
+            "minimum_height": 0.01,
+            "asset_cfg": SceneEntityCfg(name="robot"),
+        },
+    )
 
     joint_vel_limit = TerminationTermCfg(
         func=terminations.joint_vel_out_of_manual_limit,
         params={
-            "max_velocity": 60.0,
+            "max_velocity": 120.0,
             "asset_cfg": SceneEntityCfg(name="robot", joint_names=[".*_hip_joint.*", ".*_knee_joint.*"]),
         },
     )
 
-    # Shin (knee) links must never touch ground.
-    illegal_contact = TerminationTermCfg(
-        func=terminations.illegal_contact,
-        params={
-            "threshold": 0.5,
-            "sensor_cfg": SceneEntityCfg(
-                "contact_forces_body",
-                body_names=[".*_shin_link.*"],
-            ),
-        },
-    )
-
-    base_height = TerminationTermCfg(
-        func=terminations.root_height_below_minimum,
-        params={
-            "minimum_height": 0.05,
-            "asset_cfg": SceneEntityCfg(name="robot"),
-        },
-    )
+    # Disabled: structural tilt gây false positive (shin links luôn có contact force nhỏ).
+    # illegal_contact = TerminationTermCfg(
+    #     func=terminations.illegal_contact,
+    #     params={
+    #         "threshold": 10.0,
+    #         "sensor_cfg": SceneEntityCfg(
+    #             name="contact_forces_body",
+    #             body_names=["base_link", ".*_thigh_link.*", ".*_shin_link.*"],
+    #         ),
+    #     },
+    # )
 
 
 # ─────────────────────────── Env ──────────────────────────────────────────────

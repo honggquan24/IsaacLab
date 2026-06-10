@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 from isaaclab.assets import Articulation
 from isaaclab.managers import SceneEntityCfg
-from isaaclab.utils.math import wrap_to_pi, euler_xyz_from_quat
+from isaaclab.utils.math import wrap_to_pi
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
@@ -33,38 +33,32 @@ def rpy_alignment_imu(
     env: ManagerBasedRLEnv,
     target_rpy: tuple[float, float, float] = (0.0, 0.0, 0.0),
     imu_cfg: SceneEntityCfg = SceneEntityCfg("imu"),
-    scale: float = 5.0
 ) -> torch.Tensor:
-    """Penalty for deviating from the target roll/pitch (balance penalty).
+    """L2 penalty cho roll+pitch từ IMU quaternion — YAW BỎ QUA.
 
-    Returns -(roll_error² + pitch_error²), unbounded negative. Zero when perfectly
-    upright, more negative as the robot tilts further from target.
-
-    Args:
-        env: The RL environment.
-        target_rpy: Desired (roll, pitch, yaw) in radians.
-        imu_cfg: Scene entity config for the IMU sensor.
+    Trả về roll_err² + pitch_err² — dùng với weight ÂM.
+    Yaw track riêng bởi track_ang_vel_z_world_exp.
+    Port từ legged_v2: normalize quat, clamp, NaN-safe.
     """
+    from isaaclab.utils.math import euler_xyz_from_quat
     imu = env.scene[imu_cfg.name]
 
-    # Get and normalize quaternion
     quat = imu.data.quat_w
     quat = quat / torch.norm(quat, dim=-1, keepdim=True).clamp(min=1e-6)
-
-    # Safety check
     if torch.isnan(quat).any() or torch.isinf(quat).any():
         quat = torch.nan_to_num(quat, nan=1.0, posinf=1.0, neginf=-1.0)
         quat = quat / torch.norm(quat, dim=-1, keepdim=True).clamp(min=1e-6)
 
-    roll, pitch, yaw = euler_xyz_from_quat(quat)
+    roll, pitch, _ = euler_xyz_from_quat(quat)
+    roll  = torch.clamp(roll,  -torch.pi, torch.pi)
+    pitch = torch.clamp(pitch, -torch.pi, torch.pi)
 
-    target_roll, target_pitch, _ = target_rpy  # ignore yaw for balance
+    target_roll, target_pitch, _ = target_rpy
+    roll_err  = torch.clamp(wrap_to_pi(roll  - target_roll),  -torch.pi, torch.pi)
+    pitch_err = torch.clamp(wrap_to_pi(pitch - target_pitch), -torch.pi, torch.pi)
 
-    roll_error = wrap_to_pi(roll - target_roll)
-    pitch_error = wrap_to_pi(pitch - target_pitch)
-
-    total_error = torch.abs(roll_error) + torch.abs(pitch_error)
-    return total_error
+    penalty = torch.square(roll_err) + torch.square(pitch_err)
+    return torch.nan_to_num(penalty, nan=0.0)
 
 
 def equal_effort_leg_when_cmd(
@@ -203,14 +197,18 @@ def velocity_overshoot_penalty(
     vx_err = cmd[:, 0] - asset.data.root_lin_vel_b[:, 0]
     yr_err = cmd[:, 2] - asset.data.root_ang_vel_b[:, 2]
 
-    for attr, err in [("_prev_vx_err_sign", vx_err), ("_prev_yr_err_sign", yr_err)]:
-        sign_now = torch.sign(err)
-        if not hasattr(env, attr):
-            setattr(env, attr, sign_now.clone())
-        setattr(env, attr, sign_now.clone())
+    prev_vx = getattr(env, "_prev_vx_err_sign", None)
+    prev_yr = getattr(env, "_prev_yr_err_sign", None)
+    sign_vx = torch.sign(vx_err)
+    sign_yr = torch.sign(yr_err)
+    env._prev_vx_err_sign = sign_vx.clone()
+    env._prev_yr_err_sign = sign_yr.clone()
 
-    vx_cross = (torch.sign(vx_err) * getattr(env, "_prev_vx_err_sign", torch.sign(vx_err))) < 0
-    yr_cross = (torch.sign(yr_err) * getattr(env, "_prev_yr_err_sign", torch.sign(yr_err))) < 0
+    if prev_vx is None:
+        return torch.zeros(vx_err.shape[0], device=vx_err.device)
+
+    vx_cross = (sign_vx * prev_vx) < 0
+    yr_cross = (sign_yr * prev_yr) < 0
     return torch.abs(vx_err) * vx_cross.float() + torch.abs(yr_err) * yr_cross.float()
 
 

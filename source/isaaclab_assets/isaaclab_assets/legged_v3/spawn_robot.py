@@ -44,7 +44,7 @@ step_in_ep = 0
 
 while simulation_app.is_running():
     test_action = torch.randn(1, env.action_manager.total_action_dim, device="cuda:0")
-
+    test_action[:, 0:2] = 0.0
     obs, reward, terminated, truncated, info = env.step(test_action)
     step_in_ep += 1
 

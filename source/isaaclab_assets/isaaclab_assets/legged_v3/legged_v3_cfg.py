@@ -31,7 +31,7 @@ import os
 from collections.abc import Callable
 
 import isaaclab.sim as sim_utils
-from isaaclab.actuators import IdealPDActuatorCfg, IdealPDActuatorCfg
+from isaaclab.actuators import IdealPDActuatorCfg
 from isaaclab.assets import ArticulationCfg
 from isaaclab.sim.spawners.from_files import UrdfFileCfg
 from isaaclab.sim.spawners.from_files.from_files import spawn_from_urdf
@@ -210,7 +210,7 @@ LEGGED_ROBOT_V3_CFG = ArticulationCfg(
     soft_joint_pos_limit_factor=0.95,
 
     init_state=ArticulationCfg.InitialStateCfg(
-        pos=(0.0, 0.0, 0.40),
+        pos=(0.0, 0.0, 0.383),
         joint_pos={
             "left_hip_joint_A1":   0.0,
             "left_knee_joint_B1":  0.0,
@@ -228,11 +228,13 @@ LEGGED_ROBOT_V3_CFG = ArticulationCfg(
 
     actuators={
         # ── Active: hip A1 — position control, stiffness drives stance maintenance
+        # damping tăng từ 0.2 → 1.5: giảm dao động underdamped (ξ: 0.24 → 0.89 ≈ critical)
+        # Tính: ξ = d / (2*sqrt(k*I)), I_hip ≈ 0.007 kg·m² → crit_damp ≈ 1.4 → 1.5 an toàn
         "hip_active": IdealPDActuatorCfg(
             joint_names_expr=["left_hip_joint_A1", "right_hip_joint_A1"],
             effort_limit_sim=150.0,
-            stiffness=20.0,
-            damping=1.0,
+            stiffness=65.0,
+            damping=0.0,
             velocity_limit_sim=50.0,
         ),
         # ── Mimic: hip A2 tracks hip A1 via PhysxMimicJointAPI ───────────────
@@ -248,17 +250,19 @@ LEGGED_ROBOT_V3_CFG = ArticulationCfg(
             joint_names_expr=["left_knee_joint_B1", "right_knee_joint_B1", "left_knee_joint_B2", "right_knee_joint_B2"],
             effort_limit_sim=200.0,
             stiffness=0.0,
-            damping=0.5,
+            damping=1.0,   # nhỏ nhưng > 0 để tránh numerical instability
             velocity_limit_sim=50.0,
         ),
         # ── Active: wheels — IdealPD velocity control ─────────────────────────
-        # stiffness=0: no position hold; damping=X: torque = X*(vel_target - vel_current)
+        # stiffness=0: bắt buộc cho velocity control — stiffness > 0 sẽ tạo lực
+        # phục hồi về q=0, chống lại bánh xe khi quay → gây mất thăng bằng.
+        # torque = damping * (vel_target - vel_current)
         "wheel": IdealPDActuatorCfg(
             joint_names_expr=["left_wheel_joint", "right_wheel_joint"],
-            effort_limit=12.0,
+            effort_limit_sim=100.0,
             stiffness=0.0,
-            damping=1.0,
-            velocity_limit=30.0,
+            damping=20.0,   # tăng: phản ứng nhanh hơn khi balance cần correction lớn
+            velocity_limit_sim=100.0,
         ),
     },
 )
