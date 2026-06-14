@@ -759,8 +759,8 @@ giao tiếp với tầng kế tiếp thông qua \textit{setpoint}:
 
 % ── Hàng trên ───────────────────────────────────────────────────────────────────
 \node[inputbox] (input) {\textbf{Input}\\(position, state)};
-\node[rlbox,  right=1.4cm of input]  (outer) {\textbf{Outer RL}\\(vị trí, 50 Hz)};
-\node[rlbox,  right=1.4cm of outer]  (inner) {\textbf{Inner RL}\\(vận tốc, 50 Hz)};
+\node[rlbox,  right=1.4cm of input]  (outer) {\textbf{Outer RL}\\(vị trí, 10 Hz)};
+\node[rlbox,  right=1.4cm of outer]  (inner) {\textbf{Inner RL}\\(vận tốc, 100 Hz)};
 \node[pdbox,  right=1.4cm of inner]  (pd)    {\textbf{IdealPD}\\(200 Hz)};
 
 % ── Hàng dưới: Robot thẳng bên dưới IdealPD ────────────────────────────────────
@@ -802,53 +802,162 @@ mà không cần xây dựng bộ PID thủ công.
 \label{sec:outer_rl}
 % ==============================================
 
-Vòng ngoài đảm nhận vai trò lập kế hoạch điều hướng ở mức vị trí:
-nhận trạng thái toàn cục của robot (vị trí, hướng, sai lệch với đích đến)
-và xuất lệnh vận tốc $[v_{x,des},\,v_{y,des},\,\omega_{z,des}]$ làm
-đầu vào cho \texttt{velocity\_command} của vòng trong.
+Vòng ngoài là một \textbf{chính sách phân cấp} (\textit{hierarchical
+policy}): nó \emph{không} trực tiếp điều khiển khớp mà chỉ sinh ra một
+\textbf{lệnh vận tốc}
+$\mathbf{a}^{hi}=[v_{x,des},\,v_{y,des},\,\omega_{z,des}]\in[-1,1]^3$,
+rồi đưa lệnh này vào chính sách vận tốc tầng dưới
+(Mục~\ref{sec:inner_rl}) \textbf{đã huấn luyện xong và bị đóng băng trọng
+số}. Tầng dưới được nạp từ file \texttt{policy.pt} đã xuất, chạy bên trong
+action term \texttt{PreTrainedPolicyAction} và \emph{không} cập nhật gradient
+trong giai đoạn này. Cơ chế này tách bài toán thành hai phần độc lập: tầng
+dưới lo \textit{giữ thăng bằng và bám vận tốc}, tầng ngoài chỉ lo
+\textit{chọn vận tốc nào để tới đích}.
+
+Hai tầng chạy ở hai tần số khác nhau. Môi trường vòng ngoài đặt
+\texttt{decimation}${=}20$ ($\Rightarrow$ tầng ngoài cập nhật ở
+$200/20=10$~Hz), trong khi \texttt{PreTrainedPolicyAction} chạy lại chính
+sách vận tốc mỗi \texttt{low\_level\_decimation}${=}2$ bước mô phỏng
+($\Rightarrow$ tầng dưới chạy ở $200/2=100$~Hz, khớp đúng tần số lúc huấn
+luyện). Như vậy mỗi lệnh vận tốc của tầng ngoài được tầng dưới thực thi
+liên tục trong $10$ bước vật lý trước khi được cập nhật.
+
+\subsubsection{Lệnh đích và không gian quan sát}
+
+Mục tiêu điều hướng được phát sinh ngẫu nhiên bằng
+\texttt{UniformPose2dCommand}: một điểm đích $(x_g, y_g)$ trong mặt phẳng
+sàn kèm hướng mong muốn $\psi_g$, lấy mẫu lại sau mỗi $[10,20]$~s.
 
 \begin{table}[H]
     \centering
-    \caption{Cấu hình huấn luyện vòng điều khiển ngoài (Outer RL Navigation Policy)}
+    \caption{Lệnh đích điều hướng \texttt{goal} (\texttt{UniformPose2dCommand})}
+    \label{tab:nav_goal}
+    \renewcommand{\arraystretch}{1.3}
+    \begin{tabular}{|l|c|l|}
+    \hline
+    \textbf{Thành phần} & \textbf{Miền giá trị} & \textbf{Ghi chú} \\
+    \hline
+    $x_g$    & $[-5{,}0,\;+5{,}0]$ m       & Toạ độ đích theo trục $x$ (sàn) \\
+    $y_g$    & $[-5{,}0,\;+5{,}0]$ m       & Toạ độ đích theo trục $y$ (sàn) \\
+    $\psi_g$ & $[-\pi,\;+\pi]$ rad         & Hướng mong muốn tại đích \\
+    \hline
+    \end{tabular}
+\end{table}
+
+Quan sát của Actor vòng ngoài gồm 16 chiều, chỉ chứa thông tin mức điều
+hướng (vị trí đích tương đối, vận tốc thân, hướng trọng lực), \emph{không}
+chứa trạng thái khớp — vì việc điều phối khớp đã thuộc trách nhiệm của tầng
+dưới:
+
+\begin{table}[H]
+    \centering
+    \caption{Quan sát Actor vòng ngoài — 16 chiều}
+    \label{tab:nav_obs}
+    \renewcommand{\arraystretch}{1.3}
+    \begin{tabular}{|l|c|l|}
+    \hline
+    \textbf{Tín hiệu} & \textbf{Chiều} & \textbf{Mô tả} \\
+    \hline
+    \texttt{goal\_pos\_b}        & 4 & Vị trí đích trong hệ thân $[\Delta x_b,\Delta y_b,\Delta z_b,\psi_b]$ \\
+    \texttt{root\_lin\_vel\_b}   & 3 & Vận tốc tịnh tiến thân (hệ thân) \\
+    \texttt{root\_ang\_vel\_w}   & 3 & Vận tốc góc thân (hệ thế giới) \\
+    \texttt{projected\_gravity}  & 3 & Vector trọng lực trong hệ thân \\
+    \texttt{last\_action}        & 3 & Lệnh vận tốc bước trước $\mathbf{a}^{hi}_{t-1}$ \\
+    \hline
+    \textbf{Tổng} & \textbf{16} & \\
+    \hline
+    \end{tabular}
+\end{table}
+
+Trong đó \texttt{goal\_pos\_b} là lệnh đích đã chuyển về hệ thân:
+$\Delta\mathbf{p}_b = \mathbf{R}_{\psi}^{\!\top}(\mathbf{p}_g-\mathbf{p}_{base})$,
+$\psi_b = \operatorname{wrap}_\pi(\psi_g - \psi_{base})$, với $\mathbf{R}_\psi$
+là ma trận quay yaw của thân.
+
+\subsubsection{Hàm phần thưởng vòng ngoài}
+
+Gọi $d_t = \lVert \mathbf{p}_{g} - \mathbf{p}_{base}\rVert_2$ là khoảng cách
+ngang từ robot tới đích tại bước $t$. Phần thưởng vòng ngoài gồm 7 số hạng:
+
+\textbf{(1) Tiến về đích} (\texttt{progress}, $w=+5{,}0$): thưởng phần
+khoảng cách rút ngắn được sau mỗi bước, tạo gradient dày đặc dẫn robot
+về đích:
+\begin{equation}
+    r_{prog} = d_{t-1} - d_t
+    \label{eq:nav_progress}
+\end{equation}
+
+\textbf{(2) Gần đích} (\texttt{goal\_proximity}, $w=+2{,}0$): Gaussian theo
+khoảng cách, $\sigma=2{,}0$~m:
+\begin{equation}
+    r_{prox} = \exp\!\bigl(-d_t/\sigma\bigr),\qquad \sigma=2{,}0
+    \label{eq:nav_proximity}
+\end{equation}
+
+\textbf{(3) Chạm đích} (\texttt{goal\_reached}, $w=+50{,}0$): thưởng lớn,
+nhị phân khi robot vào trong bán kính $0{,}3$~m quanh đích:
+\begin{equation}
+    r_{reach} = \mathbb{1}\!\bigl[d_t < 0{,}3\bigr]
+    \label{eq:nav_reached}
+\end{equation}
+
+\textbf{(4) Hướng về đích} (\texttt{heading}, $w=+1{,}0$): cosine giữa hướng
+thân $\hat{\mathbf{h}}=[\cos\psi_{base},\sin\psi_{base}]$ và hướng tới đích:
+\begin{equation}
+    r_{head} = \operatorname{clamp}\!\Bigl(
+        \hat{\mathbf{h}}\cdot
+        \frac{\mathbf{p}_g-\mathbf{p}_{base}}{\lVert\mathbf{p}_g-\mathbf{p}_{base}\rVert},
+        \,-1,\,1\Bigr)
+    \label{eq:nav_heading}
+\end{equation}
+
+\textbf{(5) Phạt giật lệnh} (\texttt{action\_rate}, $w=-0{,}05$):
+$r_{rate}=\lVert\mathbf{a}^{hi}_t-\mathbf{a}^{hi}_{t-1}\rVert^2$, làm trơn
+quỹ đạo lệnh vận tốc.
+
+\textbf{(6) Phạt nảy đứng} (\texttt{lin\_vel\_z\_l2}, $w=-0{,}5$):
+$r_{vz}=v_z^2$.
+
+\textbf{(7) Phạt ngã} (\texttt{termination\_penalty}, $w=-200$):
+$r_{term}=\mathbb{1}[\text{kết thúc sớm}]$.
+
+Episode kết thúc khi hết thời gian (\texttt{time\_out}, $30$~s, không phạt)
+hoặc khi robot nghiêng quá ngưỡng (\texttt{bad\_orientation},
+$>1{,}2$~rad~$\approx 68{,}8^\circ$, phạt $-200$).
+
+\subsubsection{Cấu hình huấn luyện vòng ngoài}
+
+\begin{table}[H]
+    \centering
+    \caption{Cấu hình PPO vòng ngoài (\texttt{LeggedV5NavPPORunnerCfg})}
     \label{tab:outer_param}
     \renewcommand{\arraystretch}{1.3}
     \begin{tabular}{|p{4.0cm}|c|p{7.5cm}|}
     \hline
     \textbf{Tham số} & \textbf{Giá trị} & \textbf{Mô tả} \\
     \hline
-    Tần số thực thi policy &
-    12.5 Hz &
-    Chính sách điều hướng được cập nhật mỗi 16 bước mô phỏng, tương ứng với hệ số decimation bằng 16 khi môi trường mô phỏng chạy ở tần số 200 Hz. \\
+    Tần số thực thi policy & 10 Hz &
+    \texttt{decimation}${=}20$ trên nền mô phỏng 200~Hz. \\
     \hline
-    Không gian hành động &
-    3 chiều &
-    Policy sinh ra lệnh vận tốc mong muốn
-    $[v_{x,des},\,v_{y,des},\,\omega_{z,des}]$
-    để điều khiển vòng vận tốc bên trong. \\
+    Không gian hành động & 3 chiều &
+    Lệnh vận tốc $[v_{x,des},v_{y,des},\omega_{z,des}]\in[-1,1]^3$ đưa vào
+    tầng dưới đã đóng băng. \\
     \hline
-    Kiến trúc Actor &
-    $[256,\,256]$ (ELU) &
-    Mạng Actor gồm ba tầng ẩn với số lượng neuron lần lượt là 256, 256 và 128, sử dụng hàm kích hoạt ELU theo cấu hình
-    \texttt{LeggedV3WheelNavPPORunnerCfg}. \\
+    Kiến trúc Actor & $[512,256,128]$ (ELU) &
+    Ba tầng ẩn $512{\to}256{\to}128$, kích hoạt ELU,
+    $\sigma_{init}{=}1{,}0$. \\
     \hline
-    Kiến trúc Critic &
-    $[256,\,256]$ (ELU) &
-    Có cùng kiến trúc với Actor nhưng được bổ sung các privileged states nhằm cải thiện chất lượng ước lượng hàm giá trị trong quá trình huấn luyện. \\
+    Kiến trúc Critic & $[512,256,128]$ (ELU) &
+    Cùng kiến trúc với Actor. \\
     \hline
-    \texttt{num\_steps\_per\_env} &
-    32 &
-    Số bước rollout được thu thập trên mỗi môi trường trước khi thực hiện một lần cập nhật PPO. \\
+    \texttt{num\_steps\_per\_env} & 24 &
+    Số bước rollout mỗi env trước một lần cập nhật PPO. \\
     \hline
-    \texttt{max\_iterations} &
-    3\,000 &
-    Số vòng lặp huấn luyện tối đa của policy vòng ngoài. Việc huấn luyện được thực hiện sau khi bộ điều khiển vòng trong đã đạt trạng thái hội tụ. \\  
+    \texttt{max\_iterations} & 3\,000 &
+    Huấn luyện sau khi tầng dưới đã hội tụ. \\
     \hline
     \end{tabular}
 \end{table}
-
-Vì vòng ngoài tập trung vào điều hướng: vị trí tương đối
-với đích $(\Delta x,\,\Delta y)$, hướng robot (yaw), vận tốc thân nên
-không bao gồm chi tiết trạng thái khớp (thuộc trách nhiệm của vòng trong).
 
 % ==============================================
 \subsection{Vòng trong: Chính sách vận tốc }
@@ -863,7 +972,7 @@ Bảng~\ref{tab:wheel_env} tóm tắt thông số chính:
 
 \begin{table}[H]
     \centering
-    \caption{Cấu hình môi trường huấn luyện \texttt{Isaac-Legged-V3-Wheel}}
+    \caption{Cấu hình môi trường huấn luyện \texttt{Isaac-Legged-V5-Wheel}}
     \label{tab:wheel_env}
     \renewcommand{\arraystretch}{1.3}
     \begin{tabular}{|p{4.0cm}|c|p{7.5cm}|}
@@ -876,56 +985,63 @@ Bảng~\ref{tab:wheel_env} tóm tắt thông số chính:
     \hline
     Loại địa hình &
     Phẳng &
-    Môi trường sử dụng mặt phẳng cố định, không áp dụng địa hình ngẫu nhiên hoặc các biến đổi độ cao nhằm tập trung học điều khiển cơ bản trước khi mở rộng sang các điều kiện phức tạp hơn. \\
+    Mặt phẳng cố định, không áp dụng địa hình ngẫu nhiên nhằm tập trung học điều khiển cơ bản trước khi mở rộng sang điều kiện phức tạp hơn. \\
     \hline
-    Hệ số ma sát tĩnh $\mu_s$ &
-    2.0 &
-    Giá trị ma sát cao được sử dụng để giảm hiện tượng trượt bánh xe trong giai đoạn đầu huấn luyện, giúp chính sách học được hành vi điều khiển ổn định hơn. \\
+    Hệ số ma sát (tĩnh / động) &
+    1{,}5 / 1{,}3 &
+    Giá trị ma sát cao giúp giảm trượt bánh xe trong giai đoạn đầu, ổn định hành vi điều khiển ($\mu_s{=}1{,}5$, $\mu_d{=}1{,}3$, kiểu kết hợp \texttt{multiply}). \\
     \hline
     Tần số mô phỏng vật lý &
     200 Hz &
-    Bộ giải vật lý được cập nhật với chu kỳ mô phỏng
-    $\Delta t_{sim}=5~\mathrm{ms}$,
-    đảm bảo độ chính xác của động lực học hệ thống. \\
+    Bộ giải vật lý cập nhật với chu kỳ $\Delta t_{sim}=5~\mathrm{ms}$. \\
     \hline
     Decimation &
-    4 &
-    Chính sách RL chỉ được cập nhật sau mỗi 4 bước mô phỏng vật lý, tương ứng với tần số thực thi policy là 50 Hz. \\
+    2 &
+    Chính sách RL cập nhật sau mỗi 2 bước vật lý, tương ứng tần số thực thi policy là 100 Hz. \\
     \hline
     Thời gian episode &
     60 s &
-    Mỗi episode kéo dài tối đa 60 giây, tương ứng khoảng 3\,000 bước điều khiển ở tần số policy 50 Hz. \\
+    Mỗi episode kéo dài tối đa 60 giây, tương ứng khoảng 6\,000 bước điều khiển ở tần số policy 100 Hz. \\
     \hline
     \end{tabular}
 \end{table}
 
-Sau mỗi episode, môi trường sẽ được reset theo công thức sau:
+Đầu mỗi episode, robot được sinh lại tại gốc khung (spawn cố định, không
+ngẫu nhiên hoá vị trí trong cấu hình hiện tại) với nhiễu nhỏ để tăng tính
+bền vững:
 \begin{itemize}
-    \item Góc và vận tốc khớp nhiễu: $\Delta q\sim\mathcal{U}(-0{,}02,+0{,}02)$~rad,
+    \item Góc và vận tốc khớp nhiễu (\texttt{reset\_joints\_by\_offset}):
+    $\Delta q\sim\mathcal{U}(-0{,}02,+0{,}02)$~rad,
     $\Delta\dot{q}\sim\mathcal{U}(-0{,}02,+0{,}02)$~rad/s.
-    \item Vị trí gốc: $(x,y)\sim\mathcal{U}(\pm5\;\text{m})$,
-    yaw~$\sim\mathcal{U}(-\pi,+\pi)$.
+    \item Vận tốc gốc nhiễu (\texttt{reset\_root\_state\_uniform}):
+    $v_{x,y,z}\sim\mathcal{U}(-0{,}02,+0{,}02)$~m/s; vị trí và yaw giữ cố
+    định ở gốc.
 \end{itemize}
+
+Ngoài hai sự kiện reset trên, môi trường còn khai báo sẵn (đang tạm tắt) bộ
+\textit{domain randomization}: ngẫu nhiên hệ số ma sát thân/bánh, tỉ lệ
+khối lượng thân $\mathcal{U}(0{,}8,1{,}2)$, dời tâm khối $\pm3$~cm và lực
+đẩy ngẫu nhiên giữa episode — dùng để tăng độ bền sim-to-real khi cần.
 
 \subsubsection{Không gian hành động}
 \label{sec:action_space}
 
-Inner RL xuất 4 hành động liên tục $\mathbf{a}\in\mathbb{R}^4$ tại
-mỗi bước 50~Hz:
+Inner RL xuất 4 hành động liên tục $\mathbf{a}\in\mathbb{R}^4$ tại mỗi bước
+100~Hz, gồm 2 lệnh góc hông và 2 lệnh vận tốc bánh xe:
 
 \begin{table}[H]
     \centering
-    \caption{Không gian hành động 4 chiều}
+    \caption{Không gian hành động 4 chiều (bản MIMIC)}
     \label{tab:action_cfg}
     \renewcommand{\arraystretch}{1.3}
     \begin{tabular}{|c|l|c|l|}
     \hline
     \textbf{Idx} & \textbf{Khớp} & \textbf{Scale} & \textbf{Loại điều khiển} \\
     \hline
-    0 & \texttt{left\_hip\_joint\_A1}  & 0{,}25 & Vị trí $\to$ IdealPD ($K_p{=}60$, $K_d{=}2$) \\
-    1 & \texttt{right\_hip\_joint\_A1} & 0{,}25 & Vị trí $\to$ IdealPD ($K_p{=}60$, $K_d{=}2$) \\
-    2 & \texttt{left\_wheel\_joint}    & 1{,}0  & Vận tốc $\to$ IdealPD ($K_p{=}0$, $K_d{=}3$) \\
-    3 & \texttt{right\_wheel\_joint}   & 1{,}0  & Vận tốc $\to$ IdealPD ($K_p{=}0$, $K_d{=}3$) \\
+    0 & \texttt{right\_hip\_joint} & 1{,}0 & Vị trí $\to$ IdealPD ($K_p{=}30$, $K_d{=}1{,}5$) \\
+    1 & \texttt{left\_hip\_joint}  & 1{,}0 & Vị trí $\to$ IdealPD ($K_p{=}30$, $K_d{=}1{,}5$) \\
+    2 & \texttt{right\_wheel\_joint} & 10{,}0 & Vận tốc $\to$ Implicit ($K_p{=}0$, $K_d{=}25$) \\
+    3 & \texttt{left\_wheel\_joint}  & 10{,}0 & Vận tốc $\to$ Implicit ($K_p{=}0$, $K_d{=}25$) \\
     \hline
     \end{tabular}
 \end{table}
@@ -934,59 +1050,119 @@ Actor MLP xuất phân phối Gaussian; hành động thô được sample theo:
 $\mathbf{a} = \boldsymbol{\mu}_\theta(s) + \sigma\boldsymbol{\varepsilon}$,
 $\sigma_{init} = 0{,}5$.
 
+\paragraph{Cơ chế khớp mimic và ràng buộc 5-bar.}
+Mỗi chân là cơ cấu 5-bar có \textbf{hai khớp chủ động} (tay quay A và B,
+tương ứng \texttt{right\_hip\_joint} và \texttt{right\_hip\_joint\_mimic}).
+Để điểm cuối $P$ (trục bánh xe) nâng/hạ \emph{thẳng đứng} đối xứng — tức
+chỉ đổi chiều cao thân mà không trượt ngang — hai tay quay phải chuyển động
+\textbf{phản gương} nhau:
+\begin{equation}
+    q_{B} = -\,q_{A}
+    \label{eq:mimic_constraint}
+\end{equation}
+Thay vì để chính sách tự học ràng buộc này, đề tài cài đặt một action term
+riêng \texttt{HipMimicPositionAction}: chính sách chỉ xuất \textbf{1 lệnh
+góc cho mỗi chân} (khớp chủ động $A$), còn khớp mimic $B$ được \emph{tự
+động} đặt setpoint bằng giá trị âm tại mọi bước:
+\begin{equation}
+    q_{A,des} = a_{hip}\cdot s_{hip},\qquad
+    q_{B,des} = -\,q_{A,des},\qquad s_{hip}=1{,}0
+    \label{eq:mimic_apply}
+\end{equation}
+Khi reset, khớp mimic cũng được ghi $q_B = -q_A$ ngay trước bước đầu để vòng
+kín 5-bar luôn thoả ràng buộc.
+
+\paragraph{Vì sao dùng mimic thay vì điều khiển 4 khớp hông độc lập.}
+Đề tài cài đặt song song hai phiên bản — \texttt{Isaac-Legged-V5-Wheel}
+(mimic) và \texttt{Isaac-Legged-V5-Wheel-NoMimic} (điều khiển trực tiếp cả
+4 khớp hông). So sánh cho thấy bản mimic vượt trội ở bốn điểm:
+\begin{enumerate}
+    \item \textbf{Giảm chiều không gian hành động $6\to4$.} Bản không mimic
+    cần 6 hành động ($4$ hông $+\,2$ bánh); bản mimic chỉ cần $4$
+    ($2$ hông $+\,2$ bánh). Không gian tìm kiếm nhỏ hơn $\Rightarrow$ hội tụ
+    nhanh hơn, nhiễu thăm dò thấp hơn.
+    \item \textbf{Bảo đảm ràng buộc 5-bar tại mọi thời điểm.} Ràng buộc
+    $q_B=-q_A$ đúng \emph{theo cấu trúc}, không phụ thuộc việc học. Bản không
+    mimic có thể sinh tổ hợp lệch gương, làm hai tay quay chống nhau trong
+    vòng kín $\Rightarrow$ nội lực lớn, rung khớp, thậm chí phá hình học.
+    \item \textbf{Khớp với thực tế vật lý.} Mỗi chân thực chất chỉ có
+    \emph{một bậc tự do chiều cao} hữu ích; mimic phản ánh đúng điều này,
+    tránh lãng phí dung lượng mạng để học một quan hệ đã biết giải tích.
+    \item \textbf{Đơn giản hoá reward.} Vì đối xứng \emph{trong một chân} đã
+    được đảm bảo, hàm thưởng chỉ còn cần ràng buộc đối xứng
+    \emph{giữa hai chân} (số hạng \texttt{hip\_symmetry},
+    Mục~\ref{sec:reward_fn}).
+\end{enumerate}
+Bản không mimic vẫn được giữ lại để đối chứng; toàn bộ phần trình bày dưới
+đây ứng với bản mimic chính thức.
+
 \subsubsection{Không gian quan sát (Actor–Critic bất đối xứng)}
 \label{sec:obs_space}
+
+Robot V5 có \textbf{12 bậc tự do} (DOF) trong mô phỏng: 2 khớp hông chủ động
+(\texttt{right/left\_hip\_joint}), 2 khớp hông mimic
+(\texttt{right/left\_hip\_joint\_mimic}), 4 khớp gối bị động
+(\texttt{right/left\_knee\_joint\_1/2}), 2 khớp bánh xe
+(\texttt{right/left\_wheel\_joint}) và 2 khớp trượt đóng vòng kín
+(\texttt{right/left\_close\_loop\_linear}). Do đó \texttt{joint\_pos} và
+\texttt{joint\_vel} đều có 12 chiều.
 
 Actor dùng cảm biến onboard (có thể triển khai lên phần cứng thật):
 
 \begin{table}[H]
     \centering
-    \caption{Quan sát Actor — 47 chiều (onboard sensors)}
+    \caption{Quan sát Actor — 40 chiều (onboard sensors)}
     \label{tab:obs_actor}
     \renewcommand{\arraystretch}{1.3}
     \begin{tabular}{|l|c|l|}
     \hline
     \textbf{Tín hiệu} & \textbf{Chiều} & \textbf{Mô tả} \\
     \hline
-    \texttt{imu\_lin\_acc}           & 3  & Gia tốc tuyến tính thân (m/s$^2$) \\
-    \texttt{imu\_ang\_vel}           & 3  & Vận tốc góc thân (rad/s) \\
-    \texttt{imu\_orientation}        & 4  & Quaternion hướng \\
-    \texttt{imu\_projected\_gravity} & 3  & Vector trọng lực trong hệ thân \\
-    \texttt{joint\_pos}              & 10 & Vị trí 10 khớp (rad) \\
-    \texttt{joint\_vel}              & 10 & Vận tốc 10 khớp (rad/s) \\
-    \texttt{last\_action}            & 4  & Hành động bước trước \\
-    \texttt{velocity\_cmd}           & 3  & Lệnh $[v_{x,des},v_{y,des},\omega_{z,des}]$ \\
-    \texttt{height\_cmd}             & 3  & Lệnh chiều cao $[0,0,z_{des}]$ \\
-    \texttt{velocity\_error}         & 2  & Sai lệch $[v_{x,err},\,\omega_{z,err}]$ \\
-    \texttt{wheel\_vel}              & 2  & Vận tốc bánh $[\omega_L,\omega_R]$ (rad/s) \\
+    \texttt{base\_lin\_vel}      & 3  & Vận tốc tịnh tiến thân (hệ thân) \\
+    \texttt{projected\_gravity}  & 3  & Vector trọng lực trong hệ thân \\
+    \texttt{joint\_pos}          & 12 & Vị trí 12 khớp (rad) \\
+    \texttt{joint\_vel}          & 12 & Vận tốc 12 khớp (rad/s) \\
+    \texttt{last\_action}        & 4  & Hành động bước trước $\mathbf{a}_{t-1}$ \\
+    \texttt{velocity\_cmd}       & 3  & Lệnh $[v_{x,des},v_{y,des},\omega_{z,des}]$ \\
+    \texttt{height\_cmd}         & 3  & Lệnh chiều cao $[0,0,z_{des}]$ \\
     \hline
-    \textbf{Tổng Actor}              & \textbf{47} & \\
+    \textbf{Tổng Actor}          & \textbf{40} & \\
     \hline
     \end{tabular}
 \end{table}
 
-Trong khi đó, Critic nhận thêm trạng thái đặc quyền từ mô phỏng chỉ khi training:
-
+Critic là một nhóm quan sát \emph{độc lập}, bổ sung trạng thái đặc quyền chỉ
+có trong mô phỏng (toạ độ và vận tốc hệ thế giới, mô-men thực, thời gian) để
+ước lượng hàm giá trị tốt hơn — các tín hiệu này không cần triển khai lên
+phần cứng:
 
 \begin{table}[H]
     \centering
-    \caption{Trạng thái đặc quyền bổ sung cho Critic — 28 chiều}
+    \caption{Quan sát Critic — 73 chiều (gồm trạng thái đặc quyền)}
     \label{tab:obs_critic_extra}
     \renewcommand{\arraystretch}{1.3}
     \begin{tabular}{|l|c|l|}
     \hline
     \textbf{Tín hiệu} & \textbf{Chiều} & \textbf{Mô tả} \\
     \hline
-    \texttt{root\_pos\_w}     & 3  & Vị trí gốc thân (hệ thế giới) \\
-    \texttt{root\_quat\_w}    & 4  & Quaternion hướng (hệ thế giới) \\
-    \texttt{root\_lin\_vel\_w}& 3  & Vận tốc tịnh tiến (hệ thế giới) \\
-    \texttt{root\_ang\_vel\_w}& 3  & Vận tốc góc (hệ thế giới) \\
-    \texttt{base\_lin\_vel}   & 3  & Vận tốc tịnh tiến (hệ thân) \\
-    \texttt{joint\_effort}    & 10 & Mô-men xoắn thực 10 khớp \\
-    \texttt{current\_time}    & 1  & Thời gian hiện tại (s) \\
-    \texttt{remaining\_time}  & 1  & Thời gian còn lại (s) \\
+    \texttt{root\_pos\_w}        & 3  & Vị trí gốc thân (hệ thế giới) \\
+    \texttt{root\_quat\_w}       & 4  & Quaternion hướng (hệ thế giới) \\
+    \texttt{root\_lin\_vel\_w}   & 3  & Vận tốc tịnh tiến (hệ thế giới) \\
+    \texttt{root\_ang\_vel\_w}   & 3  & Vận tốc góc (hệ thế giới) \\
+    \texttt{base\_lin\_vel}      & 3  & Vận tốc tịnh tiến (hệ thân) \\
+    \texttt{base\_ang\_vel}      & 3  & Vận tốc góc (hệ thân) \\
+    \texttt{projected\_gravity}  & 3  & Vector trọng lực (hệ thân) \\
+    \texttt{joint\_pos}          & 12 & Vị trí 12 khớp \\
+    \texttt{joint\_vel}          & 12 & Vận tốc 12 khớp \\
+    \texttt{joint\_effort}       & 12 & Mô-men xoắn thực 12 khớp \\
+    \texttt{last\_action}        & 4  & Hành động bước trước \\
+    \texttt{velocity\_cmd}       & 3  & Lệnh vận tốc \\
+    \texttt{height\_cmd}         & 3  & Lệnh chiều cao \\
+    \texttt{current\_time}       & 1  & Thời gian hiện tại (s) \\
+    \texttt{remaining\_time}     & 1  & Thời gian còn lại (s) \\
+    \texttt{root\_rpy\_deg}      & 3  & Roll/pitch/yaw thân (độ) \\
     \hline
-    \multicolumn{3}{|l|}{\textbf{Tổng Critic} $= 47 + 28 = 75$ chiều} \\
+    \textbf{Tổng Critic}         & \textbf{73} & \\
     \hline
     \end{tabular}
 \end{table}
@@ -997,7 +1173,14 @@ Trong quá trình huấn luyện, robot không được điều khiển bằng c
 
 Đối với bài toán điều khiển robot bánh xe hai chân, tập lệnh bao gồm hai nhóm chính: lệnh vận tốc (velocity command). Nhóm lệnh vận tốc xác định vận tốc tuyến tính mong muốn theo phương chuyển động chính của robot và vận tốc quay quanh trục thẳng đứng. 
 
-Cụ thể, vận tốc dọc $v_{x,des}$ được lấy mẫu trong khoảng $[-1.0,;1.0]$ m/s, cho phép robot thực hiện cả chuyển động tiến và lùi. Thành phần vận tốc ngang $v_{y,des}$ được cố định bằng 0 m/s nhằm giới hạn bài toán ở chuyển động phẳng, phù hợp với đặc tính động học của nền tảng robot được nghiên cứu. Đồng thời, vận tốc góc mong muốn $\omega_{z,des}$ được lấy mẫu trong khoảng $[-1.0,;1.0]$ rad/s, cho phép robot học các thao tác quay trái, quay phải và quay tại chỗ.
+Do thân robot được xoay $90^\circ$ quanh trục $X$ khi khởi tạo, \textbf{trục
+dọc (chiều tiến) của robot trùng với trục $y$ của thân}. Vì vậy lệnh tiến/lùi
+được áp lên thành phần $v_{y,des}$, lấy mẫu trong khoảng $[-1{,}0,\;1{,}0]$~m/s.
+Thành phần ngang $v_{x,des}$ được cố định bằng 0~m/s nhằm giới hạn bài toán ở
+chuyển động phẳng, phù hợp với đặc tính động học của nền tảng robot được nghiên
+cứu. Đồng thời, vận tốc góc mong muốn $\omega_{z,des}$ được lấy mẫu trong
+khoảng $[-1{,}0,\;1{,}0]$~rad/s, cho phép robot học các thao tác quay trái,
+quay phải và quay tại chỗ.
 
 Các miền lấy mẫu của toàn bộ lệnh điều khiển được trình bày trong Bảng~\ref{tab:commands}.
 
@@ -1011,18 +1194,22 @@ Các miền lấy mẫu của toàn bộ lệnh điều khiển được trình 
     \textbf{Lệnh} & \textbf{Thành phần} & \textbf{Miền giá trị} & \textbf{Ghi chú} \\
     \hline
     \multirow{3}{*}{\texttt{velocity\_command}} &
-        $v_{x,des}$ & $[-1{,}0,\;+1{,}0]$ m/s & Tiến/lùi \\
-    & $v_{y,des}$ & $[0{,}0,\;0{,}0]$ m/s  & Không điều khiển ngang \\
+        $v_{x,des}$ & $[0{,}0,\;0{,}0]$ m/s  & Không điều khiển ngang \\
+    & $v_{y,des}$ & $[-1{,}0,\;+1{,}0]$ m/s & Tiến/lùi (trục dọc thân) \\
     & $\omega_{z,des}$ & $[-1{,}0,\;+1{,}0]$ rad/s & Quay tại chỗ \\
     \hline
-    \texttt{height\_command} & $z_{des}$ & $[0{,}20,\;0{,}26]$ m & Chiều cao thân \\
+    \texttt{height\_command} & $z_{des}$ & $0{,}35$ m (cố định) & Độ cao thân tương đối so với trục bánh \\
     \hline
     \end{tabular}
 \end{table}
 
-Tham số \texttt{rel\_standing\_envs}$\,{=}\,0{,}5$: 50\% môi trường nhận
-lệnh $(v_x{=}0,\,\omega_z{=}0)$ để học đứng im ổn định song song với học
-di chuyển. Lệnh được resample mỗi $[3{,}0,\,5{,}0]$~s.
+Lệnh chiều cao được hiểu là \emph{độ cao tương đối} của thân so với trục
+bánh xe (xem số hạng \texttt{track\_height},
+phương trình~\eqref{eq:rew_height}), giữ cố định $0{,}35$~m và resample mỗi
+$[3{,}0,\,6{,}0]$~s. Tham số \texttt{rel\_standing\_envs}$\,{=}\,0{,}02$:
+chỉ $2\%$ môi trường nhận lệnh đứng yên $(v_x{=}0,\,\omega_z{=}0)$ — phần
+lớn môi trường được giao lệnh di chuyển để chính sách tập trung học chạy.
+Lệnh vận tốc được resample mỗi $[3{,}0,\,5{,}0]$~s.
 
 \subsubsection{Hàm phần thưởng}
 \label{sec:reward_fn}
@@ -1034,110 +1221,122 @@ Hàm phần thưởng tổng hợp tại mỗi bước $t$ là tổng có trọn
     \label{eq:total_reward}
 \end{equation}
 
-\paragraph{Nhóm 1: Bám lệnh vận tốc và các điều kiện kết thúc:} \\
+Ký hiệu chung: $e_{vy}=v_{y,des}-v_{y}$ (sai lệch vận tốc tiến --- trục dọc
+thân là $y$ do thân xoay $90^\circ$ quanh $X$), $e_{\omega_z}=\omega_{z,des}-\omega_{z}$
+(sai lệch tốc độ quay), $\mathbf{g}_b=[g_{b,x},g_{b,y},g_{b,z}]$ là vector
+trọng lực chiếu vào hệ thân.
 
-\textbf{(1) Tồn tại mỗi bước} (\texttt{flat\_survival}, $w=+1{,}0$):
-thưởng đơn vị cho mỗi bước robot chưa ngã, tạo gradient cơ bản khuyến khích
-sống lâu hơn.
-\begin{equation}
-    r_{alive} = 1
-    \label{eq:rew_alive}
-\end{equation}
+\paragraph{Nhóm 1 --- Bám lệnh vận tốc và điều kiện kết thúc.}
 
-\textbf{(2) Phạt kết thúc sớm} (\texttt{termination\_penalty}, $w=-200$):
-phạt nhị phân khi episode kết thúc do vi phạm điều kiện ngã.
+\textbf{(1) Phạt kết thúc sớm} (\texttt{termination\_penalty}, $w=-200$):
+phạt nhị phân khi episode kết thúc do ngã/chạm sai (không tính \texttt{time\_out}):
 \begin{equation}
-    r_{term} = \mathbb{1}[\text{episode bị kết thúc sớm}]
+    r_{term} = \mathbb{1}[\text{kết thúc sớm}]
     \label{eq:rew_term}
 \end{equation}
 
-\textbf{(3) Bám vận tốc tuyến tính} (\texttt{track\_lin\_vel\_xy\_exp},
-$w=+5{,}0$): Gaussian kernel trên sai lệch $v_x$ trong hệ yaw-frame,
-$\sigma=0{,}5$~m/s:
+\textbf{(2) Bám vận tốc tuyến tính} (\texttt{track\_lin\_vel\_xy\_exp},
+$w=+1{,}5$): Gaussian kernel trên sai lệch vận tốc ngang trong hệ yaw-frame,
+$\sigma=1{,}0$~m/s:
 \begin{equation}
-    r_{lin} = \exp\!\left(-\frac{e_{vx}^2}{0{,}25}\right),
-    \quad e_{vx} = v_{x,des} - v_{x,cur}
+    r_{lin} = \exp\!\left(-\frac{\lVert\mathbf{e}_{v,xy}\rVert^2}{\sigma^2}\right),
+    \quad \sigma=1{,}0
     \label{eq:rew_lin}
 \end{equation}
 
-\textbf{(4) Bonus ổn định vận tốc} (\texttt{velocity\_settling}, $w=+2{,}0$):
-thưởng nhị phân khi cả sai lệch tốc độ tiến lẫn tốc độ góc đồng thời nằm
-trong dải chấp nhận được:
+\textbf{(3) Bám vận tốc góc} (\texttt{track\_ang\_vel\_z\_exp}, $w=+1{,}5$):
+Gaussian kernel trên sai lệch tốc độ quay quanh trục đứng, $\sigma=1{,}0$:
 \begin{equation}
-    r_{settle} = \mathbb{1}\!\bigl[|e_{vx}| < 0{,}10\;\wedge\;
+    r_{ang} = \exp\!\left(-\frac{e_{\omega_z}^2}{\sigma^2}\right),
+    \quad \sigma=1{,}0
+    \label{eq:rew_ang}
+\end{equation}
+
+\textbf{(4) Bonus ổn định vận tốc} (\texttt{velocity\_settling}, $w=+2{,}0$):
+thưởng nhị phân khi cả sai lệch tiến lẫn quay đồng thời nằm trong dải hẹp:
+\begin{equation}
+    r_{settle} = \mathbb{1}\!\bigl[|e_{vy}| < 0{,}10\;\wedge\;
                  |e_{\omega_z}| < 0{,}15\bigr]
     \label{eq:rew_settle}
 \end{equation}
 
-\textbf{(5) Phạt vượt setpoint} (\texttt{velocity\_overshoot}, $w=-3{,}0$):
-kích hoạt khi dấu sai lệch đổi chiều (\textit{sign flip}), tức là vận tốc
-vừa vượt qua setpoint:
+\textbf{(5) Phạt vượt setpoint} (\texttt{velocity\_overshoot}, $w=-5{,}0$):
+kích hoạt khi dấu sai lệch đổi chiều (\textit{sign flip}) --- tức vận tốc
+vừa vọt qua setpoint (đã lọc bỏ trường hợp đổi dấu do resample lệnh):
 \begin{equation}
-    r_{over} = |e_{vx}|\cdot\mathbb{1}[\Delta\,\mathrm{sign}(e_{vx})]
+    r_{over} = |e_{vy}|\cdot\mathbb{1}[\Delta\,\mathrm{sign}(e_{vy})]
              + |e_{\omega_z}|\cdot\mathbb{1}[\Delta\,\mathrm{sign}(e_{\omega_z})]
     \label{eq:rew_overshoot}
 \end{equation}
 
-\paragraph{Nhóm 2: Cân bằng robot:}
+\paragraph{Nhóm 2 --- Cân bằng và tư thế (đặc thù robot bánh).}
+Khác robot chân thuần tuý, robot bánh kiểu con lắc ngược cần \emph{nghiêng
+dọc} (fore-aft lean) để tăng/giảm tốc; vì vậy đề tài \textbf{không} phạt
+nghiêng dọc mà chỉ phạt nghiêng ngang và lệch tâm khối --- thay cho cặp
+\texttt{upright}/\texttt{rpy} của robot chân.
 
-\textbf{(6) Đứng thẳng} (\texttt{upright\_exp}, $w=+5{,}0$): Gaussian
-trên độ lệch của projected gravity vector $\mathbf{g}_b$ so với thẳng đứng
-($\mathbf{g}_b=(0,0,-1)$ khi đứng thẳng hoàn toàn), $\sigma=0{,}3$:
+\textbf{(6) Bám độ cao trên trục bánh} (\texttt{track\_height}, $w=+3{,}0$):
+Gaussian trên sai lệch độ cao thân \emph{tương đối} so với trung điểm trục
+hai bánh (độc lập địa hình), $\sigma=0{,}05$~m:
 \begin{equation}
-    r_{up} = \exp\!\left(-\frac{g_{b,x}^2 + g_{b,y}^2}{0{,}09}\right)
-    \label{eq:rew_upright}
+    r_{height} = \exp\!\left(-\frac{(h - z_{des})^2}{\sigma^2}\right),
+    \quad h = z_{base} - \tfrac{1}{2}\!\left(z_{w,R}+z_{w,L}\right)
+    \label{eq:rew_height}
 \end{equation}
 
-\textbf{(7) Căn chỉnh roll/pitch từ IMU} (\texttt{rpy\_align}, $w=-10{,}0$):
-phạt $L_1$ tổng sai lệch góc roll và pitch tính từ projected gravity (có thể
-triển khai trực tiếp với MPU6050 trên ESP32):
-\begin{align}
-    \phi   &= \arctan2\!\bigl(g_{b,y},\,-g_{b,z}\bigr),\quad
-    \theta  = \arctan2\!\bigl(-g_{b,x},\,\sqrt{g_{b,y}^2+g_{b,z}^2}\bigr)
-    \label{eq:rpy_angles} \\
-    r_{rpy} &= |\phi - \phi_{des}| + |\theta - \theta_{des}|
-    \label{eq:rew_rpy}
-\end{align}
-
-\textbf{(8) Triệt tiêu vận tốc đứng} (\texttt{lin\_vel\_z\_l2}, $w=-1{,}0$):
-phạt bình phương thành phần vận tốc thẳng đứng, ngăn robot nảy hoặc rung
-theo phương $z$:
+\textbf{(7) Phạt nghiêng ngang} (\texttt{lateral\_tilt}, $w=-50$): bình
+phương thành phần trọng lực theo trục ngang của thân (trục body-$x$ sau khi
+xoay $90^\circ$), bằng 0 khi thân không đổ sang bên:
 \begin{equation}
-    r_{vz} = v_z^2
-    \label{eq:rew_vz}
+    r_{lat} = g_{b,x}^2
+    \label{eq:rew_lateral}
 \end{equation}
 
-\textbf{(9) Đứng yên khi không có lệnh} (\texttt{stand\_still}, $w=-0{,}5$):
-phạt $L_1$ độ lệch góc khớp hông so với vị trí mặc định, chỉ kích hoạt khi
-tổng độ lớn lệnh vận tốc nhỏ hơn ngưỡng $0{,}05$:
+\textbf{(8) Căn tâm khối trên mặt phẳng bánh} (\texttt{com\_wheel\_plane},
+$w=-25$): phạt khoảng cách từ tâm khối toàn robot đến mặt phẳng đứng chứa
+trục hai bánh xe, giữ robot không chúi nghiêng:
+\begin{equation}
+    r_{com} = \bigl|(\mathbf{c}-\mathbf{m})\cdot\mathbf{n}\bigr|,\quad
+    \mathbf{n}=\frac{(\mathbf{p}_R-\mathbf{p}_L)\times\hat{\mathbf{z}}}
+                    {\lVert(\mathbf{p}_R-\mathbf{p}_L)\times\hat{\mathbf{z}}\rVert}
+    \label{eq:rew_com}
+\end{equation}
+với $\mathbf{c}$ là CoM (trung bình theo khối lượng), $\mathbf{m}$ là trung
+điểm hai trục bánh, $\mathbf{p}_{R,L}$ là tâm bánh phải/trái.
+
+\textbf{(9) Đối xứng hai chân} (\texttt{hip\_symmetry}, $w=-10$): do mỗi chân
+đã đối xứng nội bộ nhờ mimic, số hạng này ép \emph{hai chân} đối xứng nhau
+(stance gương: $q_{hip,R}\approx-q_{hip,L}$):
+\begin{equation}
+    r_{sym} = \bigl(q_{hip,R} + q_{hip,L}\bigr)^2
+    \label{eq:rew_symmetry}
+\end{equation}
+
+\textbf{(10) Đứng yên khi không có lệnh} (\texttt{stand\_still}, $w=-2{,}0$):
+phạt $L_1$ độ lệch góc 4 khớp hông so với mặc định, chỉ kích hoạt khi độ lớn
+lệnh vận tốc dưới ngưỡng $0{,}05$:
 \begin{equation}
     r_{still} = \sum_{j\in\text{hip}}\!\bigl|q_j - q_{j,def}\bigr|
-    \cdot\mathbb{1}\!\bigl[\|v_{cmd}\|_1 < 0{,}05\bigr]
+    \cdot\mathbb{1}\!\bigl[\|\mathbf{v}_{cmd}\| < 0{,}05\bigr]
     \label{eq:rew_still}
 \end{equation}
 
-\paragraph{Nhóm 3: Làm mượt khớp}
+\paragraph{Nhóm 3 --- Làm mượt khớp.}
 
-\textbf{(10) Gia tốc khớp} (\texttt{joint\_acc}, $w=-5{\times}10^{-5}$):
-phạt $L_2$ gia tốc góc tất cả các khớp, khuyến khích quỹ đạo mô-men trơn:
-\begin{equation}
-    r_{acc} = \|\ddot{\mathbf{q}}\|^2
-    \label{eq:rew_acc}
-\end{equation}
-
-\textbf{(11) Mô-men xoắn khớp} (\texttt{joint\_torques}, $w=-1{\times}10^{-4}$):
-phạt $L_2$ mô-men thực tế áp lên các khớp, tiết kiệm năng lượng cơ học:
-\begin{equation}
-    r_{torq} = \|\boldsymbol{\tau}\|^2
-    \label{eq:rew_torq}
-\end{equation}
-
-\textbf{(12) Tốc độ thay đổi hành động} (\texttt{action\_rate},
-$w=-0{,}01$): phạt $L_2$ sự thay đổi hành động giữa hai bước liên tiếp,
-tránh giật hại cơ cấu:
+\textbf{(11) Tốc độ thay đổi hành động} (\texttt{action\_rate}, $w=-0{,}01$):
+phạt $L_2$ thay đổi hành động giữa hai bước, tránh giật hại cơ cấu:
 \begin{equation}
     r_{rate} = \|\mathbf{a}_t - \mathbf{a}_{t-1}\|^2
     \label{eq:rew_rate}
+\end{equation}
+
+\textbf{(12) Gia tốc khớp hông} (\texttt{leg\_joint\_acc},
+$w=-5{\times}10^{-7}$): phạt $L_2$ gia tốc góc \emph{chỉ trên 4 khớp hông}
+(không tính bánh --- bánh quay nhanh là bình thường), khử rung mà không cần
+tăng cản cơ học:
+\begin{equation}
+    r_{acc} = \sum_{j\in\text{hip}}\ddot{q}_j^{\,2}
+    \label{eq:rew_acc}
 \end{equation}
 
 \subsubsection{Điều kiện kết thúc episode}
@@ -1151,16 +1350,20 @@ tránh giật hại cơ cấu:
     \hline
     \textbf{Điều kiện} & \textbf{Ngưỡng} & \textbf{Phạt} \\
     \hline
-    \texttt{time\_out}         & $t \geq 60$~s                            & — \\
-    \texttt{bad\_orientation}  & góc nghiêng $> 45°$ ($\pi/4$~rad)        & $-200$ \\
-    \texttt{base\_height}      & chiều cao thân $< 0{,}05$~m              & $-200$ \\
-    \texttt{joint\_vel\_limit} & $|\dot{q}| > 60$~rad/s (hông hoặc gối)  & $-200$ \\
+    \texttt{time\_out}              & $t \geq 60$~s                         & — \\
+    \texttt{bad\_orientation}       & góc nghiêng $> 90^\circ$ ($\pi/2$~rad) & $-200$ \\
+    \texttt{base\_height}           & chiều cao thân $< 0{,}25$~m           & $-200$ \\
+    \texttt{joint\_vel\_limit}      & $|\dot{q}| > 150$~rad/s               & $-200$ \\
+    \texttt{illegal\_contact\_hip}  & lực chạm khớp hông $> 100$~N          & $-200$ \\
+    \texttt{illegal\_contact\_knee} & lực chạm khớp gối $> 100$~N           & $-200$ \\
     \hline
     \end{tabular}
 \end{table}
 
-\texttt{time\_out} là dừng tự nhiên (không phạt); ba điều kiện còn lại là
-thất bại sớm, đều kích hoạt phần thưởng âm $-200$.
+\texttt{time\_out} là dừng tự nhiên (không phạt); năm điều kiện còn lại là
+thất bại sớm. Phần thưởng âm $-200$ được áp \emph{một lần} qua số hạng
+\texttt{termination\_penalty} (phương trình~\eqref{eq:rew_term}) cho bất kỳ
+điều kiện thất bại nào kích hoạt.
 
 
 % ==============================================
@@ -1186,21 +1389,25 @@ do chính sách RL cung cấp; $q$, $\dot{q}$ là trạng thái thực đọc t�
 PhysX.
 
 Bảng~\ref{tab:actuator_params} liệt kê tham số truyền động cho từng loại
-khớp, được khai báo trong \texttt{legged\_v3\_cfg.py}:
+khớp, được khai báo trong \texttt{legged\_v5\_cfg.py}. Khớp hông và gối dùng
+\texttt{IdealPDActuatorCfg} (PD tường minh trong Python), riêng bánh xe và
+khớp đóng vòng kín dùng \texttt{ImplicitActuatorCfg} (PhysX tự giải PD ẩn,
+ổn định cho quán tính nhỏ ở gain lớn):
 
 \begin{table}[H]
     \centering
-    \caption{Tham số \texttt{IdealPDActuatorCfg} — \texttt{legged\_v3\_cfg.py}}
+    \caption{Tham số bộ truyền động --- \texttt{legged\_v5\_cfg.py}}
     \label{tab:actuator_params}
     \renewcommand{\arraystretch}{1.3}
     \begin{tabular}{|l|c|c|c|c|l|}
     \hline
     \textbf{Khớp} & \textbf{Chế độ} & $K_p$ & $K_d$ & $\tau_{max}$ (N$\cdot$m) & \textbf{Ghi chú} \\
     \hline
-    Hip A1 (trái, phải) & Vị trí   & 60{,}0 & 2{,}0 & 150 & Chính sách điều khiển \\
-    Hip A2 (mimic)      & Thụ động & 0{,}0  & 0{,}0 & 100 & Theo A1 qua PhysxMimicJointAPI \\
-    Knee B1/B2          & Thụ động & 0{,}0  & 0{,}5 & 200 & PhysX tự xử lý vòng kín \\
-    Wheel (trái, phải)  & Vận tốc  & 0{,}0  & 3{,}0 & 12  & Chính sách điều khiển \\
+    Hông chủ động (R, L)   & Vị trí (IdealPD)   & 30{,}0  & 1{,}5 & 100   & Chính sách điều khiển \\
+    Hông mimic (R, L)      & Vị trí (IdealPD)   & 30{,}0  & 1{,}5 & 100   & Setpoint $=-$hông chủ động \\
+    Gối bị động ($\times4$) & Tự do (IdealPD)    & 0{,}0   & 0{,}0 & 100   & Coupler vòng kín \\
+    Bánh xe (R, L)         & Vận tốc (Implicit) & 0{,}0   & 25{,}0& 300   & Chính sách điều khiển \\
+    Khớp đóng vòng (R, L)  & Ràng buộc (Implicit)& 10\,000 & 500   & 10\,000 & Slider khoá vòng 5-bar \\
     \hline
     \end{tabular}
 \end{table}
@@ -1209,34 +1416,38 @@ Robot có \textbf{hai nhánh truyền động song song} hoạt động độc l
 trong mỗi bước vật lý 200~Hz:
 
 \begin{itemize}
-    \item \textbf{Nhánh hông — chế độ vị trí} (\texttt{JointPositionActionCfg}):
-    Inner RL xuất offset góc $a_{hip} \in \mathbb{R}^2$, được scale và cộng
-    vào góc mặc định để tạo setpoint:
+    \item \textbf{Nhánh hông — chế độ vị trí} (\texttt{HipMimicPositionAction},
+    IdealPD): Inner RL xuất 2 lệnh góc $a_{hip}\in\mathbb{R}^2$ (một cho mỗi
+    chân), scale trực tiếp thành setpoint khớp chủ động; khớp mimic lấy giá
+    trị âm (phương trình~\eqref{eq:mimic_apply}):
     \begin{equation}
-        q_{des} = q_{default} + a_{hip} \times 0{,}25
+        q_{A,des} = a_{hip}\times 1{,}0,\qquad q_{B,des} = -\,q_{A,des}
         \label{eq:hip_setpoint}
     \end{equation}
-    IdealPD tính mô-men theo luật PD đầy đủ với $K_p = 60$, $K_d = 2$:
+    IdealPD tính mô-men theo luật PD đầy đủ với $K_p = 30$, $K_d = 1{,}5$:
     \begin{equation}
-        \tau_{hip} = \operatorname{clamp}\!\bigl(60\,(q_{des}-q) - 2\,\dot{q},\;\pm150\bigr)\;\mathrm{[N{\cdot}m]}
+        \tau_{hip} = \operatorname{clamp}\!\bigl(30\,(q_{des}-q) - 1{,}5\,\dot{q},\;\pm100\bigr)\;\mathrm{[N{\cdot}m]}
         \label{eq:tau_hip_idealpd}
     \end{equation}
 
-    \item \textbf{Nhánh bánh xe — chế độ vận tốc} (\texttt{JointVelocityActionCfg}):
-    Inner RL xuất setpoint vận tốc $a_{whl} \in \mathbb{R}^2$, scale trực tiếp:
+    \item \textbf{Nhánh bánh xe — chế độ vận tốc}
+    (\texttt{JointVelocityActionCfg}, ImplicitActuator): Inner RL xuất 2
+    setpoint vận tốc $a_{whl}\in\mathbb{R}^2$, scale hệ số $10{,}0$:
     \begin{equation}
-        \omega_{des} = a_{whl} \times 1{,}0
+        \omega_{des} = a_{whl} \times 10{,}0
         \label{eq:wheel_setpoint_idealpd}
     \end{equation}
-    IdealPD hoạt động ở chế độ cản thuần túy ($K_p = 0$, $K_d = 3$):
+    Bộ truyền động ẩn hoạt động ở chế độ cản thuần ($K_p=0$, $K_d=25$), PhysX
+    giải mô-men $\tau_{wheel}=K_d(\omega_{des}-\omega)$ và bão hoà ở
+    $\pm300$~N$\cdot$m:
     \begin{equation}
-        \tau_{wheel} = \operatorname{clamp}\!\bigl(3{,}0\,(\omega_{des}-\omega),\;\pm12\bigr)\;\mathrm{[N{\cdot}m]}
+        \tau_{wheel} = \operatorname{clamp}\!\bigl(25\,(\omega_{des}-\omega),\;\pm300\bigr)\;\mathrm{[N{\cdot}m]}
         \label{eq:tau_wheel_idealpd}
     \end{equation}
 \end{itemize}
 
 Hai nhánh hội tụ tại bước \textit{áp đặt mô-men vào PhysX} và được thực thi
-đồng thời ở 200~Hz (decimation~$=4$ so với policy 50~Hz).
+đồng thời ở 200~Hz (decimation~$=2$ so với policy 100~Hz).
 Hình~\ref{fig:idealpd_flow} minh họa kiến trúc song song này.
 
 % ── Flow IdealPD — 2 nhánh song song ────────────────────────────────────────────
@@ -1259,23 +1470,24 @@ Hình~\ref{fig:idealpd_flow} minh họa kiến trúc song song này.
     {Hành động RL \;$\mathbf{a}=[a_{hip,L},\,a_{hip,R},\;\;a_{whl,L},\,a_{whl,R}]$};
 
 \node[mathblock] (scale_hip) at (-2.7, -1.8)
-    {\textbf{Scale hông}\\
-     $q_{des}=q_{def}+a_{hip}\!\times\!0{,}25$};
+    {\textbf{Mimic hông}\\
+     $q_{A,des}=a_{hip}\!\times\!1{,}0$\\[2pt]
+     $q_{B,des}=-q_{A,des}$};
 
 \node[mathblock] (scale_whl) at (2.7, -1.8)
     {\textbf{Scale bánh xe}\\[2pt]
-     $\omega_{des}=a_{whl}\!\times\!1{,}0$\\[2pt]
+     $\omega_{des}=a_{whl}\!\times\!10{,}0$\\[2pt]
      \textit{JointVelocityActionCfg}};
 
 \node[mathblock] (pd_hip) at (-2.7, -4.0)
     {\textbf{IdealPD — Hông}\\[2pt]
-     $K_p{=}60,\;K_d{=}2,\;\tau_{max}{=}{\pm}150\;\text{N{\cdot}m}$\\[2pt]
-     $\tau_{hip}=\mathrm{clamp}(60\Delta q-2\dot{q},\;\pm150)$};
+     $K_p{=}30,\;K_d{=}1{,}5,\;\tau_{max}{=}{\pm}100\;\text{N{\cdot}m}$\\[2pt]
+     $\tau_{hip}=\mathrm{clamp}(30\Delta q-1{,}5\dot{q},\;\pm100)$};
 
 \node[mathblock] (pd_whl) at (2.7, -4.0)
-    {\textbf{IdealPD — Bánh xe}\\[2pt]
-     $K_p{=}0,\;K_d{=}3,\;\tau_{max}{=}{\pm}12\;\text{N{\cdot}m}$\\[2pt]
-     $\tau_{whl}=\mathrm{clamp}(3{,}0\,\Delta\omega,\;\pm12)$};
+    {\textbf{Implicit — Bánh xe}\\[2pt]
+     $K_p{=}0,\;K_d{=}25,\;\tau_{max}{=}{\pm}300\;\text{N{\cdot}m}$\\[2pt]
+     $\tau_{whl}=\mathrm{clamp}(25\,\Delta\omega,\;\pm300)$};
 
 \node[outblock] (apply) at (0, -6.0)
     {Áp đặt $[\tau_{hip},\,\tau_{whl}]$ vào PhysX \quad (200~Hz)};
@@ -1287,9 +1499,10 @@ Hình~\ref{fig:idealpd_flow} minh họa kiến trúc song song này.
 \draw[arr] (pd_hip.south) -- ++(0,-0.3) -| (apply.north);
 \draw[arr] (pd_whl.south) -- ++(0,-0.3) -| (apply.north);
 \end{tikzpicture}
-\caption{Luồng tín hiệu tầng IdealPD hai nhánh song song: nhánh hông ($K_p{=}60$,
-$K_d{=}2$, $\tau_{max}{=}{\pm}150$ N$\cdot$m); nhánh bánh xe ($K_p{=}0$,
-$K_d{=}3$, $\tau_{max}{=}{\pm}12$ N$\cdot$m). Cả hai hội tụ tại PhysX ở 200~Hz.}
+\caption{Luồng tín hiệu tầng truyền động hai nhánh song song: nhánh hông
+(IdealPD, $K_p{=}30$, $K_d{=}1{,}5$, $\tau_{max}{=}{\pm}100$ N$\cdot$m, khớp
+mimic lấy giá trị âm); nhánh bánh xe (ImplicitActuator, $K_p{=}0$,
+$K_d{=}25$, $\tau_{max}{=}{\pm}300$ N$\cdot$m). Cả hai hội tụ tại PhysX ở 200~Hz.}
 \label{fig:idealpd_flow}
 \end{figure}
 
@@ -1301,9 +1514,10 @@ $K_d{=}3$, $\tau_{max}{=}{\pm}12$ N$\cdot$m). Cả hai hội tụ tại PhysX �
 
 \subsubsection{Kiến trúc mạng Actor–Critic}
 
-Cả Actor và Critic dùng MLP 3 lớp ẩn, hàm kích hoạt ELU và chuẩn hóa
-quan sát online (running mean/std). Bảng~\ref{tab:network_arch} liệt kê
-kiến trúc thực từ \texttt{rsl\_rl\_ppo\_cfg.py}:
+Actor và Critic dùng MLP, hàm kích hoạt ELU và chuẩn hóa quan sát online
+(running mean/std). Vòng trong dùng hai lớp ẩn rộng $[1024,1024]$, vòng ngoài
+dùng ba lớp ẩn thu nhỏ dần $[512,256,128]$. Bảng~\ref{tab:network_arch} liệt
+kê kiến trúc thực từ \texttt{rsl\_rl\_ppo\_cfg.py}:
 
 \begin{table}[H]
     \centering
@@ -1314,10 +1528,10 @@ kiến trúc thực từ \texttt{rsl\_rl\_ppo\_cfg.py}:
     \hline
     \textbf{Policy} & \textbf{Input} & \textbf{Hidden layers} & \textbf{Output} & \textbf{Kích hoạt} \\
     \hline
-    Inner Actor  & 47  & $[256\!\to\!256\!\to\!256]$ & 4 (tuyến tính) & ELU \\
-    Inner Critic & 75  & $[256\!\to\!256\!\to\!256]$ & 1 (giá trị)    & ELU \\
-    Outer Actor  & $\approx$20 & $[256\!\to\!256\!\to\!128]$ & 3 (tuyến tính) & ELU \\
-    Outer Critic & $\approx$20 & $[256\!\to\!256\!\to\!128]$ & 1 (giá trị)    & ELU \\
+    Inner Actor  & 40 & $[1024\!\to\!1024]$         & 4 (tuyến tính) & ELU \\
+    Inner Critic & 73 & $[1024\!\to\!1024]$         & 1 (giá trị)    & ELU \\
+    Outer Actor  & 16 & $[512\!\to\!256\!\to\!128]$ & 3 (tuyến tính) & ELU \\
+    Outer Critic & 16 & $[512\!\to\!256\!\to\!128]$ & 1 (giá trị)    & ELU \\
     \hline
     \end{tabular}
 \end{table}
@@ -1339,7 +1553,7 @@ $\sigma_{init}=0{,}5$.
     \hline
     \multicolumn{4}{|c|}{\textit{Rollout}} \\
     \hline
-    \texttt{num\_steps\_per\_env}  & 24     & 32     & Bước rollout/iter/env \\
+    \texttt{num\_steps\_per\_env}  & 24     & 24     & Bước rollout/iter/env \\
     \texttt{max\_iterations}       & 5\,000 & 3\,000 & Tổng iteration \\
     \texttt{num\_learning\_epochs} & 5      & 5      & Epoch cập nhật/iter \\
     \texttt{num\_mini\_batches}    & 4      & 4      & Mini-batch/epoch \\
@@ -1422,8 +1636,9 @@ và ổn định mà không cần tinh chỉnh thủ công.
 \begin{itemize}
     \item \textbf{Isaac Sim / PhysX}: $\approx3$--$4$\,GB.
     \item \textbf{Rollout buffer}:
-    $4\,096\times24\times75\times4\;\text{byte}\approx30\;\text{MB}$.
-    \item \textbf{Mạng + trạng thái Adam}:
-    $3\times256^2\times2\approx400\text{K}$ tham số $\approx5\;\text{MB}$.
+    $4\,096\times24\times73\times4\;\text{byte}\approx29\;\text{MB}$.
+    \item \textbf{Mạng + trạng thái Adam}: hai lớp ẩn $1024^2$ cho cả Actor và
+    Critic $\approx2$ triệu tham số; kèm trạng thái Adam ($m,v$)
+    $\approx25\;\text{MB}$.
 \end{itemize}
 Tổng ước tính $\approx4$--$5$\,GB, phù hợp với 8\,GB VRAM của RTX~3070.

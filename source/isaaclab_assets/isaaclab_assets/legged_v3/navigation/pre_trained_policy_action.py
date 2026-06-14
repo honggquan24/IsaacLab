@@ -1,3 +1,14 @@
+"""Pre-trained low-level locomotion policy as a high-level action term (V5).
+
+Khác bản V3: low-level V5 có NHIỀU action term (leg_pos + wheel_vel) nên dùng
+`ActionManager` thay vì một `ActionTerm` đơn. Obs remap theo tên term của V5
+(`last_action`, `velocity_cmd`).
+
+Luồng:
+  - High-level policy xuất raw_actions = velocity command (vx, vy, omega).
+  - Mỗi `low_level_decimation` bước: dựng obs low-level (trong đó velocity_cmd =
+    raw_actions), chạy policy đã train → action khớp, áp qua ActionManager.
+"""
 from __future__ import annotations
 
 import torch
@@ -6,7 +17,13 @@ from typing import TYPE_CHECKING
 
 import isaaclab.utils.math as math_utils
 from isaaclab.assets import Articulation
-from isaaclab.managers import ActionTerm, ActionTermCfg, ObservationGroupCfg, ObservationManager
+from isaaclab.managers import (
+    ActionManager,
+    ActionTerm,
+    ActionTermCfg,
+    ObservationGroupCfg,
+    ObservationManager,
+)
 from isaaclab.markers import VisualizationMarkers
 from isaaclab.markers.config import BLUE_ARROW_X_MARKER_CFG, GREEN_ARROW_X_MARKER_CFG
 from isaaclab.utils import configclass
@@ -17,11 +34,7 @@ if TYPE_CHECKING:
 
 
 class PreTrainedPolicyAction(ActionTerm):
-    """Action term that runs a pre-trained low-level locomotion policy.
-
-    Raw actions = velocity commands (vx, vy, omega) passed to the low-level policy.
-    The low-level policy outputs joint-level actions applied every low_level_decimation steps.
-    """
+    """Chạy policy locomotion V5 đã train làm tầng thấp. Raw action = (vx, vy, omega)."""
 
     cfg: PreTrainedPolicyActionCfg
 
@@ -31,31 +44,38 @@ class PreTrainedPolicyAction(ActionTerm):
         self.robot: Articulation = env.scene[cfg.asset_name]
 
         if not check_file_path(cfg.policy_path):
-            raise FileNotFoundError(f"Policy file '{cfg.policy_path}' does not exist.")
+            raise FileNotFoundError(f"Policy file '{cfg.policy_path}' không tồn tại.")
         file_bytes = read_file(cfg.policy_path)
         self.policy = torch.jit.load(file_bytes).to(env.device).eval()
 
         self._raw_actions = torch.zeros(self.num_envs, self.action_dim, device=self.device)
 
-        self._low_level_action_term: ActionTerm = cfg.low_level_actions.class_type(cfg.low_level_actions, env)
-        self.low_level_actions = torch.zeros(self.num_envs, self._low_level_action_term.action_dim, device=self.device)
+        # Low-level dùng ActionManager (V5: leg_pos mimic/nomimic + wheel_vel)
+        self._low_level_action_manager = ActionManager(cfg.low_level_actions, env)
+        self.low_level_actions = torch.zeros(
+            self.num_envs, self._low_level_action_manager.total_action_dim, device=self.device
+        )
 
         def last_action():
+            # reset last action về 0 ở bước đầu mỗi episode
             if hasattr(env, "episode_length_buf"):
                 self.low_level_actions[env.episode_length_buf == 0, :] = 0
             return self.low_level_actions
 
-        cfg.low_level_observations.actions.func = lambda dummy_env: last_action()
-        cfg.low_level_observations.actions.params = dict()
-        cfg.low_level_observations.velocity_commands.func = lambda dummy_env: self._raw_actions
-        cfg.low_level_observations.velocity_commands.params = dict()
+        # Remap obs low-level (tên term theo V5 PolicyCfg):
+        #   last_action  -> action low-level vừa sinh
+        #   velocity_cmd -> raw action tầng cao (lệnh vận tốc)
+        cfg.low_level_observations.last_action.func = lambda dummy_env: last_action()
+        cfg.low_level_observations.last_action.params = dict()
+        cfg.low_level_observations.velocity_cmd.func = lambda dummy_env: self._raw_actions
+        cfg.low_level_observations.velocity_cmd.params = dict()
 
         self._low_level_obs_manager = ObservationManager({"ll_policy": cfg.low_level_observations}, env)
         self._counter = 0
 
     @property
     def action_dim(self) -> int:
-        return 3  # (vx, vy, omega)
+        return 3  # (vx, vy, omega) — khớp velocity_cmd 3 chiều của low-level
 
     @property
     def raw_actions(self) -> torch.Tensor:
@@ -66,17 +86,19 @@ class PreTrainedPolicyAction(ActionTerm):
         return self._raw_actions
 
     def process_actions(self, actions: torch.Tensor):
-        self._raw_actions[:] = actions
+        # clip về dải lệnh vận tốc low-level đã train ([-1, 1])
+        self._raw_actions[:] = actions.clamp(-1.0, 1.0)
 
     def apply_actions(self):
         if self._counter % self.cfg.low_level_decimation == 0:
             low_level_obs = self._low_level_obs_manager.compute_group("ll_policy")
             self.low_level_actions[:] = self.policy(low_level_obs)
-            self._low_level_action_term.process_actions(self.low_level_actions)
+            self._low_level_action_manager.process_action(self.low_level_actions)
             self._counter = 0
-        self._low_level_action_term.apply_actions()
+        self._low_level_action_manager.apply_action()
         self._counter += 1
 
+    # ───────────────────────── debug visualization ──────────────────────────
     def _set_debug_vis_impl(self, debug_vis: bool):
         if debug_vis:
             if not hasattr(self, "base_vel_goal_visualizer"):
@@ -119,13 +141,13 @@ class PreTrainedPolicyAction(ActionTerm):
 
 @configclass
 class PreTrainedPolicyActionCfg(ActionTermCfg):
-    """Configuration for the pre-trained locomotion policy action term."""
+    """Config cho action term locomotion-pretrained."""
 
     class_type: type[ActionTerm] = PreTrainedPolicyAction
 
     asset_name: str = MISSING
-    policy_path: str = MISSING
-    low_level_decimation: int = 4
-    low_level_actions: ActionTermCfg = MISSING
+    policy_path: str = MISSING          # đường dẫn policy.pt đã export (low-level)
+    low_level_decimation: int = 4       # low-level chạy nhanh gấp 4 lần high-level
+    low_level_actions: object = MISSING # ActionCfg group của locomotion (leg+wheel)
     low_level_observations: ObservationGroupCfg = MISSING
     debug_vis: bool = True

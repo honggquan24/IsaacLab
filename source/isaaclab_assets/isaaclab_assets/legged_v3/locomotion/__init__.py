@@ -1,2 +1,1 @@
-from .legged_v3_wheel_env_cfg import LeggedV3WheelEnvCfg
-from .legged_v3_leg_env_cfg import LeggedV3LegEnvCfg
+from .legged_v5_wheel_env_cfg import LeggedV5WheelEnvCfg

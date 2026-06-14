@@ -6,9 +6,26 @@ from typing import TYPE_CHECKING
 
 from isaaclab.assets import Articulation
 from isaaclab.managers import SceneEntityCfg
+from isaaclab.utils.math import quat_apply_inverse, euler_xyz_from_quat
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
+
+
+def root_rpy_deg(
+    env: "ManagerBasedRLEnv",
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    print_every: int = 200,
+) -> torch.Tensor:
+    """Roll/pitch/yaw của root link, đơn vị độ. Shape (N, 3). Dùng để debug orientation."""
+    asset: Articulation = env.scene[asset_cfg.name]
+    roll, pitch, yaw = euler_xyz_from_quat(asset.data.root_quat_w)
+    rpy = torch.stack([roll, pitch, yaw], dim=-1).rad2deg()
+    if env.common_step_counter % print_every == 0:
+        r0, p0, y0 = rpy[0, 0].item(), rpy[0, 1].item(), rpy[0, 2].item()
+        h = asset.data.root_pos_w[0, 2].item()
+        print(f"[DBG orient] step={env.common_step_counter:>7d}  h={h:.3f}  roll={r0:+.1f}°  pitch={p0:+.1f}°  yaw={y0:+.1f}°")
+    return rpy
 
 
 def velocity_error(
@@ -66,6 +83,66 @@ def base_height_w(
     """
     asset: Articulation = env.scene[asset_cfg.name]
     return asset.data.root_pos_w[:, 2:3]
+
+
+def com_pos_b(
+    env: "ManagerBasedRLEnv",
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Vị trí khối tâm (mass-weighted CoM) trong body frame, tương đối với gốc base_link.
+    Shape (N, 3).
+
+    Hữu ích để policy biết CoM đang lệch về đâu so với base (trái/phải, trước/sau, cao/thấp).
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+    com_w   = asset.data.body_com_pos_w                            # (N, B, 3)
+    masses  = asset.data.default_mass.to(com_w.device)            # (N, B)
+    total_m = masses.sum(dim=-1, keepdim=True)                     # (N, 1)
+    com_w_agg = (com_w * masses.unsqueeze(-1)).sum(dim=1) / total_m  # (N, 3)
+    rel_w = com_w_agg - asset.data.root_pos_w
+    return quat_apply_inverse(asset.data.root_quat_w, rel_w)
+
+
+def com_to_wheel_plane_dist(
+    env: "ManagerBasedRLEnv",
+    wheel_right_body: str = "wheel_link_right",
+    wheel_left_body:  str = "wheel_link_left",
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Khoảng cách có dấu từ CoM đến mặt phẳng cân bằng (wheel balance plane).
+    Shape (N, 1).
+
+    Mặt phẳng cân bằng = mặt phẳng chứa trục bánh xe (axle) và phương thẳng đứng (Z).
+    Khoảng cách dương = CoM lệch về phía bánh phải, âm = về phía bánh trái.
+    Giá trị lý tưởng = 0 (CoM nằm đúng trên mặt phẳng giữa 2 bánh).
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+    body_names = asset.data.body_names
+    ir = body_names.index(wheel_right_body)
+    il = body_names.index(wheel_left_body)
+
+    p_r = asset.data.body_pos_w[:, ir, :]  # (N, 3)
+    p_l = asset.data.body_pos_w[:, il, :]  # (N, 3)
+    mid = (p_r + p_l) * 0.5               # (N, 3) — tâm trục bánh
+
+    # Hướng trục bánh (trái → phải), chuẩn hoá
+    axle = p_r - p_l
+    axle_unit = axle / axle.norm(dim=-1, keepdim=True).clamp(min=1e-6)
+
+    # Pháp tuyến mặt phẳng = axle × Z_world (hướng về phía trước robot)
+    up = torch.zeros_like(axle_unit)
+    up[:, 2] = 1.0
+    normal = torch.linalg.cross(axle_unit, up)
+    normal_unit = normal / normal.norm(dim=-1, keepdim=True).clamp(min=1e-6)
+
+    # Khối tâm mass-weighted
+    com_w   = asset.data.body_com_pos_w
+    masses  = asset.data.default_mass.to(com_w.device)
+    total_m = masses.sum(dim=-1, keepdim=True)
+    com_w_agg = (com_w * masses.unsqueeze(-1)).sum(dim=1) / total_m  # (N, 3)
+
+    dist = ((com_w_agg - mid) * normal_unit).sum(dim=-1, keepdim=True)  # (N, 1)
+    return dist
 
 
 def kinematic_height_estimate(

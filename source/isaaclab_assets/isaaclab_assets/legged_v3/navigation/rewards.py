@@ -1,4 +1,4 @@
-"""Navigation reward functions for Legged Robot V3 hierarchical policy.
+"""Navigation reward functions for Legged Robot V5 hierarchical policy.
 
 All functions are called by NavRewardCfg in legged_v3_wheel_navigation_env_cfg.py.
 The high-level policy receives these shaped rewards while the low-level locomotion

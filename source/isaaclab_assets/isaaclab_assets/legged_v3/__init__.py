@@ -1,69 +1,55 @@
-"""Legged Robot V3 — 2-legged wheeled robot.
+"""Legged Robot V5 — bipedal wheeled robot (5-bar, USD export từ Onshape).
 
-Tasks:
-  - Isaac-Legged-V3-Wheel:      Wheeled locomotion with balance
-  - Isaac-Legged-V3-Leg:        Leg-based locomotion
-  - Isaac-Legged-V3-Curriculum: Auto-curriculum locomotion
-  - Isaac-Legged-V3-Navigation: Hierarchical navigation (high-level over pre-trained locomotion)
+Task:
+  - Isaac-Legged-V5-Wheel: Wheeled locomotion với balance
 
-Train locomotion (headless):
+Train (headless):
     ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
-        --task Isaac-Legged-V3-Wheel --num_envs 4096 --headless
-
-Train navigation (requires trained locomotion checkpoint):
-    ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \\
-        --task Isaac-Legged-V3-Navigation --num_envs 1024 --headless
+        --task Isaac-Legged-V5-Wheel --num_envs 4096 --headless
 """
 
 import gymnasium as gym
 from . import agents
 
-# Register tasks first (before env-cfg imports) to avoid circular imports:
-# env-cfg modules import isaaclab_tasks.manager_based.* which would re-enter
-# this package during isaaclab_tasks initialisation.
-
 gym.register(
-    id="Isaac-Legged-V3-Wheel",
+    id="Isaac-Legged-V5-Wheel",          # bản MIMIC (policy ra 2 hip, mimic auto)
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
     disable_env_checker=True,
     kwargs={
-        "env_cfg_entry_point": f"{__name__}.locomotion.legged_v3_wheel_env_cfg:LeggedV3WheelEnvCfg",
-        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:LeggedV3WheelPPORunnerCfg",
+        "env_cfg_entry_point": f"{__name__}.locomotion.legged_v5_wheel_env_cfg:LeggedV5WheelEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:LeggedV5WheelPPORunnerCfg",
     },
 )
 
 gym.register(
-    id="Isaac-Legged-V3-Leg",
+    id="Isaac-Legged-V5-Wheel-NoMimic",  # bản KHÔNG mimic (policy ra cả 4 hip)
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
     disable_env_checker=True,
     kwargs={
-        "env_cfg_entry_point": f"{__name__}.locomotion.legged_v3_leg_env_cfg:LeggedV3LegEnvCfg",
-        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:LeggedV3LegPPORunnerCfg",
+        "env_cfg_entry_point": f"{__name__}.locomotion.legged_v5_wheel_env_cfg_nomimic:LeggedV5WheelEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:LeggedV5WheelNoMimicPPORunnerCfg",
     },
 )
 
 gym.register(
-    id="Isaac-Legged-V3-Curriculum",
+    id="Isaac-Legged-V5-Navigation",     # tầng cao: command pos → goal, low-level pretrained
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
     disable_env_checker=True,
     kwargs={
-        "env_cfg_entry_point": f"{__name__}.locomotion.curriculum.env_cfg:LeggedV3CurriculumEnvCfg",
-        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:LeggedV3CurriculumPPORunnerCfg",
+        "env_cfg_entry_point": f"{__name__}.navigation.legged_v5_navigation_env_cfg:LeggedV5NavigationEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:LeggedV5NavPPORunnerCfg",
     },
 )
 
 gym.register(
-    id="Isaac-Legged-V3-Navigation",
+    id="Isaac-Legged-V5-Warehouse-Nav",  # tầng cao + LiDAR: né vật cản trong kho, tới đích
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
     disable_env_checker=True,
     kwargs={
-        "env_cfg_entry_point": f"{__name__}.navigation.legged_v3_wheel_navigation_env_cfg:LeggedV3WheelNavigationEnvCfg",
-        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:LeggedV3WheelNavPPORunnerCfg",
+        "env_cfg_entry_point": f"{__name__}.navigation.legged_v5_warehouse_nav_env_cfg:LeggedV5WarehouseNavEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:LeggedV5WarehouseNavPPORunnerCfg",
     },
 )
 
-from .legged_v3_cfg import *
-from .locomotion.legged_v3_wheel_env_cfg import *
-from .locomotion.legged_v3_leg_env_cfg import *
-from .locomotion.curriculum import LeggedV3CurriculumEnvCfg
-from .navigation import LeggedV3WheelNavigationEnvCfg
+from .locomotion.legged_v5_wheel_env_cfg import LeggedV5WheelEnvCfg
+from .navigation import LeggedV5NavigationEnvCfg, LeggedV5WarehouseNavEnvCfg

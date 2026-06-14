@@ -1,3 +1,5 @@
 from .pre_trained_policy_action import PreTrainedPolicyAction, PreTrainedPolicyActionCfg
-from .legged_v3_wheel_navigation_env_cfg import LeggedV3WheelNavigationEnvCfg
+from .legged_v5_navigation_env_cfg import LeggedV5NavigationEnvCfg
+from .legged_v5_warehouse_nav_env_cfg import LeggedV5WarehouseNavEnvCfg
 from . import rewards
+from . import sensors
