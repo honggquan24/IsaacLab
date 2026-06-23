@@ -12,9 +12,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from tensorboard.backend.event_processing import event_accumulator as ea
 
-LOGDIR = "source/isaaclab_assets/isaaclab_assets/legged_v5/logs/legged_v5_wheel_mimic_2000ep"
+LOGDIR = "source/isaaclab_assets/isaaclab_assets/legged_v5/logs/legged_v5_wheel_mimic"
 OUTDIR = "source/isaaclab_assets/isaaclab_assets/legged_v5/NCKH/figure/results"
-MAX_STEP = 2000
+MAX_STEP = 600
 
 os.makedirs(OUTDIR, exist_ok=True)
 f = sorted(glob.glob(os.path.join(LOGDIR, "events.out.tfevents.*")))[0]

@@ -441,3 +441,54 @@ def wheel_air_time_penalty(
     first_contact = contact_sensor.compute_first_contact(env.step_dt)[:, sensor_cfg.body_ids]
     last_air_time = contact_sensor.data.last_air_time[:, sensor_cfg.body_ids]
     return torch.sum((last_air_time - threshold) * first_contact, dim=1)
+
+
+def wheel_speed_symmetry_l2(
+    env: ManagerBasedRLEnv,
+    command_name: str = "velocity_command",
+    wz_gate: float = 0.05,
+    right_sign: float = 1.0,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg(
+        "robot", joint_names=["left_wheel_joint", "right_wheel_joint"]
+    ),
+) -> torch.Tensor:
+    """Phạt chênh tốc 2 bánh KHI lệnh xoay ≈ 0 (tức là đang đi thẳng).
+
+    Robot xoay BẰNG chênh tốc 2 bánh (differential drive), nên KHÔNG được phạt
+    chênh lệch khi có lệnh xoay — nếu không sẽ giết track_ang_vel_z. Hàm này GATE:
+    chỉ phạt khi |wz_cmd| < wz_gate.
+
+    Khi đi thẳng: ω_left ≈ ω_right (sau chuẩn hoá dấu, positive = cả 2 tiến) →
+    chênh lệch ≈ lái lệch / trôi ngang. Trả (ω_left − ω_right)² * gate, weight ÂM.
+    Bất biến thứ tự joint vì dùng bình phương hiệu (chỉ đúng khi right_sign=1, mặc định).
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+    vel = asset.data.joint_vel[:, asset_cfg.joint_ids].clone()   # (N, 2) [left, right]
+    vel[:, 1] *= right_sign
+    diff_sq = torch.square(vel[:, 0] - vel[:, 1])                # (N,)
+
+    wz_cmd = env.command_manager.get_command(command_name)[:, 2]  # (N,)
+    gate = (torch.abs(wz_cmd) < wz_gate).float()
+    return diff_sq * gate
+
+
+def turn_speed_coupling_penalty(
+    env: ManagerBasedRLEnv,
+    command_name: str = "velocity_command",
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Phạt tiến nhanh KHI được LỆNH xoay (nguồn lật ngang khi lượn vòng tốc độ cao).
+
+    Gia tốc hướng tâm ≈ vy · wz làm robot lật roll khi vừa phóng vừa bẻ lái. Mục tiêu:
+    "được lệnh xoay thì chậm lại". Phạt (vy_THỰC · wz_LỆNH)² — DÙNG weight ÂM.
+
+    QUAN TRỌNG — dùng wz_LỆNH, KHÔNG dùng wz_thực:
+      wz_thực lúc đầu train chứa rung lắc vô ý (noise) → (vy·wz_thực)² phạt cả khi
+      robot CHỈ muốn đi thẳng mà bị lắc → policy né bằng cách KHÔNG tiến (vy→0) →
+      không bao giờ học được vy. Dùng wz_LỆNH: lệnh đi thẳng (wz_cmd=0) ⇒ phạt=0 ⇒
+      vy học tự do; chỉ khi LỆNH xoay mới phạt tốc tiến (thứ robot điều khiển được).
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+    vy = asset.data.root_lin_vel_b[:, 1]                          # forward = body +Y
+    wz_cmd = env.command_manager.get_command(command_name)[:, 2]  # yaw rate LỆNH
+    return torch.square(vy * wz_cmd)

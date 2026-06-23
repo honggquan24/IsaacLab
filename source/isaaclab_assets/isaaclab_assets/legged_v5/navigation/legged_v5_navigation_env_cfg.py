@@ -112,13 +112,14 @@ class NavActionCfg:
 
     locomotion = PreTrainedPolicyActionCfg(
         asset_name="robot",
-        policy_path="source/isaaclab_assets/isaaclab_assets/legged_v5/logs/legged_v5_wheel_mimic_2000ep/exported/policy.pt",  # locomotion 2000 iter đã export
+        policy_path="source/isaaclab_assets/isaaclab_assets/legged_v5/logs/legged_v5_wheel_mimic/exported/policy.pt",  # locomotion 2000 iter đã export
         low_level_decimation=2,         # khớp decimation=2 lúc train locomotion (100 Hz)
         low_level_actions=LowLevelActionCfg(),   # leg_pos (mimic) + wheel_vel của V5
         low_level_observations=LowLevelObsCfg(),
-        # vy/wz tối đa = ±0.5 KHỚP dải train low-level. Trước để (0,1,1) → tầng cao phát
-        # lệnh tới 1.0 (gấp 2× dải train) → low-level OOD → robot ngã (bad_orientation 74%).
-        command_scale=(0.0, 0.5, 0.5),
+        # KHỚP ĐÚNG dải train low-level: vy ±0.5, wz ±0.3 (low-level CHỈ train tới wz 0.3).
+        # Trước để (0,1,1) → lệnh tới 1.0 (2× dải) → ngã 74%. Rồi (0,0.5,0.5) → wz vẫn vượt
+        # (0.5 > 0.3 train, 1.7×) → low-level OOD trục xoay = trục gây lật ngang → ngã 60%.
+        command_scale=(0.0, 0.5, 0.3),
         debug_vis=False,   # tắt mũi tên vận tốc (bị xoay 90°X chĩa lên trời, gây hiểu nhầm) — chỉ giữ chấm đỏ đích
     )
 

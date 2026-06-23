@@ -5,8 +5,8 @@ KHÔNG sửa log gốc, chỉ đọc file events.* và ghi ra thư mục con rep
 
 Chạy:
     python source/isaaclab_assets/isaaclab_assets/legged_v5/tools/report_curves.py \
-        --logdir logs/rsl_rl/legged_v5_wheel_mimic/2026-06-15_19-24-41 \
-        --max_step 2000
+        --logdir logs/rsl_rl/legged_v5_wheel_mimic/2026-06-18_05-53-51 \
+        --max_step 600
 """
 import argparse
 import csv
@@ -68,36 +68,32 @@ def main():
             print(line)
             f.write(line + "\n")
 
-    # ── 3) Hình gộp ───────────────────────────────────────────────────────────
-    def plot_group(fname, title, tags_sel):
-        plt.figure(figsize=(8, 5))
-        for t in tags_sel:
-            if t not in data:
-                continue
-            s = clip(data[t], args.max_step)
-            if not s:
-                continue
-            xs, ys = zip(*s)
-            plt.plot(xs, ys, label=t.split("/")[-1], linewidth=1.2)
-        plt.xlabel("Iteration"); plt.title(title); plt.legend(fontsize=8)
-        plt.grid(alpha=0.3); plt.tight_layout()
-        plt.savefig(os.path.join(outdir, fname), dpi=150)
+    # ── 3) Hình: MỖI metric MỘT biểu đồ riêng ─────────────────────────────────
+    figdir = os.path.join(outdir, "figs")
+    os.makedirs(figdir, exist_ok=True)
+
+    def safe_name(tag):
+        # "Episode_Reward/track_lin_vel_y_exp" -> "Episode_Reward__track_lin_vel_y_exp"
+        return tag.replace("/", "__").replace(" ", "_")
+
+    n = 0
+    for t in tags:
+        s = clip(data[t], args.max_step)
+        if not s:
+            continue
+        xs, ys = zip(*s)
+        plt.figure(figsize=(7, 4))
+        plt.plot(xs, ys, linewidth=1.3, color="#1f77b4")
+        plt.xlabel("Iteration")
+        plt.ylabel(t.split("/")[-1])
+        plt.title(t)
+        plt.grid(alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(os.path.join(figdir, safe_name(t) + ".png"), dpi=150)
         plt.close()
+        n += 1
 
-    plot_group("fig_progress.png", "Reward & Episode length",
-               ["Train/mean_reward", "Train/mean_episode_length"])
-    plot_group("fig_terminations.png", "Episode terminations",
-               [t for t in tags if t.startswith("Episode_Termination/")])
-    plot_group("fig_tracking.png", "Tracking errors",
-               ["Metrics/velocity_command/error_vel_xy",
-                "Metrics/velocity_command/error_vel_yaw",
-                "Metrics/height_command/position_error"])
-    plot_group("fig_reward_terms.png", "Reward terms",
-               [t for t in tags if t.startswith("Episode_Reward/")])
-    plot_group("fig_losses.png", "PPO losses",
-               ["Loss/value_function", "Loss/surrogate", "Loss/entropy"])
-
-    print(f"\nĐã ghi: {csv_path}\n        {summary_path}\n        5 hình PNG trong {outdir}")
+    print(f"\nĐã ghi: {csv_path}\n        {summary_path}\n        {n} hình PNG (mỗi metric 1 file) trong {figdir}")
 
 
 if __name__ == "__main__":

@@ -18,7 +18,7 @@ import math
 
 import isaaclab.sim as sim_utils
 from isaaclab.assets import Articulation, AssetBaseCfg
-from isaaclab.sensors import ContactSensorCfg
+from isaaclab.sensors import ContactSensorCfg, CameraCfg
 from isaaclab.envs import ManagerBasedRLEnvCfg
 from isaaclab.managers import (
     EventTermCfg,
@@ -81,6 +81,25 @@ class LeggedV5SceneCfg(InteractiveSceneCfg):
         track_air_time=False,
     )
 
+    follow_cam: CameraCfg = CameraCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/Robot/Robot/base/follow_cam",
+        update_period=0.0,          # update mỗi bước sim (= dt)
+        height=480,
+        width=640,
+        data_types=["rgb"],
+        spawn=sim_utils.PinholeCameraCfg(
+            focal_length=12.0,
+            focus_distance=400.0,
+            horizontal_aperture=20.955,
+            clipping_range=(0.05, 200.0),
+        ),
+        offset=CameraCfg.OffsetCfg(
+            pos=(0.15, 0.2, 0.25),  # 0.35m trước mặt, 0.25m trên base
+            rot=(0.9659, 0.0, -0.2588, 0.0),  # pitch -30° (quaternion wxyz)
+            convention="ros",
+        ),
+    )
+
 
 # ─────────────────────────── Actions ──────────────────────────────────────────
 
@@ -111,8 +130,9 @@ class CommandsCfg:
 
     velocity_command = commands.UniformVelocityCommandCfg(
         asset_name="robot",
-        resampling_time_range=(3.0, 5.0),
-        rel_standing_envs=0.02,   
+        resampling_time_range=(3.0, 5.0),   # đủ dài để robot KỊP đạt tốc rồi ổn định mới đổi lệnh.
+        # (0.5s quá ngắn: balancer chưa kịp gia tốc đã đổi lệnh → track_lin_vel thành nhiễu → KHÔNG học được vy)
+        rel_standing_envs=0.02,    
         heading_command=False,
         debug_vis=False,
         ranges=commands.UniformVelocityCommandCfg.Ranges(
@@ -367,6 +387,19 @@ class RewardCfg:
         func=mdp.rewards.hip_symmetry_l2,
         weight=-10.0,
     )
+
+    # Khi KHÔNG lệnh xoay (wz≈0) → khuyến khích 2 bánh quay đều nhau (đi thẳng, bớt trôi ngang).
+    # GATE theo wz: chỉ phạt lúc đi thẳng, KHÔNG cản xoay (xoay = chênh tốc 2 bánh).
+    # right_sign=-1 BẮT BUỘC: teleop cho thấy TỊNH TIẾN = 2 bánh NGƯỢC DẤU raw
+    # (vd vy=-0.5 → L=+15, R=-16). Nếu để +1 thì (ω_L-ω_R)² trên raw ≈ 31² → phạt ~48
+    # mỗi lần tiến/lùi → robot bỏ tịnh tiến VÀ mất luôn khả năng lái bánh giữ pitch.
+    # right_sign=-1 → tiến/lùi thành cùng dấu chuẩn hoá → diff≈0 → hết phạt.
+    wheel_symmetry = RewardTermCfg(
+        func=mdp.rewards.wheel_speed_symmetry_l2,
+        weight=-0.05,
+        params={"command_name": "velocity_command", "wz_gate": 0.05, "right_sign": -1.0},
+    )
+
 
     # Khi lệnh vận tốc ≈ 0 → phạt hip lệch khỏi tư thế mặc định (giữ 2 chân đều, đứng yên)
     stand_still = RewardTermCfg(

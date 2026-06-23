@@ -11,8 +11,8 @@ import glob
 import numpy as np
 from tensorboard.backend.event_processing import event_accumulator as ea
 
-LOG = "source/isaaclab_assets/isaaclab_assets/legged_v5/logs/legged_v5_wheel_mimic_2000ep"
-MAXSTEP = 2000
+LOG = "source/isaaclab_assets/isaaclab_assets/legged_v5/logs/2026-06-18_02-19-07"
+MAXSTEP = 3500
 WIN = 11  # cửa sổ trung bình trượt (số iter)
 
 acc = ea.EventAccumulator(sorted(glob.glob(f"{LOG}/events.out.tfevents.*"))[0],
