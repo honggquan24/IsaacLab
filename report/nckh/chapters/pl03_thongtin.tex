@@ -1,0 +1,115 @@
+% =============================================
+% File: chapters/pl03_thongtin.tex
+% Mẫu PL03 — Thông tin kết quả nghiên cứu
+% =============================================
+
+\phantomsection
+\addcontentsline{toc}{chapter}{Thông tin kết quả nghiên cứu}
+
+{\fontsize{13pt}{15pt}\selectfont
+
+\vspace{0.2cm}
+\noindent BỘ GIÁO DỤC VÀ ĐÀO TẠO\\[0.05cm]
+\noindent\textbf{TRƯỜNG ĐH CÔNG NGHỆ KỸ THUẬT TP.HCM}
+
+\vspace{0.3cm}
+\begin{center}
+    {\bfseries THÔNG TIN KẾT QUẢ NGHIÊN CỨU CỦA ĐỀ TÀI}
+\end{center}
+
+\vspace{0.1cm}
+\noindent\textbf{1. Thông tin chung:}
+
+\vspace{0.1cm}
+\noindent- Tên đề tài: \textit{ROBOT TỰ CÂN BẰNG ĐA BẬC TỰ DO}
+
+\vspace{0.15cm}
+\noindent- Chủ nhiệm đề tài: \textbf{Trần Minh Cương} \hfill Mã số SV: \underline{23134007}
+
+\vspace{0.1cm}
+\noindent- Lớp: \underline{\quad 23134B \quad} \hfill Khoa: \underline{\quad Cơ khí chế tạo máy \quad}
+
+\vspace{0.2cm}
+\noindent- Thành viên đề tài:
+
+\vspace{0.1cm}
+% Cột Khoa dùng \raggedright để không xuống dòng giữa chữ
+% Tổng: 3.0 + 2.0 + 3.8 + 4.7 = 13.5cm
+\noindent\begin{tabular}{|p{0.20\linewidth}|p{0.15\linewidth}|p{0.15\linewidth}|p{0.40\linewidth}|}
+\hline
+\textbf{Họ và tên} & \textbf{MSSV} & \textbf{Khoa} & \textbf{Điện thoại, email} \\
+\hline
+Nguyễn Anh Hào       & 23134015 & Cơ khí chế tạo máy & 0379667093, 23134015@student.hcmute.edu.vn \\
+\hline
+Nguyễn Đình Anh Khôi & 21146256 & Cơ khí chế tạo máy & 0903487536, 21146256@student.hcmute.edu.vn \\
+\hline
+Phùng Mạnh Thắng     & 21146316 & Cơ khí chế tạo máy & 0961992800, 21146316@student.hcmute.edu.vn \\
+\hline
+Võ Hồng Quân         & 22134012 & Cơ khí chế tạo máy & 0363645485, 22134012@student.hcmute.edu.vn \\
+\hline
+\end{tabular}
+
+\vspace{0.15cm}
+\noindent- Người hướng dẫn: TS. Cái Việt Anh Dũng
+
+\vspace{0.2cm}
+\noindent\textbf{2. Mục tiêu đề tài:} Xây dựng hệ thống điều khiển PI kết hợp ANN để điều
+khiển thích nghi động cơ DC NF5475 trên vi điều khiển ESP32; đồng thời phân tích động học
+cơ cấu 5-bar parallel làm nền tảng cho điều khiển chân robot bipedal wheel.
+
+\vspace{0.2cm}
+\noindent\textbf{3. Tính mới và sáng tạo:} Đề tài kết hợp quy trình nhận dạng hàm truyền
+động cơ bằng MATLAB (\texttt{tfest}), tối ưu tham số PI bằng giải thuật di truyền (GA) và
+xây dựng mạng ANN từ đầu (không dùng framework) để dự đoán $K_p$, $K_i$ thích nghi theo
+sai số vận tốc thực, triển khai trực tiếp trên ESP32. Đây là quy trình hoàn chỉnh và có
+thể tái hiện, phù hợp với điều kiện nghiên cứu sinh viên.
+
+\vspace{0.2cm}
+\noindent\textbf{4. Kết quả nghiên cứu:}
+\begin{itemize}[leftmargin=0.5cm, topsep=2pt, itemsep=0pt]
+    \item Hàm truyền động cơ NF5475 được nhận dạng với độ chính xác 95,36\%.
+    \item Bộ PI tối ưu bằng GA: độ vọt lố $<5\%$, thời gian xác lập $<0{,}5$~s.
+    \item Mạng ANN (2 lớp ẩn, 1000 epochs) hội tụ, dự đoán $K_p$, $K_i$ trên 9 mức
+    setpoint từ 250 đến 2250 RPM.
+    \item Hệ thống ổn định trên ESP32 với chu kỳ điều khiển $\Delta t = 0{,}01$~s.
+    \item Phân tích động học thuận/nghịch và Jacobian cơ cấu 5-bar parallel
+    ($A_1A_2 = 105$~mm, $L_{act} = 100$~mm, $L_{pas} = 180$~mm).
+\end{itemize}
+
+\vspace{0.15cm}
+\noindent\textbf{5. Đóng góp về mặt giáo dục và đào tạo, kinh tế -- xã hội, an ninh, quốc
+phòng và khả năng áp dụng của đề tài:} Đề tài cung cấp quy trình nghiên cứu hoàn chỉnh từ
+lý thuyết đến thực nghiệm về điều khiển thích nghi, có giá trị giáo dục cao cho sinh viên
+ngành Kỹ thuật. Kết quả có thể ứng dụng trong phát triển robot phục vụ và hỗ trợ y tế. Chi
+phí phần cứng thấp (ESP32, động cơ DC) giúp dễ nhân rộng trong các cơ sở đào tạo.
+
+\vspace{0.15cm}
+\noindent\textbf{6. Công bố khoa học của SV từ kết quả nghiên cứu của đề tài}
+\textit{(ghi rõ tên tạp chí nếu có) hoặc nhận xét, đánh giá của cơ sở đã áp dụng các kết
+quả nghiên cứu (nếu có):} Chưa có công bố.
+
+% ---- Khối ký tên SV — bên phải ----
+\begin{flushright}
+    Ngày \underline{\quad} tháng \underline{\quad} năm 2026 \\[0.3cm]
+    \textbf{SV chịu trách nhiệm chính thực hiện đề tài} \\[0.15cm]
+    \textit{(ký, họ và tên)} \\[1.8cm]
+\end{flushright}
+
+% ---- Nhận xét người hướng dẫn ----
+\vspace{0.1cm}
+\noindent\textbf{Nhận xét của người hướng dẫn về những đóng góp khoa học của SV thực hiện đề tài}
+\textit{:}
+
+\vspace{0.2cm}
+\noindent\dotfill\\[0.55cm]
+\noindent\dotfill
+
+% ---- Khối ký tên Người hướng dẫn — bên phải ----
+\vspace{0.5cm}
+\begin{flushright}
+    Ngày \underline{\quad} tháng \underline{\quad} năm 2026 \\[0.3cm]
+    \textbf{Người hướng dẫn} \\[0.15cm]
+    \textit{(ký, họ và tên)} \\[1.8cm]
+\end{flushright}
+
+}

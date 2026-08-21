@@ -1,0 +1,1318 @@
+% =============================================
+% File: chapters/theoretical_background.tex
+% Chương 1: Cơ sở lý thuyết
+% =============================================
+
+\chapter{CƠ SỞ LÝ THUYẾT}
+\label{chap:cosolythuyet}
+
+Chương này trình bày các kiến thức nền tảng phục vụ cho quá trình nghiên cứu,
+bao gồm: đặc tính của động cơ DC NF5475, nền tảng vi điều khiển ESP32, lý thuyết
+bộ điều khiển PID, mạng nơron nhân tạo và động học cơ cấu 5-bar parallel.
+
+
+
+% ==============================================
+\section{Động cơ DC NF5475}
+% ==============================================
+
+\subsection{Tổng quan}
+
+Động cơ NISCA NF5475 là động cơ điện có encoder. Loại động cơ này được sử dụng khá phổ biến trong các mô hình robot di động, robot tự cân bằng, máy CNC mini và các hệ truyền động yêu cầu điều khiển tốc độ hoặc vị trí tương đối chính xác.
+
+Về cấu tạo, NF5475 sử dụng nam châm vĩnh cửu và rotor quay bên trong stator. Một số phiên bản được tích hợp encoder quang ở phía sau động cơ, cho phép đo tốc độ quay và chiều quay của trục. Tín hiệu encoder thường gồm hai kênh A và B lệch pha nhau, nhờ đó bộ điều khiển có thể xác định được số xung, tốc độ góc và chiều quay của động cơ.
+
+Ưu điểm của động cơ NF5475 là kết cấu tương đối chắc chắn, có sẵn encoder phản hồi, tốc độ quay cao và dễ điều khiển bằng các mạch cầu H công suất như BTS7960. Encoder tích hợp giúp nâng cao độ chính xác khi điều khiển vận tốc, đặc biệt phù hợp với các bài toán điều khiển PID cho robot hai bánh tự cân bằng.
+
+Từ các đặc điểm trên, động cơ NISCA NF5475 được đánh giá là phù hợp cho mô hình robot tự cân bằng quy mô nhỏ và trung bình, đặc biệt trong các ứng dụng cần điều khiển vận tốc bánh xe bằng tín hiệu phản hồi encoder. Việc sử dụng động cơ này giúp hệ thống có khả năng điều khiển vòng kín tốt hơn so với động cơ DC không encoder, đồng thời vẫn đảm bảo tính kinh tế và dễ triển khai trong mô hình nghiên cứu sinh viên.
+\subsection{Thông số kỹ thuật}
+
+Các thông số điện cơ chính của NF5475 được tóm tắt trong Bảng~\ref{tab:nf5475_spec}.
+
+\begin{table}[H]
+\centering
+\caption{Thông số tham khảo của động cơ NISCA NF5475}
+\label{tab:nf5475_specs}
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Thông số} & \textbf{Giá trị tham khảo} \\ \hline
+Mã động cơ & NISCA NF5475 / NF5475E \\ \hline
+Loại động cơ & Động cơ DC servo có encoder \\ \hline
+Điện áp làm việc & 12--24 VDC\\ \hline
+Công suất & 32--40 W \\ \hline
+Tốc độ không tải & 2500--4500 RPM \\ \hline
+Encoder & 200 xung/vòng, 2 kênh A và B \\ \hline
+Điện áp encoder & 5 VDC \\ \hline
+Khối lượng & 700 g \\ \hline
+Ổ đỡ trục & Bạc đạn hai phía \\ \hline
+Nam châm & Nam châm vĩnh cửu 4 cực \\ \hline
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{figure/motor_datasheet.png}
+    \caption{Thông số động cơ NF5475}
+    \label{fig:Thông số động cơ NF5475}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{figure/Kichthuocmotor.png}
+    \caption{Kích thước động cơ NF5475}
+    \label{fig:Kích thước động cơ NF5475}
+\end{figure}
+
+
+\subsection{Encoder}
+
+Encoder là bộ phận phản hồi được gắn ở phía sau động cơ, có nhiệm vụ đo chuyển động quay của trục động cơ. Đối với động cơ NF5475, encoder thường là loại encoder quang hai kênh, gồm hai tín hiệu xung A và B lệch pha nhau $90^\circ$. Nhờ sự lệch pha này, bộ điều khiển có thể xác định được tốc độ quay, vị trí góc tương đối và chiều quay của động cơ.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.65\textwidth]{figure/nguyenly_encoder.png}
+    \caption{Nguyên lý tín hiệu hai kênh A và B của encoder xung}
+    \label{fig:encoder_ab_signal}
+\end{figure}
+
+Khi trục động cơ quay, encoder phát ra các xung điện áp trên hai kênh A và B. Nếu tín hiệu A sớm pha hơn tín hiệu B, động cơ được xác định quay theo một chiều. Ngược lại, nếu tín hiệu B sớm pha hơn tín hiệu A, động cơ quay theo chiều ngược lại. Nhờ đó, encoder không chỉ đo được số vòng quay mà còn xác định được hướng quay của động cơ.
+
+Giả sử encoder có độ phân giải $N$ xung/vòng, số xung đếm được trong một khoảng thời gian là $\Delta n$, thời gian lấy mẫu là $\Delta t$, ta có thể xác định tốc độ quay của động cơ theo công thức:
+
+\begin{equation}
+    n = \frac{\Delta n}{N \cdot \Delta t}
+\end{equation}
+
+Trong đó:
+\begin{itemize}
+    \item $n$ là tốc độ quay của động cơ, đơn vị vòng/giây;
+    \item $\Delta n$ là số xung encoder đếm được trong thời gian lấy mẫu;
+    \item $N$ là số xung encoder trên một vòng quay;
+    \item $\Delta t$ là chu kỳ lấy mẫu, đơn vị giây.
+\end{itemize}
+
+Tốc độ quay của động cơ theo đơn vị vòng/phút được xác định như sau:
+
+\begin{equation}
+    n_{\text{rpm}} = \frac{60 \cdot \Delta n}{N \cdot \Delta t}
+\end{equation}
+
+Ngoài ra, vận tốc góc của trục động cơ có thể được tính theo công thức:
+
+\begin{equation}
+    \omega = \frac{2\pi \cdot \Delta n}{N \cdot \Delta t}
+\end{equation}
+
+Trong đó $\omega$ là vận tốc góc của động cơ, đơn vị rad/s.
+
+Nếu xét vị trí góc tương đối của trục động cơ, góc quay $\theta$ được xác định dựa trên tổng số xung encoder đếm được:
+
+\begin{equation}
+    \theta = \frac{2\pi \cdot n_p}{N}
+\end{equation}
+
+Trong đó:
+\begin{itemize}
+    \item $\theta$ là góc quay của trục động cơ, đơn vị rad;
+    \item $n_p$ là tổng số xung encoder đã đếm được;
+    \item $N$ là số xung encoder trên một vòng quay.
+\end{itemize}
+
+
+Nhờ encoder, hệ thống điều khiển có thể biết được tốc độ quay thực tế của bánh xe, từ đó hiệu chỉnh sai số giữa giá trị mong muốn và giá trị thực tế. Điều này giúp robot tự cân bằng phản ứng ổn định hơn khi có nhiễu, khi tải trọng thay đổi hoặc khi robot di chuyển trên các bề mặt khác nhau.
+
+
+% ==============================================
+\section{Vi điều khiển ESP32 WROOM}
+% ==============================================
+
+\subsection{Giới thiệu}
+
+ESP32 WROOM-32 là module vi điều khiển 32-bit do Espressif Systems phát triển, được tích hợp sẵn Wi-Fi và Bluetooth. Module này thường được sử dụng trong các hệ thống điều khiển nhúng, IoT và robot di động nhờ khả năng xử lý tốt, nhiều chân vào/ra số và hỗ trợ các ngoại vi phần cứng cần thiết cho điều khiển động cơ.
+
+Trong đề tài này, ESP32 WROOM-32 được sử dụng làm bộ điều khiển trung tâm để đọc tín hiệu encoder, xử lý thuật toán điều khiển và xuất tín hiệu PWM điều khiển mạch công suất động cơ. Vi điều khiển được lập trình thông qua môi trường Arduino IDE, giúp quá trình phát triển chương trình thuận tiện và dễ kiểm tra thực nghiệm.
+
+Một số đặc điểm chính của ESP32 WROOM-32 gồm:
+
+\begin{itemize}
+    \item CPU: Xtensa LX6 dual-core, tần số tối đa 240 MHz.
+    \item Bộ nhớ Flash: 4 MB.
+    \item RAM: 520 KB.
+    \item Hỗ trợ PWM phần cứng thông qua ngoại vi LEDC.
+    \item Hỗ trợ ngắt ngoài trên các chân GPIO để đọc tín hiệu encoder.
+    \item Tích hợp Wi-Fi và Bluetooth, thuận tiện cho việc mở rộng giao tiếp không dây.
+\end{itemize}
+
+Đối với bài toán điều khiển động cơ trong robot tự cân bằng, ESP32 có khả năng đáp ứng tốt do có tốc độ xử lý cao, hỗ trợ tạo PWM ổn định và có thể đọc xung encoder bằng ngắt ngoài. Điều này giúp hệ thống đo tốc độ quay của động cơ và điều khiển phản hồi theo thời gian thực.
+
+\subsection{Cấu hình chân sử dụng}
+
+Trong đề tài này, ESP32 WROOM-32 được cấu hình để giao tiếp với mạch điều khiển động cơ và encoder. Các chân GPIO được lựa chọn dựa trên khả năng xuất PWM, đọc tín hiệu số và hỗ trợ ngắt ngoài.
+
+\begin{table}[H]
+\centering
+\caption{Cấu hình chân sử dụng trên ESP32 WROOM-32}
+\label{tab:esp32_pin_config}
+\begin{tabular}{|c|c|l|}
+\hline
+\textbf{Chân ESP32} & \textbf{Ký hiệu} & \textbf{Chức năng} \\ \hline
+GPIO 18 & R\_PWM & Xuất tín hiệu PWM điều khiển chiều quay thứ nhất của động cơ \\ \hline
+GPIO 19 & L\_PWM & Xuất tín hiệu PWM điều khiển chiều quay thứ hai của động cơ \\ \hline
+GPIO 25 & phase\_a & Đọc tín hiệu kênh A của encoder \\ \hline
+GPIO 26 & phase\_b & Đọc tín hiệu kênh B của encoder \\ \hline
+5V0 & VCC & Cấp nguồn 5 V cho encoder \\ \hline
+GND & GND & Nối đất chung cho ESP32, encoder và mạch công suất \\ \hline
+\end{tabular}
+\end{table}
+
+Chân \texttt{phase\_a} được cấu hình ở chế độ ngắt ngoài để đếm xung encoder. Trong đề tài này, encoder được đọc theo chế độ $1x$, tức là chỉ xét một cạnh của tín hiệu kênh A. Khi có cạnh xung xuất hiện trên kênh A, chương trình sẽ kiểm tra trạng thái của kênh B để xác định chiều quay của động cơ.
+
+Tín hiệu PWM được xuất từ ESP32 bằng ngoại vi LEDC với độ phân giải 8-bit. Khi đó, giá trị điều khiển PWM nằm trong khoảng từ $0$ đến $255$. Để biểu diễn cả hai chiều quay của động cơ, chương trình sử dụng biến điều khiển có miền giá trị:
+
+\begin{equation}
+    u \in [-255, 255]
+\end{equation}
+
+Trong đó:
+\begin{itemize}
+    \item $u > 0$: động cơ quay theo chiều thuận;
+    \item $u < 0$: động cơ quay theo chiều ngược;
+    \item $u = 0$: động cơ dừng.
+\end{itemize}
+
+Khi $u > 0$, tín hiệu PWM được xuất ra chân \texttt{R\_PWM}, trong khi chân \texttt{L\_PWM} được đặt ở mức thấp. Ngược lại, khi $u < 0$, tín hiệu PWM được xuất ra chân \texttt{L\_PWM}, còn chân \texttt{R\_PWM} được đặt ở mức thấp. Cách điều khiển này phù hợp với các mạch cầu H như BTS7960, cho phép điều khiển tốc độ và chiều quay của động cơ bằng hai chân PWM riêng biệt.
+
+
+% ==============================================
+\section{Bộ điều khiển PID}
+% ==============================================
+
+\subsection{Nguyên lý hoạt động}
+
+Bộ điều khiển PID, viết tắt của Proportional--Integral--Derivative, là bộ điều khiển vòng kín có phản hồi. Nhiệm vụ của bộ điều khiển là tạo ra tín hiệu điều khiển $u(t)$ sao cho ngõ ra thực tế $y(t)$ bám theo tín hiệu đặt $r(t)$.
+
+Sai số điều khiển được xác định bởi:
+
+\begin{equation}
+    e(t) = r(t) - y(t)
+\end{equation}
+
+Trong đó:
+\begin{itemize}
+    \item $e(t)$ là sai số điều khiển tại thời điểm $t$;
+    \item $r(t)$ là giá trị đặt, hay còn gọi là setpoint;
+    \item $y(t)$ là giá trị ngõ ra thực tế đo được từ hệ thống.
+\end{itemize}
+
+Công thức tổng quát của bộ điều khiển PID trong miền thời gian được viết như sau:
+
+\begin{equation}
+    u(t) = K_P e(t) + K_I \int_{0}^{t} e(\tau)d\tau + K_D \frac{d e(t)}{dt}
+    \label{eq:pid_general}
+\end{equation}
+
+Trong đó:
+\begin{itemize}
+    \item $u(t)$ là tín hiệu điều khiển đầu ra;
+    \item $K_P$ là hệ số tỉ lệ;
+    \item $K_I$ là hệ số tích phân;
+    \item $K_D$ là hệ số vi phân.
+\end{itemize}
+
+Về bản chất, bộ điều khiển PID kết hợp ba thành phần điều khiển: khâu tỉ lệ, khâu tích phân và khâu vi phân. Mỗi thành phần có vai trò riêng trong việc cải thiện đáp ứng của hệ thống. Khâu tỉ lệ giúp hệ phản ứng nhanh với sai số hiện tại, khâu tích phân giúp loại bỏ sai số xác lập, còn khâu vi phân giúp dự đoán xu hướng thay đổi của sai số nhằm giảm vọt lố và tăng độ ổn định.
+
+Trong điều khiển động cơ DC có encoder, tín hiệu phản hồi có thể là tốc độ quay hoặc vị trí góc của trục động cơ. Bộ điều khiển sẽ so sánh giá trị đặt với giá trị thực tế, sau đó điều chỉnh tín hiệu PWM cấp cho mạch công suất để làm giảm sai số.
+
+\subsection{Vai trò từng khâu}
+
+Bộ điều khiển PID gồm ba khâu chính: khâu tỉ lệ P, khâu tích phân I và khâu vi phân D.
+
+\paragraph{Khâu tỉ lệ P}
+
+\begin{equation}
+    u_P(t) = K_P e(t)
+\end{equation}
+
+Khi $K_P$ tăng, hệ thống phản ứng nhanh hơn với sai số. Tuy nhiên, nếu $K_P$ quá lớn, hệ thống có thể xuất hiện dao động, độ vọt lố lớn hoặc mất ổn định. Trong điều khiển động cơ, khâu P giúp động cơ tăng hoặc giảm tốc nhanh hơn khi tốc độ thực tế khác với tốc độ đặt.
+
+\paragraph{Khâu tích phân I}
+
+\begin{equation}
+    u_I(t) = K_I \int_{0}^{t} e(\tau)d\tau
+\end{equation}
+
+Khâu I có tác dụng loại bỏ sai số xác lập, đặc biệt khi hệ thống chịu tải hoặc có ma sát. Tuy nhiên, nếu $K_I$ quá lớn, hệ thống có thể bị vọt lố lớn, đáp ứng chậm hơn và dễ xảy ra hiện tượng bão hòa tích phân. Vì vậy, trong thực tế thường cần giới hạn giá trị tích phân để tránh hiện tượng \textit{integral windup}.
+
+\paragraph{Khâu vi phân D}
+
+\begin{equation}
+    u_D(t) = K_D \frac{de(t)}{dt}
+\end{equation}
+
+Khâu D có tác dụng dự đoán xu hướng thay đổi của sai số, từ đó giúp hệ thống giảm vọt lố và ổn định nhanh hơn. Tuy nhiên, khâu D nhạy cảm với nhiễu đo lường, đặc biệt khi tín hiệu phản hồi từ encoder có độ phân giải thấp hoặc bị nhiễu xung. Do đó, trong điều khiển vận tốc động cơ, khâu D thường được giảm nhỏ hoặc loại bỏ.
+
+\begin{table}[H]
+\centering
+\caption{Ảnh hưởng của các hệ số PID đến đáp ứng hệ thống}
+\label{tab:pid_effect}
+\begin{tabular}{|c|p{5cm}|p{5cm}|}
+\hline
+\textbf{Khâu} & \textbf{Vai trò chính} & \textbf{Ảnh hưởng khi tăng hệ số} \\ \hline
+$K_P$ & Giảm sai số hiện tại, tăng tốc độ đáp ứng & Đáp ứng nhanh hơn, nhưng có thể tăng vọt lố và dao động \\ \hline
+$K_I$ & Loại bỏ sai số xác lập & Giảm sai số lâu dài, nhưng có thể làm tăng vọt lố và gây bão hòa tích phân \\ \hline
+$K_D$ & Dự đoán xu hướng thay đổi của sai số & Giảm vọt lố, tăng ổn định, nhưng nhạy cảm với nhiễu \\ \hline
+\end{tabular}
+\end{table}
+
+\subsection{Mô hình điều khiển động cơ trong đề tài}
+
+Trong đề tài này, động cơ DC có encoder được điều khiển theo cấu trúc hai vòng lặp. Vòng ngoài là bộ điều khiển vị trí, có nhiệm vụ tạo ra vận tốc đặt cho động cơ. Vòng trong là bộ điều khiển vận tốc, có nhiệm vụ điều chỉnh tín hiệu PWM sao cho vận tốc thực tế của động cơ bám theo vận tốc đặt.
+
+Cấu trúc điều khiển được mô tả như sau:
+
+\begin{itemize}
+    \item Vòng ngoài: bộ điều khiển PID vị trí, dùng để tính vận tốc đặt từ sai số vị trí.
+    \item Vòng trong: bộ điều khiển PI vận tốc, dùng để điều khiển tốc độ quay của động cơ.
+\end{itemize}
+
+Đối với vòng điều khiển vị trí, sai số vị trí được xác định bởi:
+
+\begin{equation}
+    e_{\theta}(t) = \theta_{\text{set}}(t) - \theta_{\text{real}}(t)
+\end{equation}
+
+Trong đó:
+\begin{itemize}
+    \item $e_{\theta}(t)$ là sai số vị trí;
+    \item $\theta_{\text{set}}(t)$ là vị trí góc mong muốn;
+    \item $\theta_{\text{real}}(t)$ là vị trí góc thực tế đo được từ encoder.
+\end{itemize}
+
+Bộ điều khiển PID vị trí sinh ra vận tốc đặt cho vòng trong:
+
+\begin{equation}
+    \omega_{\text{set}}(t)
+    =
+    K_{P\theta} e_{\theta}(t)
+    +
+    K_{I\theta} \int_{0}^{t} e_{\theta}(\tau)d\tau
+    +
+    K_{D\theta} \frac{d e_{\theta}(t)}{dt}
+\end{equation}
+
+Trong đó $\omega_{\text{set}}(t)$ là vận tốc góc đặt cho động cơ.
+
+Ở vòng điều khiển vận tốc, sai số vận tốc được tính bằng:
+
+\begin{equation}
+    e_{\omega}(t) = \omega_{\text{set}}(t) - \omega_{\text{real}}(t)
+\end{equation}
+
+Trong đó:
+\begin{itemize}
+    \item $e_{\omega}(t)$ là sai số vận tốc;
+    \item $\omega_{\text{set}}(t)$ là vận tốc góc đặt;
+    \item $\omega_{\text{real}}(t)$ là vận tốc góc thực tế đo được từ encoder.
+\end{itemize}
+
+Trong đề tài, vòng điều khiển vận tốc sử dụng bộ PI, tức là bỏ qua khâu vi phân và chọn $K_D = 0$. Khi đó, tín hiệu điều khiển vận tốc được xác định bởi:
+
+\begin{equation}
+    u_{\omega}(t)
+    =
+    K_{P\omega} e_{\omega}(t)
+    +
+    K_{I\omega} \int_{0}^{t} e_{\omega}(\tau)d\tau
+\end{equation}
+
+Tín hiệu $u_{\omega}(t)$ sau đó được giới hạn trong miền giá trị PWM:
+
+\begin{equation}
+    u_{\omega}(t) \in [-255, 255]
+\end{equation}
+
+Giá trị PWM dương tương ứng với một chiều quay của động cơ, giá trị PWM âm tương ứng với chiều quay ngược lại, còn giá trị bằng không tương ứng với trạng thái dừng.
+
+Để tránh hiện tượng bão hòa tích phân, khâu tích phân của bộ PI vận tốc được giới hạn trong khoảng:
+
+\begin{equation}
+    I_{\omega} \in [-1000, 1000]
+\end{equation}
+
+Khi đó, công thức điều khiển PI vận tốc có xét giới hạn tích phân được viết dưới dạng:
+
+\begin{equation}
+    u_{\omega}(t)
+    =
+    K_{P\omega} e_{\omega}(t)
+    +
+    K_{I\omega} I_{\omega}(t)
+\end{equation}
+
+với:
+
+\begin{equation}
+    I_{\omega}(t)
+    =
+    \text{sat}
+    \left(
+    \int_{0}^{t} e_{\omega}(\tau)d\tau,
+    -1000,
+    1000
+    \right)
+\end{equation}
+
+Trong đó hàm $\text{sat}(\cdot)$ là hàm giới hạn giá trị, được định nghĩa như sau:
+
+\begin{equation}
+\text{sat}(x,x_{\min},x_{\max}) =
+\begin{cases}
+x_{\max}, & x > x_{\max} \\
+x, & x_{\min} \leq x \leq x_{\max} \\
+x_{\min}, & x < x_{\min}
+\end{cases}
+\end{equation}
+
+Việc sử dụng cấu trúc hai vòng lặp giúp hệ thống điều khiển động cơ ổn định hơn. Vòng trong đảm bảo động cơ bám vận tốc đặt, trong khi vòng ngoài điều chỉnh vị trí hoặc góc quay theo yêu cầu. Cấu trúc này phù hợp với các hệ thống robot tự cân bằng, do robot cần phản ứng nhanh với sai số góc nghiêng và đồng thời cần kiểm soát tốt tốc độ quay của bánh xe.
+
+\begin{figure}[H]
+    \centering
+    % \includegraphics[width=0.9\textwidth]{pid_motor_control_block.png}
+    \caption{Sơ đồ khối cấu trúc điều khiển hai vòng lặp cho động cơ}
+    \label{fig:pid_motor_control_block}
+\end{figure}
+
+% ==============================================
+\section{Mạng Nơron Nhân Tạo (ANN)}
+% ==============================================
+
+\subsection{Tổng quan}
+
+Mạng Nơron Nhân Tạo (Artificial Neural Network, viết tắt là ANN) là mô hình
+tính toán được lấy cảm hứng từ hệ thần kinh sinh học, có khả năng học ánh xạ
+phi tuyến từ đầu vào đến đầu ra thông qua quá trình huấn luyện bằng dữ liệu.
+Trong đề tài, ANN được dùng cho bài toán \textbf{hồi quy} (regression): dự
+đoán giá trị $K_p$, $K_i$ từ trạng thái sai số vận tốc.
+
+
+\subsection{Cấu trúc mạng ANN}
+
+Mạng ANN gồm ba loại lớp: \textbf{lớp đầu vào} (input layer), một hoặc nhiều
+\textbf{lớp ẩn} (hidden layer) và \textbf{lớp đầu ra} (output layer). Tùy vào
+bài toán cụ thể, số lớp ẩn và số neuron mỗi lớp có thể điều chỉnh theo ý muốn.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.65\textwidth]{figure/ann_structure.png}
+    \caption{Kiến trúc tổng quát của mạng ANN fully connected}
+    \label{fig:ann_structure}
+\end{figure}
+
+Mỗi lớp ẩn gồm các nút (neuron), trong đó mỗi neuron kết nối với \textit{toàn
+bộ} neuron của lớp liền sau --- kiểu kết nối này gọi là lớp \textbf{fully
+connected} (Dense). Đầu ra của neuron thứ $j$ ở lớp $l$ được tính:
+\begin{equation}
+    a_j^{(l)} = \phi\!\left(\sum_{i} w_{ji}^{(l)}\, a_i^{(l-1)} + b_j^{(l)}\right)
+    \label{eq:neuron_output}
+\end{equation}
+trong đó $w_{ji}^{(l)}$ là trọng số, $b_j^{(l)}$ là bias, và $\phi(\cdot)$ là
+hàm kích hoạt.
+
+
+\subsection{Hàm kích hoạt}
+
+Hàm kích hoạt đưa tính phi tuyến vào mạng, cho phép ANN xấp xỉ các ánh xạ
+phức tạp. Đề tài sử dụng hai hàm kích hoạt khác nhau tùy mục đích:
+
+\begin{itemize}
+    \item \textbf{ReLU (Rectified Linear Unit):} Dùng trong mạng ANN dự đoán
+    tham số PI. Giá trị âm được đặt về 0, giá trị dương giữ nguyên:
+    \begin{equation}
+        f(x) = \max(0,\; x)
+        \label{eq:relu}
+    \end{equation}
+    Ưu điểm: đạo hàm bằng 1 với $x > 0$, tránh \textit{vanishing gradient};
+    tính toán đơn giản, phù hợp triển khai trên phần cứng nhúng.
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=0.45\textwidth]{figure/relu_plot.png}
+        \caption{Đồ thị hàm kích hoạt ReLU}
+        \label{fig:relu_plot}
+    \end{figure}
+
+    \item \textbf{ELU (Exponential Linear Unit):} Dùng trong mạng Actor--Critic
+    của PPO huấn luyện trên Isaac Lab. ELU cho phép đầu ra âm ở vùng $x \leq 0$:
+    \begin{equation}
+        f(x) =
+        \begin{cases}
+            x & x > 0 \\
+            \alpha\,(e^x - 1) & x \leq 0
+        \end{cases}
+        \label{eq:elu}
+    \end{equation}
+    với $\alpha = 1$. So với ReLU, ELU tránh hiện tượng \textit{dying neuron}
+    và cho gradient mượt hơn ở vùng âm, phù hợp với bài toán điều khiển
+    locomotion có không gian trạng thái liên tục.
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=0.65\textwidth]{figure/elu_plot.png}
+        \caption{Đồ thị hàm kích hoạt ELU ($\alpha = 1$)}
+        \label{fig:elu_plot}
+    \end{figure}
+
+    \item \textbf{Linear:} Dùng ở lớp đầu ra để đầu ra không bị ràng buộc về
+    khoảng giá trị:
+    \begin{equation}
+        f(x) = x
+        \label{eq:linear_act}
+    \end{equation}
+\end{itemize}
+
+
+\subsection{Lớp Dense, Regularization và Dropout}
+
+Mỗi lớp Dense thực hiện phép biến đổi affine:
+\begin{equation}
+    \mathbf{z}^{(l)} = \mathbf{W}^{(l)}\mathbf{a}^{(l-1)} + \mathbf{b}^{(l)},
+    \qquad \mathbf{a}^{(l)} = \phi\!\left(\mathbf{z}^{(l)}\right)
+    \label{eq:dense}
+\end{equation}
+
+
+Để chống \textit{overfitting}, đề tài áp dụng đồng thời hai kỹ thuật:
+
+\begin{itemize}
+    \item \textbf{L2 Regularization:} Thêm số hạng phạt vào hàm loss tỉ lệ
+    với bình phương trọng số:
+    \begin{equation}
+        \mathcal{L}_{reg} = \mathcal{L}
+        + \frac{\lambda}{2}\sum_{l}\|\mathbf{W}^{(l)}\|_F^2
+        \label{eq:l2}
+    \end{equation}
+    với $\lambda = 5\times10^{-4}$. L2 buộc trọng số nhỏ lại, tránh mạng phụ
+    thuộc quá mức vào một nhóm đặc trưng cụ thể.
+
+    \item \textbf{Dropout:} Trong mỗi bước huấn luyện, mỗi neuron ở lớp ẩn
+    được vô hiệu hóa ngẫu nhiên với xác suất $p = 0{,}1$, buộc mạng học các
+    đặc trưng phân tán. Khi inference, toàn bộ neuron được kích hoạt và đầu ra
+    nhân với $(1-p)$ để bù xác suất.
+\end{itemize}
+
+
+\subsection{Hàm loss và Optimizer}
+
+\textbf{Hàm loss MSE (Mean Squared Error):}
+
+Vì bài toán là hồi quy liên tục, hàm loss được chọn là MSE --- đo trung bình
+bình phương sai lệch giữa giá trị dự đoán $\hat{y}_i$ và nhãn thực $y_i$:
+\begin{equation}
+    \mathcal{L}_{MSE} = \frac{1}{n}\sum_{i=1}^{n}\left(y_i - \hat{y}_i\right)^2
+    \label{eq:mse}
+\end{equation}
+MSE phạt nặng các sai lệch lớn (do bình phương), phù hợp khi cần độ chính xác
+cao trên toàn dải setpoint.
+
+\vspace{6pt}
+\textbf{Optimizer Adam (Adaptive Moment Estimation):}
+
+Adam kết hợp Momentum và RMSProp, tự động điều chỉnh learning rate cho từng
+tham số. Tại bước cập nhật $t$:
+\begin{align}
+    m_t &= \beta_1 m_{t-1} + (1-\beta_1)\,g_t \label{eq:adam_m}\\
+    v_t &= \beta_2 v_{t-1} + (1-\beta_2)\,g_t^2 \label{eq:adam_v}\\
+    \hat{m}_t &= \frac{m_t}{1-\beta_1^t}, \qquad
+    \hat{v}_t = \frac{v_t}{1-\beta_2^t} \label{eq:adam_bias}\\
+    \theta_t &= \theta_{t-1}
+    - \frac{\alpha}{\sqrt{\hat{v}_t}+\varepsilon}\,\hat{m}_t
+    \label{eq:adam_update}
+\end{align}
+trong đó $g_t = \nabla_\theta \mathcal{L}$ là gradient tại bước $t$,
+$\beta_1 = 0{,}9$, $\beta_2 = 0{,}999$, $\varepsilon = 10^{-8}$ là giá trị
+mặc định. Đề tài sử dụng $\alpha = 2\times10^{-3}$ với decay $= 3\times10^{-4}$
+để learning rate giảm dần, giúp hội tụ ổn định về cuối quá trình huấn luyện.
+
+
+% ==============================================
+\section{Cơ cấu 5-bar Parallel}
+% ==============================================
+
+\subsection{Giới thiệu}
+
+Cơ cấu 5-bar parallel là cơ cấu phẳng khép kín gồm 5 thanh nối, trong đó 2
+khớp chủ động ($A_1$, $A_2$) được truyền động bởi 2 động cơ độc lập.
+So với cơ cấu nối tiếp 3 bậc tự do, cơ cấu 5-bar parallel giúp:
+
+\begin{itemize}
+    \item Giảm số động cơ cần điều khiển (từ 3 xuống 2 mỗi chân).
+    \item Tăng độ cứng vững cơ học.
+    \item Giảm momen quán tính, nâng cao khả năng phản hồi.
+\end{itemize}
+
+Cơ cấu được minh họa như hình dưới đây:
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.75\linewidth]{figure/5_bar_linkage.png}
+    \caption{Enter Caption}
+    \label{fig:placeholder}
+\end{figure}
+
+\subsection{Thông số hình học}
+
+Các thông số hình học của cơ cấu 5-bar parallel trong đề tài được cho trong
+Bảng~\ref{tab:5bar_params}. 
+
+\begin{table}[H]
+\centering
+\caption{Thông số hình học cơ cấu 5-bar parallel}
+\label{tab:5bar_params}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{|l|c|c|}
+\hline
+\textbf{Thông số} & \textbf{Ký hiệu} & \textbf{Giá trị} \\
+\hline
+Khoảng cách giữa hai khớp chủ động & $A_1A_2$ & 105 mm \\
+Chiều dài thanh chủ động & $L_{act}$ & 100 mm \\
+Chiều dài thanh bị động  & $L_{pas}$ & 180 mm \\
+\hline
+\end{tabular}
+\end{table}
+
+
+\subsection{Thiết lập hệ tọa độ}
+
+Phân tích động học được thực hiện trong mặt phẳng 2D. Hệ tọa độ được chọn với
+gốc tại trung điểm $A_1A_2$:
+\begin{equation}
+    A_1 = \left(-\frac{d}{2},\; 0\right), \qquad A_2 = \left(\frac{d}{2},\; 0\right)
+\end{equation}
+
+Góc $\theta_1$ đo từ trục $x$ dương đến thanh $A_1B_1$, chiều dương ngược chiều
+kim đồng hồ. Tương tự cho $\theta_2$ đo từ trục $x$ dương đến thanh $A_2B_2$.
+Vị trí hai khớp trung gian:
+\begin{align}
+    B_1 &= \left(-\frac{d}{2} + L_{act}\cos\theta_1,\;\; L_{act}\sin\theta_1\right)
+    \label{eq:B1}\\
+    B_2 &= \left(\frac{d}{2} + L_{act}\cos\theta_2,\;\; L_{act}\sin\theta_2\right)
+    \label{eq:B2}
+\end{align}
+
+
+\subsection{Động học thuận (Forward Kinematics)}
+
+Cho trước $(\theta_1, \theta_2)$, cần tìm vị trí điểm cuối $P(x, y)$.
+
+Điểm $P$ phải đồng thời thuộc hai đường tròn: tâm $B_1$ bán kính $L_{pas}$
+và tâm $B_2$ bán kính $L_{pas}$, nên thỏa mãn hệ phương trình ràng buộc:
+\begin{align}
+    (x - B_{1x})^2 + (y - B_{1y})^2 &= L_{pas}^2 \label{eq:fk1}\\
+    (x - B_{2x})^2 + (y - B_{2y})^2 &= L_{pas}^2 \label{eq:fk2}
+\end{align}
+
+Trừ (\ref{eq:fk2}) cho (\ref{eq:fk1}), thu được phương trình tuyến tính:
+\begin{equation}
+    2(B_{2x} - B_{1x})\,x + 2(B_{2y} - B_{1y})\,y
+    = B_{2x}^2 - B_{1x}^2 + B_{2y}^2 - B_{1y}^2
+    \label{eq:fk_linear}
+\end{equation}
+
+Từ (\ref{eq:fk_linear}), biểu diễn $x$ theo $y$ (hoặc ngược lại) rồi thế
+vào (\ref{eq:fk1}) để giải phương trình bậc hai. Kết quả cho tối đa hai
+nghiệm $(x, y)$ --- tương ứng hai cấu hình (nhánh trên và nhánh dưới của
+cơ cấu). Nghiệm được chọn theo \textbf{nhánh làm việc thực tế} của chân
+robot (điểm $P$ nằm phía dưới thân, $y < 0$).
+
+
+\subsection{Động học nghịch (Inverse Kinematics)}
+
+Cho trước vị trí mong muốn $P_d = (x_d, y_d)$, cần tìm $(\theta_1, \theta_2)$.
+
+Đặt khoảng cách từ $A_1$, $A_2$ đến $P_d$:
+\begin{equation}
+    r_1 = \sqrt{\!\left(x_d + \frac{d}{2}\right)^2 + y_d^2}, \qquad
+    r_2 = \sqrt{\!\left(x_d - \frac{d}{2}\right)^2 + y_d^2}
+    \label{eq:r1r2}
+\end{equation}
+
+Trong tam giác $A_1 B_1 P$, áp dụng định lý cosin để tìm góc $\angle PA_1B_1$:
+\begin{equation}
+    \cos(\angle PA_1B_1) = \frac{L_{act}^2 + r_1^2 - L_{pas}^2}{2\,L_{act}\,r_1}
+    \label{eq:cosine_1}
+\end{equation}
+
+Góc chủ động thứ nhất:
+\begin{equation}
+    \theta_1 = \mathrm{atan2}(y_d,\; x_d + d/2)
+    \pm \arccos\!\left(\frac{L_{act}^2 + r_1^2 - L_{pas}^2}{2\,L_{act}\,r_1}\right)
+    \label{eq:ik1}
+\end{equation}
+
+Tương tự trong tam giác $A_2 B_2 P$:
+\begin{equation}
+    \theta_2 = \mathrm{atan2}(y_d,\; x_d - d/2)
+    \mp \arccos\!\left(\frac{L_{act}^2 + r_2^2 - L_{pas}^2}{2\,L_{act}\,r_2}\right)
+    \label{eq:ik2}
+\end{equation}
+
+Dấu $\pm$ / $\mp$ được chọn nhất quán với nhánh làm việc của cơ cấu để tránh
+nhảy nghiệm khi $P_d$ di chuyển liên tục. Điều kiện tồn tại nghiệm:
+\begin{equation}
+    \left|\,L_{act} - L_{pas}\,\right| \leq r_i \leq L_{act} + L_{pas},
+    \quad i = 1, 2
+    \label{eq:ik_exist}
+\end{equation}
+tức là $P_d$ phải nằm trong không gian làm việc của cơ cấu.
+
+
+\subsection{Ma trận Jacobian}
+
+Ma trận Jacobian $\mathbf{J} \in \mathbb{R}^{2\times2}$ mô tả quan hệ tức thời
+giữa vận tốc khớp chủ động và vận tốc điểm cuối:
+\begin{equation}
+    \dot{\mathbf{P}} = \mathbf{J}(\theta_1,\theta_2)\,\dot{\boldsymbol{\Theta}},
+    \qquad
+    \dot{\mathbf{P}} = \begin{bmatrix}\dot{x}\\\dot{y}\end{bmatrix}, \quad
+    \dot{\boldsymbol{\Theta}} = \begin{bmatrix}\dot{\theta}_1\\\dot{\theta}_2\end{bmatrix}
+    \label{eq:jacobian_def}
+\end{equation}
+
+\textbf{Dẫn xuất Jacobian từ ràng buộc vòng kín:}
+
+Lấy đạo hàm theo thời gian hai phương trình ràng buộc
+(\ref{eq:fk1})--(\ref{eq:fk2}):
+\begin{align}
+    (x - B_{1x})(\dot{x} - \dot{B}_{1x}) + (y - B_{1y})(\dot{y} - \dot{B}_{1y}) &= 0\\
+    (x - B_{2x})(\dot{x} - \dot{B}_{2x}) + (y - B_{2y})(\dot{y} - \dot{B}_{2y}) &= 0
+\end{align}
+
+Trong đó vận tốc các khớp trung gian:
+\begin{align}
+    \dot{B}_{1x} = -L_{act}\sin\theta_1\,\dot{\theta}_1, &\quad
+    \dot{B}_{1y} =  L_{act}\cos\theta_1\,\dot{\theta}_1 \\
+    \dot{B}_{2x} = -L_{act}\sin\theta_2\,\dot{\theta}_2, &\quad
+    \dot{B}_{2y} =  L_{act}\cos\theta_2\,\dot{\theta}_2
+\end{align}
+
+Đặt $\mathbf{p}_i = P - B_i$ là vector từ khớp trung gian đến điểm cuối,
+hệ phương trình viết lại dạng ma trận:
+\begin{equation}
+    \underbrace{\begin{bmatrix}
+        p_{1x} & p_{1y} \\
+        p_{2x} & p_{2y}
+    \end{bmatrix}}_{\mathbf{J}_e}
+    \begin{bmatrix}\dot{x}\\\dot{y}\end{bmatrix}
+    =
+    \underbrace{\begin{bmatrix}
+        L_{act}(p_{1y}\cos\theta_1 - p_{1x}\sin\theta_1) & 0 \\
+        0 & L_{act}(p_{2y}\cos\theta_2 - p_{2x}\sin\theta_2)
+    \end{bmatrix}}_{\mathbf{J}_\theta}
+    \begin{bmatrix}\dot{\theta}_1\\\dot{\theta}_2\end{bmatrix}
+    \label{eq:jacobian_system}
+\end{equation}
+
+Do đó:
+\begin{equation}
+    \mathbf{J} = \mathbf{J}_e^{-1}\,\mathbf{J}_\theta
+    \label{eq:jacobian_formula}
+\end{equation}
+
+\textbf{Ứng dụng của Jacobian:}
+\begin{itemize}
+    \item \textbf{Điều khiển vận tốc:} Cho vận tốc mong muốn tại điểm cuối
+    $\dot{\mathbf{P}}_d$, tính vận tốc đặt cho động cơ:
+    $\dot{\boldsymbol{\Theta}} = \mathbf{J}^{-1}\dot{\mathbf{P}}_d$.
+    \item \textbf{Phân tích lực:} Lực tại điểm cuối $\mathbf{F}$ liên hệ với
+    mô-men khớp $\boldsymbol{\tau}$ qua:
+    $\boldsymbol{\tau} = \mathbf{J}^T \mathbf{F}$.
+    \item \textbf{Phát hiện vùng kỳ dị:} Khi $\det(\mathbf{J}_e) = 0$,
+    ma trận Jacobian mất hạng --- tại đó cơ cấu mất một bậc tự do và vận tốc
+    khớp có thể tiến tới vô cực dù vận tốc điểm cuối hữu hạn. Cần tránh
+    vùng này trong quỹ đạo hoạt động.
+\end{itemize}
+
+
+\subsection{Ma trận Jacobian}
+
+Jacobian mô tả quan hệ giữa vận tốc khớp và vận tốc điểm cuối:
+\begin{equation}
+    \begin{bmatrix} \dot{x} \\ \dot{y} \end{bmatrix}
+    = \mathbf{J}(\theta_1, \theta_2)
+    \begin{bmatrix} \dot{\theta}_1 \\ \dot{\theta}_2 \end{bmatrix}
+\end{equation}
+
+Ma trận Jacobian được dùng để:
+\begin{itemize}
+    \item Sinh vận tốc đặt cho từng động cơ khi robot cần dịch chuyển điểm
+    cuối $P$ theo quỹ đạo mong muốn.
+    \item Xác định các vùng kỳ dị (singular configuration), nơi sai số nhỏ
+    tại điểm cuối có thể gây vận tốc hoặc momen khớp rất lớn.
+\end{itemize}
+
+\subsection{Không gian làm việc và chế độ hoạt động}
+
+Phương trình động học nghịch (\ref{eq:ik1})--(\ref{eq:ik2}) có hai nghiệm
+cho mỗi góc $\theta_1$, $\theta_2$, tương ứng với dấu $+$ hoặc $-$ trước
+số hạng $\arccos$. Tổ hợp của hai lựa chọn này tạo ra \textbf{4 chế độ hoạt
+động} (working mode) của cơ cấu, ký hiệu theo cặp dấu $(\sigma_1, \sigma_2)$
+với $\sigma_i \in \{+, -\}$:
+
+\begin{equation}
+    \theta_1 = \mathrm{atan2}(y_d,\; x_d + d/2)
+    + \sigma_1\arccos\!\left(\frac{L_{act}^2 + r_1^2 - L_{pas}^2}{2\,L_{act}\,r_1}\right)
+\end{equation}
+\begin{equation}
+    \theta_2 = \mathrm{atan2}(y_d,\; x_d - d/2)
+    - \sigma_2\arccos\!\left(\frac{L_{act}^2 + r_2^2 - L_{pas}^2}{2\,L_{act}\,r_2}\right)
+\end{equation}
+
+Mỗi chế độ tương ứng một không gian làm việc và hình dạng cơ cấu khác nhau,
+minh họa trong Hình~\ref{fig:5bar_modes}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\textwidth]{figure/5bar_workspace_modes.png}
+    \caption{Bốn chế độ hoạt động của cơ cấu 5-bar parallel:
+    (a)~$++$, (b)~$-+$, (c)~$+-$, (d)~$--$. Vùng tô màu là không gian
+    làm việc tương ứng; đường đỏ là biên kỳ dị.}
+    \label{fig:5bar_modes}
+\end{figure}
+
+Đặc điểm từng chế độ:
+\begin{itemize}
+    \item \textbf{Chế độ $++$} (Hình~\ref{fig:5bar_modes}a): Cả hai khớp
+    trung gian $B_1$, $B_2$ gập vào phía trên. Không gian làm việc nằm lệch
+    một phía, diện tích nhỏ.
+
+    \item \textbf{Chế độ $-+$} (Hình~\ref{fig:5bar_modes}b): Không gian làm
+    việc rộng nhất, bao phủ phần lớn vùng xung quanh $A_1A_2$, trừ vùng tâm
+    bị giới hạn bởi đường biên kỳ dị trong.
+
+    \item \textbf{Chế độ $+-$} (Hình~\ref{fig:5bar_modes}c): Hai khớp trung
+    gian gập xuống dưới, đối xứng. Điểm cuối $P$ nằm \textbf{phía dưới}
+    đường nối $A_1A_2$ với không gian làm việc dạng ellipse nằm ngang.
+    Đây là chế độ được chọn cho robot Legged~V3, vì bánh xe cần đặt
+    phía dưới thân và cơ cấu hoạt động trong dải chiều cao ổn định,
+    tránh xa vùng kỳ dị.
+
+    \item \textbf{Chế độ $--$} (Hình~\ref{fig:5bar_modes}d): Đối xứng với
+    chế độ $++$, không gian làm việc lệch phía còn lại.
+\end{itemize}
+
+Để tránh nhảy nghiệm (mode switching) khi điểm cuối di chuyển, toàn bộ quỹ
+đạo hoạt động của chân robot phải nằm hoàn toàn trong không gian làm việc
+của một chế độ duy nhất. Điều kiện (\ref{eq:ik_exist}) được kiểm tra tại
+mỗi bước lập lịch quỹ đạo để đảm bảo nghiệm tồn tại và liên tục.
+
+
+% ==============================================
+\section{Học tăng cường (Reinforcement Learning)}
+% ==============================================
+
+\subsection{Giới thiệu}
+
+Học tăng cường (Reinforcement Learning -- RL) là kỹ thuật học máy huấn luyện
+phần mềm đưa ra quyết định tối ưu thông qua cơ chế thử-và-sai kết hợp hệ thống
+khen thưởng -- trừng phạt. Tương tự cách con người học tập, thuật toán RL tự
+khám phá chiến lược tốt nhất, thậm chí chấp nhận hy sinh lợi ích ngắn hạn
+(trì hoãn khen thưởng) để đạt mục tiêu dài hạn.
+
+Hệ thống RL hoạt động dựa trên sự tương tác khép kín giữa hai thành phần:
+\begin{itemize}
+    \item \textbf{Agent (tác nhân):} Đối tượng học tập và ra quyết định, quan
+    sát môi trường và chọn hành động nhằm tối đa hóa phần thưởng tích lũy.
+    \item \textbf{Environment (môi trường):} Thế giới mà agent tồn tại và tương
+    tác, phản hồi lại hành động bằng trạng thái mới và phần thưởng (Reward).
+\end{itemize}
+
+Tại mỗi bước thời gian, quy trình diễn ra theo thứ tự:
+\begin{enumerate}
+    \item Agent quan sát trạng thái hiện tại của môi trường.
+    \item Agent chọn hành động dựa trên chính sách hiện tại.
+    \item Môi trường chuyển sang trạng thái mới và trả về phần thưởng.
+    \item Agent cập nhật chính sách dựa trên tín hiệu phần thưởng nhận được.
+\end{enumerate}
+
+\subsection{Các thành phần cốt lõi}
+
+\textbf{Không gian trạng thái và quan sát.}
+State $s$ là bức tranh đầy đủ về thế giới tại một thời điểm.
+Observation $o$ là những gì agent thực sự nhìn thấy (có thể không đầy đủ).
+
+\textbf{Không gian hành động (Action Space).}
+Tập hợp tất cả hành động hợp lệ trong môi trường, gồm hai loại:
+\begin{itemize}
+    \item \textit{Discrete Action Space:} số hành động hữu hạn.
+    \item \textit{Continuous Action Space:} số hành động vô hạn (liên tục).
+\end{itemize}
+
+\textbf{Chính sách (Policy $\pi$).}
+Policy là quy tắc để agent quyết định hành động tiếp theo dựa trên quan sát:
+\begin{itemize}
+    \item \textit{Deterministic Policy:} Luôn chọn đúng một hành động cho mỗi
+    trạng thái.
+    \item \textit{Stochastic Policy:} Chọn hành động theo phân phối xác suất.
+    Ký hiệu:
+    \begin{equation}
+        a_t \sim \pi_\theta(\cdot \mid s_t)
+        \label{eq:stochastic_policy}
+    \end{equation}
+Trong đó:
+\begin{itemize}[leftmargin=1.5cm]
+    \item $a_t$: hành động tại thời điểm $t$.
+    \item $s_t$: trạng thái tại thời điểm $t$.
+    \item $\pi_\theta$: chính sách (policy) được tham số hóa bởi $\theta$.
+    \item $\theta$: tập tham số của chính sách.
+    \item $\pi_\theta(\cdot \mid s_t)$: phân phối xác suất của các hành động khi biết trạng thái $s_t$.
+    \item Dấu ``$\cdot$'': biểu diễn tất cả các hành động có thể.
+    \item Dấu ``$\sim$'': ký hiệu ``được lấy mẫu từ''.
+\end{itemize}
+Với chính sách ngẫu nhiên, có hai phép tính quan trọng trong quá trình sử dụng và
+huấn luyện policy, đó là lấy mẫu hành động và tính log-likelihood.
+
+\textbf{Lấy mẫu hành động} (Sampling actions) là quá trình chọn hành động một cách
+ngẫu nhiên dựa trên phân phối xác suất do policy tạo ra. Cách làm này giúp agent có khả
+năng khám phá môi trường, thay vì chỉ lặp lại một hành động cố định.
+
+\textbf{Tính log-likelihood} là quá trình tính logarit của xác suất mà policy gán cho một
+hành động cụ thể $a$ tại trạng thái $s$, được biểu diễn bởi:
+
+\begin{equation}
+    \log \pi_\theta(a \mid s)
+    \label{eq:log_likelihood}
+\end{equation}
+
+Giá trị log-likelihood được sử dụng để tính gradient trong quá trình huấn luyện policy.
+Thông qua đó, thuật toán có thể tăng xác suất lựa chọn các hành động tốt và giảm xác suất
+lựa chọn các hành động chưa tốt. Đây là thành phần quan trọng trong các thuật toán
+Policy Gradient như PPO, A2C và các biến thể Actor--Critic khác.
+
+Trong trường hợp sử dụng \textbf{Categorical Policy} cho không gian hành động rời rạc,
+mạng nơ-ron của policy thường có cấu trúc gồm đầu vào là observation, các lớp ẩn dùng
+để trích xuất đặc trưng, lớp tuyến tính cuối cùng tạo ra các giá trị logits tương ứng với
+từng hành động, sau đó hàm softmax được sử dụng để chuyển logits thành phân phối xác
+suất.
+
+Khi đó, nếu $P_\theta(s)$ là vector xác suất đầu ra của policy tại trạng thái $s$, với số
+phần tử bằng số hành động có thể thực hiện, thì log-likelihood của hành động $a$ được
+tính như sau:
+
+\begin{equation}
+    \log \pi_\theta(a \mid s)
+    =
+    \log \left( [P_\theta(s)]_a \right)
+    \label{eq:categorical_log_likelihood}
+\end{equation}
+
+Trong đó, $[P_\theta(s)]_a$ là phần tử trong vector xác suất tương ứng với hành động
+$a$. Có thể hiểu mỗi hành động là một chỉ số trong vector xác suất đầu ra của policy.
+
+\textbf{Quỹ đạo (Trajectory).}
+Chuỗi các sự kiện trong một episode:
+\begin{equation}
+    \tau = (s_0, a_0, s_1, a_1, \ldots)
+\end{equation}
+Trạng thái ban đầu lấy mẫu từ phân phối khởi tạo $s_0 \sim \rho_0(\cdot)$.
+
+\textbf{Phần thưởng và Tổng lợi nhuận.}
+Phần thưởng tức thời tại bước $t$:
+\begin{equation}
+    r_t = R(s_t, a_t, s_{t+1})
+\end{equation}
+
+Tổng lợi nhuận có chiết khấu (Infinite-horizon discounted return):
+\begin{equation}
+    R(\tau) = \sum_{t=0}^{\infty} \gamma^t r_t, \quad \gamma \in [0,1)
+\end{equation}
+Hệ số chiết khấu $\gamma$ đảm bảo tổng hội tụ và ưu tiên phần thưởng gần hơn.
+
+\textbf{Hàm giá trị (Value Functions).}
+\begin{align}
+    V^\pi(s) &= \mathbb{E}_{\tau \sim \pi}\bigl[R(\tau) \mid s_0 = s\bigr]
+    \label{eq:Vpi}\\
+    Q^\pi(s,a) &= \mathbb{E}_{\tau \sim \pi}\bigl[R(\tau) \mid s_0=s,\, a_0=a\bigr]
+    \label{eq:Qpi}\\
+    V^*(s) &= \max_\pi\, V^\pi(s) \label{eq:Vstar}\\
+    Q^*(s,a) &= \max_\pi\, Q^\pi(s,a) \label{eq:Qstar}
+\end{align}
+
+Quan hệ giữa $V^\pi$ và $Q^\pi$:
+\begin{align}
+    V^\pi(s) &= \mathbb{E}_{a\sim\pi}\bigl[Q^\pi(s,a)\bigr] \\
+    V^*(s)   &= \max_a Q^*(s,a)
+\end{align}
+
+\textbf{Phương trình Bellman.}
+\begin{equation}
+    V^\pi(s) = \mathbb{E}_{a\sim\pi,\, s'\sim P}
+    \bigl[r(s,a) + \gamma\, V^\pi(s')\bigr]
+    \label{eq:bellman}
+\end{equation}
+Đây là cơ sở để cập nhật mạng Critic trong kiến trúc Actor-Critic của PPO.
+
+\textbf{Hàm lợi thế (Advantage Function).}
+\begin{equation}
+    A^\pi(s,a) = Q^\pi(s,a) - V^\pi(s)
+    \label{eq:advantage}
+\end{equation}
+$A > 0$ nghĩa là hành động tốt hơn trung bình (tăng xác suất chọn);
+$A < 0$ nghĩa là hành động tệ hơn (giảm xác suất chọn).
+
+\textbf{Mục tiêu tối ưu.}
+\begin{equation}
+    \pi^* = \arg\max_\pi\, J(\pi),
+    \quad J(\pi) = \mathbb{E}_{\tau \sim \pi}\bigl[R(\tau)\bigr]
+    \label{eq:rl_objective}
+\end{equation}
+
+Trong đó:
+\begin{itemize}[leftmargin=1.5cm]
+    \item $\pi^*$: Optimal policy, tức là chính sách tối ưu.
+    \item $\mathbb{E}_{\tau \sim \pi}$: Lấy trung bình tổng reward của nhiều trajectory
+    $\tau$, trong đó mỗi trajectory $\tau$ được lấy mẫu từ policy $\pi$.
+\end{itemize}
+
+Sau khi nắm được các khái niệm cơ bản trong học tăng cường, bước tiếp theo là xác định
+quy trình thiết kế và tư duy xây dựng bài toán RL. Đối với bài toán xe robot tự cân bằng,
+quy trình có thể được thực hiện theo các bước sau:
+
+\begin{enumerate}[leftmargin=1.5cm]
+    \item \textbf{Định nghĩa môi trường:} Xác định không gian trạng thái $S$,
+    không gian hành động $A$, hàm thưởng $R$ và quy luật chuyển trạng thái $P$.
+
+    \item \textbf{Chọn loại chính sách:} Lựa chọn loại policy phù hợp với bài toán,
+    có thể là chính sách xác định hoặc chính sách ngẫu nhiên tùy theo dạng không gian
+    hành động.
+
+    \item \textbf{Định nghĩa Return:} Lựa chọn dạng tổng phần thưởng phù hợp, chẳng hạn
+    như Infinite-horizon discounted return hoặc Finite-horizon undiscounted return.
+
+    \item \textbf{Tối ưu policy:} Mục tiêu của quá trình học là tìm chính sách tối ưu:
+    \begin{equation}
+        \pi^* = \arg\max_{\pi} J(\pi)
+        \label{eq:optimize_policy}
+    \end{equation}
+
+    Đồng thời, sử dụng các hàm giá trị để đánh giá trạng thái và hành động:
+    \begin{itemize}[leftmargin=1.5cm]
+        \item $V^\pi(s)$: Giá trị của trạng thái $s$.
+        \item $Q^\pi(s,a)$: Giá trị của cặp trạng thái -- hành động $(s,a)$.
+        \item $A^\pi(s,a)$: Lợi thế của hành động $a$ tại trạng thái $s$.
+    \end{itemize}
+
+    \item \textbf{Áp dụng phương trình Bellman:} Phương trình Bellman được sử dụng
+    để cập nhật và học các hàm giá trị. Ý tưởng chính của Bellman Backup là giá trị
+    hiện tại được tính từ phần thưởng tức thời cộng với giá trị chiết khấu của trạng thái
+    kế tiếp:
+    \begin{equation}
+        \text{Bellman Backup}
+        =
+        \text{reward}
+        +
+        \text{discounted next value}
+    \end{equation}
+\end{enumerate}
+\textit{Discounted next value} là giá trị của trạng thái kế tiếp sau khi nhân với hệ số
+chiết khấu, được biểu diễn bởi $\gamma V^\pi(s')$. Thành phần này giúp agent không chỉ
+xét phần thưởng hiện tại mà còn xét đến lợi ích có thể đạt được trong tương lai.
+% ==============================================
+\section{Thuật toán PPO}
+% ==============================================
+
+\subsection{Khái niệm}
+
+Proximal Policy Optimization (PPO), do OpenAI giới thiệu năm 2017, là thuật
+toán on-policy thuộc nhóm Policy Gradient. PPO giải quyết vấn đề bước cập nhật
+quá lớn bằng cách giới hạn biên độ thay đổi giữa chính sách mới và cũ, đảm bảo
+quá trình học ổn định và tránh sụp đổ hiệu suất.
+
+\subsection{Kiến trúc Actor-Critic}
+
+PPO sử dụng kiến trúc Actor-Critic:
+\begin{itemize}
+    \item \textbf{Actor ($\pi_\theta$):} Mạng nơron đưa ra hành động.
+    \item \textbf{Critic ($V_\phi$):} Mạng nơron đánh giá giá trị trạng thái,
+    dự đoán $V^\pi(s)$.
+\end{itemize}
+
+\subsection{Tỷ lệ xác suất và GAE}
+
+\textbf{Tỷ lệ xác suất (Probability Ratio):}
+\begin{equation}
+    r_t(\theta) = \frac{\pi_\theta(a_t \mid s_t)}{\pi_{\theta_\text{old}}(a_t \mid s_t)}
+    \label{eq:prob_ratio}
+\end{equation}
+Trong đó:
+\begin{itemize}[leftmargin=1.5cm]
+    \item $\pi_\theta$: chính sách hiện tại, tức là chính sách đang được cập nhật.
+    \item $\pi_{\theta_{\text{old}}}$: chính sách cũ, tức là chính sách trước khi cập nhật.
+    \item Khi bắt đầu cập nhật, $r_t(\theta) = 1$. Khi $\theta$ thay đổi, $r_t(\theta)$ sẽ lệch khỏi 1.
+    \item $\theta$: tập các tham số (parameters) của policy $\pi$.
+\end{itemize}
+Khi $r_t(\theta) > 1$: policy mới ưa thích hành động đó hơn policy cũ;
+khi $r_t(\theta) < 1$: ít ưa thích hơn; khi $r_t(\theta) = 1$: không thay đổi.
+
+\textbf{Generalized Advantage Estimation (GAE).}
+Sai số TD (Temporal Difference error):
+\begin{equation}
+    \delta_t = r_t + \gamma\, V(s_{t+1}) - V(s_t)
+    \label{eq:td_error}
+\end{equation}
+
+Trong đó:
+\begin{itemize}[leftmargin=1.5cm]
+    \item $r_t$: phần thưởng nhận được tại thời điểm $t$.
+    \item $V(s)$: giá trị trạng thái do mạng Critic dự đoán.
+    \item $\gamma$: hệ số chiết khấu (discount factor), có giá trị thuộc khoảng $[0,1]$.
+\end{itemize}
+
+Ước lượng lợi thế:
+\begin{equation}
+    \hat{A}_t = \sum_{k=0}^{\infty} (\gamma\lambda)^k\, \delta_{t+k}
+    \label{eq:gae}
+\end{equation}
+Thường chọn $\lambda \approx 0{,}95$ để cân bằng phương sai -- độ chệch.
+
+Trong đó:
+\begin{itemize}[leftmargin=1.5cm]
+    \item Khi $\lambda = 0$: 
+    \begin{equation}
+        \hat{A}_t = \delta_t
+    \end{equation}
+    Ước lượng có phương sai thấp nhưng độ chệch cao, do phụ thuộc nhiều vào giá trị
+    dự đoán của mạng Critic.
+
+    \item Khi $\lambda = 1$:
+    \begin{equation}
+        \hat{A}_t = \sum_{k=0}^{\infty} \gamma^k \delta_{t+k}
+    \end{equation}
+    Ước lượng có độ chệch thấp nhưng phương sai cao, do phụ thuộc nhiều vào tính
+    ngẫu nhiên của môi trường.
+
+    \item Trong PPO, giá trị $\lambda$ thường được chọn gần $0{,}95$ để cân bằng giữa
+    độ chệch và phương sai của ước lượng.
+\end{itemize}
+
+\subsection{Hàm mục tiêu Clipped Surrogate}
+
+\begin{equation}
+    L^{\text{CLIP}}(\theta) = \hat{\mathbb{E}}_t\!\left[
+        \min\!\left(
+            r_t(\theta)\,\hat{A}_t,\;
+            \text{clip}\!\left(r_t(\theta),\,1{-}\varepsilon,\,1{+}\varepsilon\right)\hat{A}_t
+        \right)
+    \right]
+    \label{eq:ppo_clip}
+\end{equation}
+
+trong đó $\varepsilon \in [0{,}1;\; 0{,}2]$ là hệ số clipping.
+
+Trong đó:
+\begin{itemize}[leftmargin=1.5cm]
+    \item $L^{\text{CLIP}}(\theta)$: hàm mục tiêu (objective function), PPO tối đa hóa
+    hàm này để cập nhật policy.
+
+    \item $\hat{\mathbb{E}}_t$: kỳ vọng mẫu (sample average) theo thời gian $t$, thực tế
+    là lấy trung bình trên các timestep trong batch hoặc rollout.
+
+    \item $\rho_t(\theta)$: tỷ lệ xác suất giữa policy mới và policy cũ, dùng để đo mức độ
+    thay đổi của policy đối với hành động $a_t$.
+
+    \item $\hat{A}_t$: ước lượng advantage tại thời điểm $t$, cho biết hành động $a_t$
+    tốt hơn hay tệ hơn mức trung bình. Nếu $\hat{A}_t > 0$ thì hành động $a_t$ được xem
+    là tốt và nên tăng xác suất lựa chọn; nếu $\hat{A}_t < 0$ thì hành động $a_t$ được xem
+    là chưa tốt và nên giảm xác suất lựa chọn.
+
+    \item $\varepsilon$: hệ số clipping, thường chọn trong khoảng $0{,}1$ đến $0{,}2$,
+    dùng để giới hạn mức thay đổi của policy trong mỗi lần cập nhật.
+
+    \item $\text{clip}\left(\rho_t(\theta), 1-\varepsilon, 1+\varepsilon\right)$:
+    cắt $\rho_t(\theta)$ vào khoảng $[1-\varepsilon, 1+\varepsilon]$, nhằm ngăn policy mới
+    khác policy cũ quá nhiều.
+
+    \item $\min(\cdot)$: chọn giá trị nhỏ hơn giữa thành phần không clip và thành phần
+    có clip, nhằm đảm bảo policy không được lợi quá mức khi thay đổi quá mạnh.
+\end{itemize}
+
+Cơ chế clipping:
+\begin{itemize}
+    \item Nếu $\hat{A}_t > 0$ (hành động tốt): tăng xác suất nhưng không vượt
+    quá $1 + \varepsilon$ để tránh tự tin quá mức.
+    \item Nếu $\hat{A}_t < 0$ (hành động tệ): giảm xác suất nhưng không nhỏ hơn
+    $1 - \varepsilon$ để duy trì khả năng khám phá.
+\end{itemize}
+
+\subsection{Hàm mất mát tổng quát}
+
+\begin{equation}
+    L^{\text{PPO}}(\theta) = \hat{\mathbb{E}}_t\!\left[
+        L^{\text{CLIP}}(\theta)
+        - c_1\, L^{\text{VF}}(\theta)
+        + c_2\, S\!\left[\pi_\theta\right](s_t)
+    \right]
+    \label{eq:ppo_total_loss}
+\end{equation}
+
+Trong đó:
+\begin{itemize}[leftmargin=1.5cm]
+    \item $c_1$ và $c_2$: các hệ số trọng số (coefficients), dùng để cân bằng
+    các thành phần khác nhau trong quá trình huấn luyện.
+
+    \item $L_t^{\text{CLIP}}(\theta)$: hàm mục tiêu của Actor, như đã trình bày
+    ở trên. Thành phần này được dùng để cập nhật policy và cần được tối đa hóa.
+
+    \item $L_t^{\text{VF}}(\phi)$: hàm mất mát của Critic (Value Function Loss),
+    thường được tính bằng sai số bình phương trung bình giữa giá trị do Critic dự đoán
+    và giá trị mục tiêu:
+    \begin{equation}
+        L_t^{\text{VF}}(\phi)
+        =
+        \left(
+            V_\phi(s_t) - V_t^{\text{target}}
+        \right)^2
+    \end{equation}
+    Trong đó, $V_\phi(s_t)$ là giá trị trạng thái do mạng Critic dự đoán,
+    $V_t^{\text{target}}$ là giá trị mục tiêu dùng để huấn luyện Critic.
+    Hệ số $c_1$ thường được chọn là $0{,}5$.
+
+    \item $S[\pi_\theta](s_t)$: điểm thưởng entropy (Entropy Bonus). Entropy đo
+    mức độ ngẫu nhiên của chính sách. Việc cộng thêm entropy giúp khuyến khích agent
+    tiếp tục khám phá môi trường, tránh hội tụ quá sớm vào một chiến lược cục bộ.
+    Hệ số $c_2$ thường có giá trị nhỏ, ví dụ $0{,}01$.
+\end{itemize}
+
+
+% ==============================================
+\section{Nền tảng mô phỏng và huấn luyện}
+% ==============================================
+
+\subsection{NVIDIA Isaac Sim}
+
+NVIDIA Isaac Sim là nền tảng mô phỏng robot được xây dựng trên
+\textbf{NVIDIA Omniverse}, sử dụng động cơ vật lý \textbf{PhysX} tăng tốc GPU
+để đạt được mô phỏng độ chân thực cao ở quy mô công nghiệp. Toàn bộ môi trường
+và tài sản 3D được quản lý theo định dạng \textbf{USD} (Universal Scene
+Description).
+
+Các đặc điểm kỹ thuật nổi bật của Isaac Sim bao gồm:
+\begin{itemize}
+    \item \textbf{Mô phỏng vật lý GPU:} Động lực học khớp, va chạm, ma sát
+    và biến dạng tiếp xúc được tính toán song song trên GPU thay vì CPU,
+    cho phép chạy nhiều robot đồng thời mà không bị nghẽn cổ chai tính toán.
+
+    \item \textbf{Mô phỏng cảm biến:} Hỗ trợ đa dạng cảm biến như camera
+    RGB/depth, LiDAR, IMU, contact sensor (tất cả đều được render bởi
+    GPU để đảm bảo tốc độ thời gian thực).
+
+    \item \textbf{Nhập mô hình robot:} Hỗ trợ các định dạng
+    \texttt{URDF}, \texttt{MJCF} và Onshape (CAD trực tuyến), tự động
+    chuyển đổi sang USD khi import.
+
+    \item \textbf{Tích hợp ROS~2:} Cung cấp bridge API giao tiếp trực tiếp
+    với hệ thống robot thực qua ROS~2, phục vụ quy trình sim-to-real và
+    digital twin.
+\end{itemize}
+
+Trong đề tài, Isaac Sim được dùng để kiểm tra mô hình URDF robot Legged~V3
+trước khi huấn luyện: xác minh vị trí khâu, hướng trục khớp, tham số va chạm
+và hệ số ma sát bánh xe -- mặt sàn.
+
+\subsection{NVIDIA Isaac Lab}
+
+NVIDIA Isaac Lab là framework mã nguồn mở được xây dựng \textbf{trên nền}
+Isaac Sim, chuyên phục vụ nghiên cứu học robot (\textit{robot learning}),
+đặc biệt là học tăng cường. Isaac Lab hợp nhất ba framework trước đó
+(IsaacGymEnvs, OmniIsaacGymEnvs và Orbit) thành một hệ sinh thái thống nhất
+và linh hoạt hơn.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.80\textwidth]{figure/isaaclab_ecosystem.png}
+    \caption{Hệ sinh thái Isaac Lab: Isaac Lab xây dựng trên Isaac Sim,
+    Isaac Sim xây dựng trên NVIDIA Omniverse và PhysX}
+    \label{fig:isaaclab_ecosystem}
+\end{figure}
+
+
+Kiến trúc ba lớp của hệ sinh thái:
+\begin{itemize}
+    \item \textbf{Lớp nền:} NVIDIA Omniverse + PhysX (vật lý, rendering).
+    \item \textbf{Lớp mô phỏng:} Isaac Sim (môi trường robot tổng quát).
+    \item \textbf{Lớp framework:} Isaac Lab (công cụ học robot chuyên biệt).
+\end{itemize}
+
+Các đặc điểm chính của Isaac Lab phục vụ đề tài:
+\begin{itemize}
+    \item \textbf{Mô phỏng song song trên GPU:} Hàng nghìn môi trường độc lập
+    chạy đồng thời trên một GPU, giúp thu thập dữ liệu kinh nghiệm nhanh hơn
+    nhiều lần so với mô phỏng tuần tự trên CPU.
+
+    \item \textbf{Cảm biến và cơ cấu chấp hành mô-đun:} Cung cấp sẵn các lớp
+    triển khai IMU, contact sensor, actuator dynamics theo dạng config-based,
+    dễ tùy chỉnh cho từng robot.
+
+    \item \textbf{Quản lý thực nghiệm:} Hệ thống cấu hình dựa trên
+    \texttt{@configclass}, cho phép tái hiện (reproducible) thực nghiệm và
+    dễ dàng so sánh các cấu hình khác nhau.
+
+    \item \textbf{Tích hợp thư viện RL:} Hỗ trợ RSL-RL, RL-Games,
+    Stable-Baselines3; đề tài sử dụng \texttt{rsl\_rl} với thuật toán PPO.
+\end{itemize}
+
+
+% ==============================================
+\section{Quy trình chuẩn bị và huấn luyện mô hình}
+% ==============================================
+
+Toàn bộ quy trình từ thiết kế cơ khí đến triển khai chính sách RL gồm
+6 bước tuần tự:
+
+\begin{enumerate}
+
+    \item \textbf{Thiết kế 3D trong SolidWorks:}
+    Xây dựng mô hình chi tiết gồm khung, bánh xe, giá đỡ, trục, và các
+    liên kết cơ khí. Đảm bảo thông số hình học khớp với cơ cấu 5-bar
+    thực tế: $d = 105$ mm, $L_{act} = 100$ mm, $L_{pas} = 180$ mm.
+
+    \item \textbf{Đơn giản hóa mô hình (mesh simplification):}
+    Lược bỏ các chi tiết không ảnh hưởng đến chuyển động (lỗ bắt vít,
+    góc vát, gân tăng cứng) để giảm số lượng đa giác và tải tính toán.
+    Giữ nguyên các thông số quan trọng: kích thước tổng thể, vị trí khớp,
+    bán kính bánh xe, khối lượng, vị trí trọng tâm và moment quán tính.
+
+    \item \textbf{Xuất định dạng URDF:} Trong đó, 
+    URDF (Unified Robot Description Format) mô tả đầy đủ cấu trúc robot
+    dạng cây: các khâu (\texttt{link}), khớp nối (\texttt{joint}), vị trí
+    tương đối, khối lượng và moment quán tính, giới hạn chuyển động, lưới
+    hiển thị và lưới va chạm. Các khớp quay bánh xe được khai báo là
+    \texttt{continuous joint}; các liên kết cơ cấu 5-bar là \texttt{revolute
+    joint} với giới hạn góc xác định.
+
+    \item \textbf{Kiểm tra trong Isaac Sim:}
+    Import URDF vào Isaac Sim để xác minh:
+    \begin{itemize}
+        \item Hướng trục khớp đúng quy ước (tay phải).
+        \item Tâm quay bánh xe trùng với trục hình học.
+        \item Thuộc tính va chạm (\textit{collision mesh}) bao phủ đúng hình dạng.
+        \item Hệ số ma sát bánh xe -- mặt sàn phù hợp với thực tế.
+    \end{itemize}
+
+    \item \textbf{Huấn luyện trong Isaac Lab:}
+    Chuyển mô hình sang Isaac Lab, đăng ký task
+    và khởi động huấn luyện song song
+    với 4\,096 môi trường trên GPU.
+    
+    Sau đó, trọng số tốt nhất được lưu tự động dưới dạng checkpoint
+    \texttt{.pt} (PyTorch) sau mỗi $N$ iterations.
+
+    \item \textbf{Xuất trọng số sang định dạng ONNX:}
+    Sau huấn luyện, chính sách Actor được xuất sang định dạng
+    \textbf{ONNX} (Open Neural Network Exchange) để triển khai độc lập
+    với PyTorch:
+
+    FTrong đó, file \texttt{.onnx} chứa kiến trúc mạng và trọng số đã huấn luyện,
+    có thể chạy bằng ONNX Runtime trên nhiều nền tảng (x86, ARM, GPU)
+    mà không cần cài đặt PyTorch. Đây là bước cần thiết không thể thiếu để triển khai
+    chính sách RL lên phần cứng nhúng hoặc tích hợp vào hệ thống điều
+    khiển thực tế.
+
+\end{enumerate}

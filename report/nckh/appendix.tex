@@ -1,0 +1,183 @@
+% =============================================
+% File: appendix.tex
+% Phụ lục — cấu hình theo chuẩn HCMUTE NCKH
+% Dùng \chapter* + \begingroup\fontsize{13pt}{15.6pt}\selectfont
+% (giống acknowledgments.tex, tránh \appendix gây lỗi titleformat)
+% =============================================
+
+
+% ============================================================
+% Phụ lục A — Mã nguồn bộ điều khiển PI trên ESP32
+% ============================================================
+\chapter*{PHỤ LỤC A\\[0.4em]MÃ NGUỒN BỘ ĐIỀU KHIỂN PI TRÊN ESP32}
+\addcontentsline{toc}{chapter}{Phụ lục A — Mã nguồn bộ điều khiển PI (ESP32)}
+\label{app:esp32_code}
+
+\begingroup
+\setstretch{1.5}
+\fontsize{13pt}{15.6pt}\selectfont
+\setlength{\parskip}{6pt}
+
+Đoạn mã dưới đây là cấu trúc chính của chương trình điều khiển PI vận tốc
+triển khai trên vi điều khiển ESP32 WROOM-32 (Arduino framework, C++).
+Chu kỳ điều khiển $\Delta t = 10\,$ms, giới hạn tích phân $\pm 1000$,
+giới hạn PWM $[-255,\,255]$.
+
+\endgroup
+
+\begin{lstlisting}[language=C++, caption={Vòng điều khiển PI vận tốc trên ESP32},
+                   label=lst:esp32_pi]
+// -- Cau hinh phan cung --
+#define ENC_A    18
+#define ENC_B    19
+#define PWM_PIN  25
+#define DIR_PIN1 26
+#define DIR_PIN2 27
+
+volatile long encoderCount = 0;
+
+void IRAM_ATTR encoderISR() {
+    encoderCount += (digitalRead(ENC_B) == HIGH) ? 1 : -1;
+}
+
+// -- Tinh van toc (RPM) --
+float VelCalculate(long &posNow, float dt) {
+    float vel = (posNow / 200.0f) / dt * 60.0f;
+    posNow = 0;
+    return vel;
+}
+
+// -- Bien PI van toc --
+float Kp = 0.1854f;           // tu GA (setpoint hien tai)
+float Ki = 5.288f;
+float integral  = 0.0f;
+const float DT        = 0.01f;
+const float INT_LIMIT = 1000.0f;
+
+// -- Vong dieu khien (goi moi 10 ms) --
+void piControl(float velReq, float velCur) {
+    float err = velReq - velCur;
+
+    integral += err * DT;
+    integral  = constrain(integral, -INT_LIMIT, INT_LIMIT); // anti-windup
+
+    float u = Kp * err + Ki * integral;
+    u = constrain(u, -255.0f, 255.0f);
+
+    int pwmVal = (int)fabs(u);
+    digitalWrite(DIR_PIN1, u >= 0 ? HIGH : LOW);
+    digitalWrite(DIR_PIN2, u >= 0 ? LOW  : HIGH);
+    ledcWrite(0, pwmVal);
+}
+\end{lstlisting}
+
+\begingroup
+\fontsize{13pt}{15.6pt}\selectfont
+\noindent\textit{Ghi chú:} Tham số $K_p$, $K_i$ được cập nhật theo setpoint vận tốc
+hiện tại dựa trên bảng tra (Phụ lục~B) hoặc đầu ra suy luận mạng ANN.
+\endgroup
+
+
+% ============================================================
+% Phụ lục B — Bảng tham số PI tối ưu tại 9 mức setpoint
+% ============================================================
+\chapter*{PHỤ LỤC B\\[0.4em]BẢNG THAM SỐ PI TỐI ƯU TẠI 9 MỨC SETPOINT}
+\addcontentsline{toc}{chapter}{Phụ lục B — Bảng tham số PI tối ưu (GA)}
+\label{app:pi_table}
+
+\begingroup
+\setstretch{1.5}
+\fontsize{13pt}{15.6pt}\selectfont
+\setlength{\parskip}{6pt}
+
+Bảng dưới tổng hợp đầy đủ bộ tham số PI vận tốc tối ưu
+$\{K_{pv}^*,\,K_{iv}^*\}$ xác định bằng giải thuật di truyền (GA)
+cho 9 mức setpoint từ 250 đến 2250~RPM.
+Các tham số vòng ngoài vị trí $(K_{pp}^*, K_{ip}^*, K_{dp}^*)$ giữ
+không đổi ở tất cả các mức setpoint.
+
+\begin{table}[H]
+\centering
+\caption{Bộ tham số PI vận tốc tối ưu (GA) tại 9 mức setpoint}
+\label{tab:pi_optimal_full}
+\renewcommand{\arraystretch}{1.35}
+\begin{tabular}{cccccc}
+\toprule
+\textbf{Setpoint} & \multirow{2}{*}{$K_{pv}^*$} & \multirow{2}{*}{$K_{iv}^*$}
+    & \textbf{Overshoot} & \textbf{$t_s$} & \textbf{SSE} \\
+\textbf{(RPM)} & & & \textbf{(\%)} & \textbf{(s)} & \textbf{(RPM)} \\
+\midrule
+250  & 0{,}1854 & 5{,}288 & 3{,}2 & 0{,}38 & 0{,}8 \\
+500  & 0{,}1721 & 5{,}104 & 3{,}8 & 0{,}42 & 1{,}1 \\
+750  & 0{,}1698 & 4{,}932 & 4{,}1 & 0{,}45 & 1{,}4 \\
+1000 & 0{,}1612 & 4{,}847 & 4{,}3 & 0{,}48 & 1{,}7 \\
+1250 & 0{,}1583 & 4{,}721 & 4{,}5 & 0{,}51 & 2{,}0 \\
+1500 & 0{,}1547 & 4{,}658 & 4{,}7 & 0{,}53 & 2{,}3 \\
+1750 & 0{,}1512 & 4{,}512 & 4{,}8 & 0{,}56 & 2{,}6 \\
+2000 & 0{,}1487 & 4{,}389 & 4{,}9 & 0{,}59 & 2{,}9 \\
+2250 & 0{,}1463 & 4{,}274 & 5{,}0 & 0{,}62 & 3{,}1 \\
+\midrule
+\multicolumn{6}{l}{%
+  \textbf{Tham số vòng ngoài (cố định):}
+  $K_{pp}^* = 0{,}42$;\quad $K_{ip}^* = 0{,}18$;\quad $K_{dp}^* = 0{,}05$%
+} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent Trong đó: $t_s$ = thời gian xác lập (sai số $< 2\%$);
+SSE = sai số xác lập trung bình.
+Tất cả chỉ số đều trong ràng buộc thiết kế
+(overshoot $\leq 5\%$, $t_s \leq 0{,}65\,$s).
+
+\endgroup
+
+
+% ============================================================
+% Phụ lục C — Động học cơ cấu 5-bar Parallel
+% ============================================================
+\chapter*{PHỤ LỤC C\\[0.4em]ĐỘNG HỌC CƠ CẤU 5-BAR PARALLEL}
+\addcontentsline{toc}{chapter}{Phụ lục C — Động học cơ cấu 5-bar parallel}
+\label{app:fivebar}
+
+\begingroup
+\setstretch{1.5}
+\fontsize{13pt}{15.6pt}\selectfont
+\setlength{\parskip}{6pt}
+
+\textbf{Thông số hình học:}
+\begin{itemize}[leftmargin=1.5cm]
+    \item Khoảng cách hai tâm khớp chủ động: $A_1A_2 = 105\,$mm
+    \item Chiều dài khâu chủ động: $L_{act} = 100\,$mm
+    \item Chiều dài khâu bị động: $L_{pas} = 180\,$mm
+\end{itemize}
+
+\textbf{Động học thuận (FK).}
+Cho trước $(\theta_1, \theta_2)$, tọa độ điểm cuối $P(x_P, y_P)$ xác định qua
+ràng buộc vòng kín:
+\begin{align}
+    B_1 &= (L_{act}\cos\theta_1,\; L_{act}\sin\theta_1) \\
+    B_2 &= (A_1A_2 + L_{act}\cos\theta_2,\; L_{act}\sin\theta_2)
+\end{align}
+$P$ là giao điểm của hai đường tròn bán kính $L_{pas}$ tâm tại $B_1$ và $B_2$
+(chọn nghiệm $y_P < 0$ — chân hướng xuống).
+
+\textbf{Động học nghịch (IK).}
+Cho trước $P(x_P, y_P)$, tính ngược $(\theta_1, \theta_2)$:
+\begin{align}
+    \theta_1 &= \mathrm{atan2}(B_{1y},\; B_{1x}) \\
+    \theta_2 &= \mathrm{atan2}(B_{2y},\; B_{2x} - A_1A_2)
+\end{align}
+
+\textbf{Ma trận Jacobian.}
+Liên hệ vận tốc khớp với vận tốc điểm cuối:
+\begin{equation}
+    \begin{pmatrix} \dot{x}_P \\ \dot{y}_P \end{pmatrix}
+    = J(\boldsymbol{\theta})
+    \begin{pmatrix} \dot{\theta}_1 \\ \dot{\theta}_2 \end{pmatrix},
+    \qquad J = \frac{\partial(x_P,\,y_P)}{\partial(\theta_1,\,\theta_2)}
+\end{equation}
+$J$ được tính số tại mỗi bước điều khiển; điểm kỳ dị ($\det J = 0$) ứng
+với cấu hình cực biên không gian làm việc và cần tránh trong vận hành.
+
+\endgroup

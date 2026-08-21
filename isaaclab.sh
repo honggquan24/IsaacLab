@@ -18,6 +18,17 @@ tabs 4
 # get source directory
 export ISAACLAB_PATH="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 
+# Prepend every extension in source/ to PYTHONPATH so this checkout always wins over editable
+# installs that point at a different Isaac Lab clone. Without this, `isaaclab` and
+# `isaaclab_assets` can resolve to two different repositories at two different versions.
+for ext_dir in "${ISAACLAB_PATH}"/source/*/; do
+    ext_name="$(basename "${ext_dir}")"
+    if [ -d "${ext_dir}${ext_name}" ]; then
+        PYTHONPATH="${ext_dir%/}:${PYTHONPATH}"
+    fi
+done
+export PYTHONPATH
+
 #==
 # Helper functions
 #==
