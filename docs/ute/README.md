@@ -132,10 +132,16 @@ Script vá 4 thứ, idempotent, gộp từ 4 script `usdfix_*` cũ:
     --task Isaac-Wheeled-Biped-Wheel --num_envs 1 \
     --checkpoint logs/rsl_rl/legged_v5_wheel_mimic/2026-06-17_03-39-14/model_10799.pt
 
-# bản có camera bám theo robot (cần --enable_cameras)
+# ít env + khung nhìn gần, để quay video (bộ ghi viewport, không cần camera trên robot)
 ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
-    --task Isaac-Wheeled-Biped-Wheel-Play --num_envs 4 --enable_cameras --video
+    --task Isaac-Wheeled-Biped-Wheel-Play --num_envs 4 --video --video_length 600
 ```
+
+> Camera gắn trên robot (`CameraCfg`/`TiledCameraCfg` đặt dưới prim của robot) **không dùng
+> được trên máy này**: Isaac Sim 5.1 báo `TypeError: Unable to write from unknown dtype,
+> kind=f, size=0` khi `omni.syntheticdata` gắn annotator RGB, kể cả khi chạy kèm
+> `--enable_cameras`. Vì vậy `Isaac-Wheeled-Biped-Wheel-Play` chỉ giảm số env và chỉnh khung
+> nhìn; video lấy từ bộ ghi viewport của `play.py --video`.
 
 Kiểm tra một task còn dựng được sau khi sửa code:
 
@@ -180,3 +186,45 @@ phải train lại.
 
 `uav/` vẫn nằm nguyên trên nhánh này (đến từ nhánh `uav`), chưa đổi tên và chưa
 dọn vì không nằm trong phạm vi lần này.
+
+## 10. Kết quả smoke test
+
+Chạy `bash scripts/ute/smoke_test_all.sh --num_envs 2 --steps 5` (21/25 task dựng và bước được):
+
+| Task | Kết quả |
+| --- | --- |
+| `Isaac-Wheeled-Biped-Wheel` | PASS — act=4, obs policy (44,) / critic (77,) |
+| `Isaac-Wheeled-Biped-Wheel-Play` | PASS — act=4, obs như trên |
+| `Isaac-Wheeled-Biped-Wheel-NoMimic` | PASS — act=6, obs (46,)/(79,) |
+| `Isaac-Wheeled-Biped-Wheel-PIANN` | PASS — act=10, obs (50,)/(83,) |
+| `Isaac-Wheeled-Biped-Navigation` | PASS — act=3, obs (16,) |
+| `Isaac-Wheeled-Biped-Warehouse-Nav` | PASS — act=3, obs (106,) |
+| `Isaac-Wheeled-Biped-Obstacle-Nav` | PASS — act=3, obs (106,) |
+| `Isaac-Rotary-Pendulum-Balance` | PASS — act=1, obs (11,)/(13,) |
+| `Isaac-Rotary-Pendulum-Balance-Stage1` | PASS — act=1, obs (7,)/(9,) |
+| `Isaac-Rotary-Pendulum-Balance-Stage2` | PASS — act=1, obs (11,)/(13,) |
+| `Isaac-Cart-Pendulum` | PASS — act=2, obs (4,) |
+| `Isaac-Cart-Pendulum-Double` | PASS — act=1, obs (6,) |
+| `Isaac-Balance-Car` | PASS — act=2, obs (12,)/(9,) |
+| `Isaac-Balance-Car-Navigation` | PASS — act=2, obs (16,)/(16,) |
+| `Isaac-Balance-Car-Navigation-Play` | PASS — act=2, obs (16,)/(16,) |
+| `Isaac-Evobot-Balance` | PASS — act=5, obs (85,)/(43,) |
+| `Isaac-Evobot-Velocity` | PASS — act=5, obs (60,)/(60,) |
+| `Isaac-Evobot-Velocity-Play` | PASS — act=5, obs (60,)/(60,) |
+| `Isaac-Evobot-Manipulation` | PASS — act=5, obs (59,)/(94,) |
+| `Isaac-Evobot-Arm-FineTune` | PASS — act=5, obs (60,)/(60,) |
+| `Isaac-Evobot-Gripper-FineTune` | PASS — act=5, obs (60,)/(60,) |
+| `Isaac-Balance-Car-Navigation-Pretrained` | thiếu checkpoint tầng thấp |
+| `Isaac-Balance-Car-Navigation-Pretrained-Play` | thiếu checkpoint tầng thấp |
+| `Isaac-Evobot-Navigation` | thiếu checkpoint tầng thấp |
+| `Isaac-Evobot-Navigation-Play` | thiếu checkpoint tầng thấp |
+
+Bốn task cuối **không phải lỗi code**: chúng nạp policy tầng thấp đã export mà máy này chưa
+có. Train task tầng thấp tương ứng (`Isaac-Balance-Car`, `Isaac-Evobot-Velocity`) rồi trỏ lại
+`policy_path` trong env cfg là chạy được.
+
+Ngoài ra đã kiểm tra riêng:
+
+- `Isaac-Wheeled-Biped-Wheel` nạp được checkpoint thật
+  (`model_10799.pt`, actor 44→4, critic 77) và chạy tiếp qua `play.py`.
+- Toàn bộ 25 cấu hình agent (`rsl_rl_cfg_entry_point`) khởi tạo được với rsl-rl-lib 3.1.2.

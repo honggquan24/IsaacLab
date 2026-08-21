@@ -19,6 +19,8 @@ SUMMARY=""
 for task in ${TASKS}; do
     line=$(PYTHONUNBUFFERED=1 timeout "${TIMEOUT_S}" ./isaaclab.sh -p scripts/ute/smoke_test.py --task "${task}" "$@" 2>&1 \
         | grep -m1 'KẾT QUẢ SMOKE TEST: ')
+    # `timeout` chỉ giết wrapper bash, tiến trình python có thể sống sót và treo — dọn nốt.
+    pkill -f "smoke_test.py --task ${task}\\b" >/dev/null 2>&1
     line=${line#KẾT QUẢ SMOKE TEST: }
     [ -z "${line}" ] && line="FAIL  ${task}  (không dựng được env / quá ${TIMEOUT_S}s)"
     echo "${line}"

@@ -17,12 +17,10 @@ import isaaclab.sim as sim_utils
 from isaaclab.actuators import DCMotorCfg
 from isaaclab.assets import ArticulationCfg
 
-# PATH CONFIG - Use evobot_v1 root directory's USD file
-# File is at: evobot_v1/navigation/balance/balance_cfg.py
-# USD is at:  evobot_v1/usd_file/evoBOT_cfg.usd
-# Need to go up 2 levels: balance/ -> navigation/ -> evobot_v1/
+# Dùng chung file USD với cfg gốc của evoBOT (``evobot_cfg.py``). Bản ``evoBOT_cfg.usd``
+# cũ chỉ là một layer chỉnh sửa, thiếu contact reporting nên task balance không dựng được.
 CURRENT_DIR = Path(__file__).resolve().parent.parent
-usd_file_path = CURRENT_DIR / "usd" / "evoBOT_cfg.usd"
+usd_file_path = CURRENT_DIR / "usd" / "evoBOT_v2_cfg.usd"
 EVOBOT_USD_PATH = usd_file_path.resolve()
 
 if not EVOBOT_USD_PATH.exists():
@@ -30,6 +28,7 @@ if not EVOBOT_USD_PATH.exists():
 
 # ROBOT CONFIG FOR BALANCE TASK
 EVOBOT_BALANCE_CFG = ArticulationCfg(
+    articulation_root_prim_path="/evobot/evobot/top_link",
     spawn=sim_utils.UsdFileCfg(
         usd_path=str(EVOBOT_USD_PATH),
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
@@ -54,8 +53,8 @@ EVOBOT_BALANCE_CFG = ArticulationCfg(
             # --- Arm (Revolute joint) ---
             "arm_joint": 0.0,
             # --- Grabbing mechanism (Prismatic joints) ---
-            "left_grabbing_joint": 0.0,
-            "right_grabbing_joint": 0.0,
+            "left_gripper_joint": 0.0,
+            "right_gripper_joint": 0.0,
         },
     ),
     actuators={
@@ -87,7 +86,7 @@ EVOBOT_BALANCE_CFG = ArticulationCfg(
         ),
         # ===== Grabbers - TRAINING CONFIG =====
         "grabbers": DCMotorCfg(
-            joint_names_expr=[".*_grabbing_joint"],
+            joint_names_expr=[".*_gripper_joint"],
             effort_limit=2000.0,  # Match training (NOT 200!)
             velocity_limit=1.0,  # Match training (NOT 100!)
             stiffness=1.0,  # Match training (NOT 0.0!)

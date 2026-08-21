@@ -6,9 +6,9 @@
 """Configuration for the Evobot V1 Robot imported from Onshape.
 
 USD Structure (see EVOBOT.md for details):
-- 5 DOF: left_wheel_joint, right_wheel_joint, arm_joint, left_grabbing_joint, right_grabbing_joint
+- 6 khớp: arm_joint, base_joint, left_wheel_joint, right_wheel_joint, left_gripper_joint, right_gripper_joint
 - All joints at root level: /evobot/evobot/<joint_name>
-- Main bodies: base_link (root), head_link, arm_link, wheel, wheel_01, gripper, gripper_01
+- 7 link: top_link (root), leg_link, arm_link, wheel, wheel_01, gripper, gripper_01
 """
 
 from pathlib import Path

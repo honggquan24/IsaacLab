@@ -74,9 +74,9 @@ class EvobotSceneConfig(InteractiveSceneCfg):
         gravity_bias=(0.0, 0.0, 0.0),
     )
 
-    # # Contact sensor - mounted on head_link to detect illegal contacts
+    # # Contact sensor - mounted on top_link to detect illegal contacts
     # contact_forces_arm_link = ContactSensorCfg(
-    #     prim_path="/World/envs/env_.*/Robot/evobot/evobot/head_link",
+    #     prim_path="/World/envs/env_.*/Robot/evobot/evobot/top_link",
     #     update_period=0.01,
     # )
 
@@ -90,8 +90,8 @@ class ActionCfg:
     - left_wheel_joint (Revolute)
     - right_wheel_joint (Revolute)
     - arm_joint (Revolute)
-    - left_grabbing_joint (Prismatic)
-    - right_grabbing_joint (Prismatic)
+    - left_gripper_joint (Prismatic)
+    - right_gripper_joint (Prismatic)
     """
 
     # Wheels - High torque for locomotion
@@ -117,8 +117,8 @@ class ActionCfg:
     grabber_effort = actions.JointEffortActionCfg(
         asset_name="robot",
         joint_names=[
-            "left_grabbing_joint",  # Prismatic - Left gripper
-            "right_grabbing_joint",  # Prismatic - Right gripper
+            "left_gripper_joint",  # Prismatic - Left gripper
+            "right_gripper_joint",  # Prismatic - Right gripper
         ],
         scale=1.0,  # Low force to avoid damaging objects
     )
@@ -387,7 +387,7 @@ class RewardCfg:
     undesired_contacts = RewardTermCfg(
         func=undesired_contacts,
         weight=-10.0,
-        params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names="head_link"), "threshold": 1.0},
+        params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names="top_link"), "threshold": 1.0},
     )
 
     # Manipulation - Joint angle tracking for arm
@@ -452,7 +452,7 @@ class TerminationsCfg:
     # Contact illegal
     arm_contact = TerminationTermCfg(
         func=terminations.illegal_contact,
-        params={"threshold": 10.0, "sensor_cfg": SceneEntityCfg("contact_forces", body_names="head_link")},
+        params={"threshold": 10.0, "sensor_cfg": SceneEntityCfg("contact_forces", body_names="top_link")},
     )
 
     left_grip_contact = TerminationTermCfg(

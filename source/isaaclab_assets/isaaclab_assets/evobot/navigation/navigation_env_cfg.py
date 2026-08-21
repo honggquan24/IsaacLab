@@ -260,7 +260,7 @@ class TerminationsCfg:
     # Contact illegal
     arm_contact = TerminationTermCfg(
         func=terminations.illegal_contact,
-        params={"threshold": 10.0, "sensor_cfg": SceneEntityCfg("contact_forces", body_names="head_link")},
+        params={"threshold": 10.0, "sensor_cfg": SceneEntityCfg("contact_forces", body_names="top_link")},
     )
 
     left_grip_contact = TerminationTermCfg(

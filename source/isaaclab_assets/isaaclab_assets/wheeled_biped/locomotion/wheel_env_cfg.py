@@ -32,7 +32,7 @@ from isaaclab.managers import (
     TerminationTermCfg,
 )
 from isaaclab.scene import InteractiveSceneCfg
-from isaaclab.sensors import CameraCfg, ContactSensorCfg
+from isaaclab.sensors import ContactSensorCfg
 from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.utils import configclass
 
@@ -490,40 +490,22 @@ class WheeledBipedWheelEnvCfg(ManagerBasedRLEnvCfg):
 
 
 @configclass
-class WheeledBipedPlaySceneCfg(WheeledBipedSceneCfg):
-    """Scene dùng khi quay video: thêm camera bám theo robot.
-
-    Camera KHÔNG nằm trong scene train vì mỗi env sẽ dựng một camera riêng
-    (rất tốn) và Isaac Lab bắt buộc phải chạy kèm ``--enable_cameras``.
-    """
-
-    follow_cam: CameraCfg = CameraCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/Robot/Robot/base/follow_cam",
-        update_period=0.0,  # update mỗi bước sim (= dt)
-        height=480,
-        width=640,
-        data_types=["rgb"],
-        spawn=sim_utils.PinholeCameraCfg(
-            focal_length=12.0,
-            focus_distance=400.0,
-            horizontal_aperture=20.955,
-            clipping_range=(0.05, 200.0),
-        ),
-        offset=CameraCfg.OffsetCfg(
-            pos=(0.15, 0.2, 0.25),  # 0.35m trước mặt, 0.25m trên base
-            rot=(0.9659, 0.0, -0.2588, 0.0),  # pitch -30° (quaternion wxyz)
-            convention="ros",
-        ),
-    )
-
-
-@configclass
 class WheeledBipedWheelPlayEnvCfg(WheeledBipedWheelEnvCfg):
-    """Biến thể để quay video/demo: ít env, có camera bám, tắt randomize nền.
+    """Biến thể để xem lại policy / quay video: ít env, camera nhìn gần robot.
+
+    Quay video bằng bộ ghi viewport của ``play.py`` chứ không gắn camera vào robot:
+    trên Isaac Sim 5.1 ở máy này, mọi ``CameraCfg``/``TiledCameraCfg`` đặt dưới prim
+    của robot đều làm ``omni.syntheticdata`` báo
+    ``TypeError: Unable to write from unknown dtype`` lúc gắn annotator RGB.
 
     Chạy:
         ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \\
-            --task Isaac-Wheeled-Biped-Wheel-Play --num_envs 4 --enable_cameras
+            --task Isaac-Wheeled-Biped-Wheel-Play --num_envs 4 --video --video_length 600
     """
 
-    scene: WheeledBipedPlaySceneCfg = WheeledBipedPlaySceneCfg(num_envs=4, env_spacing=2.0)
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 4
+        self.scene.env_spacing = 3.0
+        self.viewer.eye = (1.8, 1.8, 1.2)
+        self.viewer.lookat = (0.0, 0.0, 0.3)

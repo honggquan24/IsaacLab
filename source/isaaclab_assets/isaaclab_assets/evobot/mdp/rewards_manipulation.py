@@ -65,15 +65,14 @@ def undesired_contacts(
     sensor_cfg: SceneEntityCfg,
     threshold: float = 1.0,
 ) -> torch.Tensor:
-    """Penalize undesired contacts (e.g., arm touching ground)."""
+    """Phạt phần lực va chạm vượt ``threshold`` [N] trên các link được chọn.
+
+    Chỉ tính trên ``sensor_cfg.body_ids`` rồi cộng theo link, nên trả về shape
+    ``(num_envs,)`` đúng như reward manager yêu cầu.
+    """
     contact_sensor = env.scene.sensors[sensor_cfg.name]
-    net_contact_force = torch.norm(contact_sensor.data.net_forces_w, dim=-1)
-    contact_penalty = torch.where(
-        net_contact_force > threshold,
-        net_contact_force - threshold,
-        torch.zeros_like(net_contact_force),
-    )
-    return contact_penalty
+    net_contact_force = torch.norm(contact_sensor.data.net_forces_w[:, sensor_cfg.body_ids], dim=-1)
+    return torch.sum((net_contact_force - threshold).clamp(min=0.0), dim=1)
 
 
 def reward_man(
@@ -130,12 +129,14 @@ def gripper_height_tracking_l2(
     asset: Articulation = env.scene[asset_cfg.name]
     command = env.command_manager.get_command(command_name)
 
-    # Extract target z-position from command [x, y, z, qw, qx, qy, qz]
-    target_z = command[:, 2]  # Shape: (num_envs,)
+    # Lệnh có dạng [x, y, z, qw, qx, qy, qz]; chỉ lấy z làm độ cao mong muốn [m].
+    target_z = command[:, 2].unsqueeze(-1)
 
-    joint_pos = asset.data.joint_pos[:, asset_cfg.joint_ids]
+    # Độ cao kẹp so với gốc thân robot [m] — dùng body_ids đúng như docstring mô tả.
+    # (Trước đây hàm đọc nhầm ``joint_pos`` nên trả về sai chiều và sai đại lượng.)
+    gripper_z = asset.data.body_pos_w[:, asset_cfg.body_ids, 2] - asset.data.root_pos_w[:, 2].unsqueeze(-1)
 
-    return torch.sum(torch.square(joint_pos - target_z), dim=1)
+    return torch.sum(torch.square(gripper_z - target_z), dim=1)
 
 
 def binary_gripper_tracking(

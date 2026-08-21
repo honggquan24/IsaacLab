@@ -15,6 +15,7 @@ Chạy:
 """
 
 import argparse
+import contextlib
 
 from isaaclab.app import AppLauncher
 
@@ -42,6 +43,7 @@ import isaaclab_assets  # noqa: F401, E402  (đăng ký task của dự án)
 
 PROJECT_TASKS = [
     "Isaac-Wheeled-Biped-Wheel",
+    "Isaac-Wheeled-Biped-Wheel-Play",
     "Isaac-Wheeled-Biped-Wheel-NoMimic",
     "Isaac-Wheeled-Biped-Wheel-PIANN",
     "Isaac-Wheeled-Biped-Navigation",
@@ -86,7 +88,9 @@ def run_task(task: str, num_envs: int, steps: int) -> str:
         return f"FAIL  {task:<48} {type(exc).__name__}: {exc}"
     finally:
         if env is not None:
-            env.close()
+            # Env dựng dở (ví dụ thiếu file checkpoint) có thể treo khi đóng — bỏ qua lỗi ở đây.
+            with contextlib.suppress(Exception):
+                env.close()
 
 
 def main() -> None:
