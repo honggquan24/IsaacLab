@@ -53,6 +53,8 @@ PROJECT_TASKS = [
     "Isaac-Rotary-Pendulum-Balance-Stage1",
     "Isaac-Rotary-Pendulum-Balance-Stage2",
     "Isaac-Cart-Pendulum",
+    "Isaac-Cart-Pendulum-Position",
+    "Isaac-Cart-Pendulum-Position-Play",
     "Isaac-Cart-Pendulum-Double",
     "Isaac-Balance-Car",
     "Isaac-Balance-Car-Navigation",

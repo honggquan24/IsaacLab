@@ -148,6 +148,13 @@ theo tần số điều khiển của task đó — mở file, copy, chạy.
 > `--enable_cameras`. Vì vậy `Isaac-Wheeled-Biped-Wheel-Play` chỉ giảm số env và chỉnh khung
 > nhìn; video lấy từ bộ ghi viewport của `play.py --video`.
 
+`Isaac-Cart-Pendulum-Position` cho xe đẩy bám mốc vị trí thay vì chỉ đứng cân bằng — mốc
+đổi sau mỗi 3–5 s và hiện bằng quả cầu đỏ trên ray, nhìn ra ngay trong video. Khoảng lấy mẫu
+suy từ giới hạn khớp `Slider_1` trong USD (60% giới hạn mềm) nên không phụ thuộc ray dài bao
+nhiêu. Vị trí quả cầu được tính bằng `root_pos_w + rail_axis * lệnh`, giả sử ray nằm dọc trục
+X và xe ở toạ độ khớp 0 trùng gốc thân robot; nếu chạy thấy quả cầu lệch thì chỉnh
+`rail_axis` / `marker_offset` trong `CommandsCfg` của `cart_pendulum_env_cfg.py`.
+
 Kiểm tra một task còn dựng được sau khi sửa code:
 
 ```bash

@@ -1,6 +1,31 @@
 Changelog
 ---------
 
+0.3.1 (2026-08-22)
+~~~~~~~~~~~~~~~~~~
+
+Added
+^^^^^
+
+* Added ``isaaclab_assets.cart_pendulum.mdp.commands.CartPositionCommandCfg``, a command term that
+  samples a target cart position along the rail. The sampling range follows the joint limits in the
+  USD (``limit_ratio`` of the soft limits) so it does not need the rail length hard-coded, and its
+  debug visualization draws the goal as a sphere on the rail.
+* Added position-tracking reward terms to ``isaaclab_assets.cart_pendulum.mdp.rewards``:
+  ``track_cart_position_exp``, ``cart_velocity_near_goal_l2``, ``upright_pendulum_exp`` and
+  ``pendulum_ang_vel_l2``. These resolve joints through :class:`SceneEntityCfg` instead of hard-coded
+  indices.
+* Added the ``Isaac-Cart-Pendulum-Position`` task, where the cart balances the pendulum while driving
+  to commanded positions, and ``Isaac-Cart-Pendulum-Position-Play``, a 60 s-episode variant for
+  recording video.
+
+Fixed
+^^^^^
+
+* Fixed the docstring of ``CartPendulumEnvCfg.TerminationsCfg``, which had unrelated text pasted into
+  it.
+
+
 0.3.0 (2026-08-22)
 ~~~~~~~~~~~~~~~~~~
 

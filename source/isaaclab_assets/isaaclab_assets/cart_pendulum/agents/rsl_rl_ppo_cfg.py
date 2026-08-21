@@ -36,3 +36,21 @@ class CartPendulumPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         desired_kl=0.01,
         max_grad_norm=0.5,
     )
+
+
+@configclass
+class CartPendulumPositionPPORunnerCfg(CartPendulumPPORunnerCfg):
+    """Task bám vị trí khó hơn task cân bằng: cần thêm vòng lặp và nhiễu khám phá lớn hơn."""
+
+    max_iterations = 600
+    save_interval = 100
+    experiment_name = "cartpole_v1_position_ppo"
+    policy = RslRlPpoActorCriticCfg(
+        # nhiễu ban đầu lớn hơn 0.2 để xe dám chạy hết ray đi tìm mốc ở xa
+        init_noise_std=0.5,
+        actor_obs_normalization=True,
+        critic_obs_normalization=True,
+        actor_hidden_dims=[256, 256],
+        critic_hidden_dims=[256, 512, 256],
+        activation="relu",
+    )

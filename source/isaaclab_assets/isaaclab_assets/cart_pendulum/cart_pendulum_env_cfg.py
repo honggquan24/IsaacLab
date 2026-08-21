@@ -19,6 +19,7 @@ from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.utils import configclass
 
 from .cart_pendulum_cfg import CART_PENDULUM_CFG
+from .mdp.commands import CartPositionCommandCfg
 from .mdp.rewards import *  # noqa: F403
 
 
@@ -126,10 +127,7 @@ class RewardCfg:
 
 @configclass
 class TerminationsCfg:
-    """Termination configuration for legged r
-
-    Có thể có trễ âm thanh khi chơi game hoặc xem video.
-    obot environment."""
+    """Termination configuration for the cart pendulum environment."""
 
     # TIME OUT - Episode ends after episode_length_s
     time_out = TerminationTermCfg(
@@ -166,3 +164,104 @@ class CartPendulumEnvCfg(ManagerBasedRLEnvCfg):
         # Simulation settings
         self.sim.dt = 1 / 60  # Physics timestep = 60 Hz
         self.sim.render_interval = self.decimation  # Render every decimation steps
+
+
+##
+# Biến thể bám vị trí: xe vừa giữ con lắc đứng vừa chạy tới mốc vị trí được lệnh.
+##
+
+
+@configclass
+class CommandsCfg:
+    """Lệnh vị trí cho xe đẩy."""
+
+    cart_position = CartPositionCommandCfg(
+        joint_name="Slider_1",
+        # đổi mốc sau mỗi 3–5 s: đủ lâu để xe đi tới nơi và đứng yên một nhịp trước khi có mốc mới
+        resampling_time_range=(3.0, 5.0),
+        # chỉ dùng 60% chiều dài ray, chừa biên để xe còn chỗ giảm tốc
+        limit_ratio=0.6,
+        # hiện quả cầu đỏ đánh dấu mốc — quay video nhìn ra ngay xe đang bám cái gì
+        debug_vis=True,
+    )
+
+
+@configclass
+class PositionObservationsCfg(ObservationsCfg):
+    """Quan sát của task bám vị trí: thêm lệnh vào cuối vector quan sát (4 → 5 chiều)."""
+
+    @configclass
+    class PolicyCfg(ObservationsCfg.PolicyCfg):
+        """Observations for policy group."""
+
+        cart_position_command = ObsTerm(
+            func=mdp.generated_commands,
+            params={"command_name": "cart_position"},
+        )
+
+    policy: PolicyCfg = PolicyCfg()
+
+
+@configclass
+class PositionRewardCfg:
+    """Reward của task bám vị trí.
+
+    Viết riêng chứ không kế thừa :class:`RewardCfg`: các hàm ``cartpole_reward_*`` gộp cả vị trí
+    lẫn vận tốc con lắc vào một sai số nên không tách được phần bám vị trí xe ra.
+    """
+
+    # (1) sống sót / ngã
+    alive = RewardTermCfg(func=rewards.is_alive, weight=1.0)
+    terminating = RewardTermCfg(func=rewards.is_terminated, weight=-4.0)
+
+    # (2) giữ con lắc dựng đứng
+    upright = RewardTermCfg(func=upright_pendulum_exp, weight=2.0, params={"std": 0.35})
+    pendulum_rate = RewardTermCfg(func=pendulum_ang_vel_l2, weight=-0.02)
+
+    # (3) bám mốc vị trí và dừng hẳn tại đó
+    track_position = RewardTermCfg(func=track_cart_position_exp, weight=3.0, params={"std": 0.25})
+    stop_at_goal = RewardTermCfg(func=cart_velocity_near_goal_l2, weight=-0.2, params={"std": 0.25})
+
+    # (4) làm mượt lực đẩy cho đỡ giật khi quay video
+    action_rate = RewardTermCfg(func=rewards.action_rate_l2, weight=-0.005)
+
+
+@configclass
+class PositionTerminationsCfg(TerminationsCfg):
+    """Kết thúc episode khi con lắc đổ, để khỏi phí bước học ở tư thế không cứu được."""
+
+    pendulum_fell = TerminationTermCfg(
+        func=terminations.joint_pos_out_of_manual_limit,
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names=["Revolute_1"]),
+            "bounds": (-0.8, 0.8),
+        },
+    )
+
+
+@configclass
+class CartPendulumPositionEnvCfg(CartPendulumEnvCfg):
+    """Xe đẩy bám vị trí mục tiêu trong khi giữ con lắc thăng bằng."""
+
+    commands: CommandsCfg = CommandsCfg()
+    observations: PositionObservationsCfg = PositionObservationsCfg()
+    rewards: PositionRewardCfg = PositionRewardCfg()
+    terminations: PositionTerminationsCfg = PositionTerminationsCfg()
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        # episode ngắn hơn task cân bằng: mỗi lượt vẫn kịp 4–6 mốc mà reset dày hơn
+        self.episode_length_s = 20.0
+
+
+@configclass
+class CartPendulumPositionPlayEnvCfg(CartPendulumPositionEnvCfg):
+    """Cấu hình dùng lúc quay video: ít env, episode dài để clip không bị reset giữa chừng."""
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.scene.num_envs = 4
+        self.scene.env_spacing = 3.0
+        # 60 s liền mạch, khớp với --video_length 1800 ở 30 Hz
+        self.episode_length_s = 60.0
+        self.observations.policy.enable_corruption = False
