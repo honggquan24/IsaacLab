@@ -118,6 +118,11 @@ Script vá 4 thứ, idempotent, gộp từ 4 script `usdfix_*` cũ:
 
 ## 6. Chạy
 
+Lệnh train + quay video của **từng task** nằm ngay trong docstring của
+`isaaclab_assets/<project>/__init__.py`, đã quy đổi sẵn `--video_length` ra số step
+theo tần số điều khiển của task đó — mở file, copy, chạy.
+
+
 ```bash
 # huấn luyện
 ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \

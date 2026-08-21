@@ -3,18 +3,26 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Con lắc kép trên xe đẩy — swing-up và giữ thăng bằng.
+r"""Con lắc kép trên xe đẩy — swing-up và giữ thăng bằng.
 
-Task:
-    Isaac-Cart-Pendulum-Double — xe đẩy điều khiển bằng lực, hai khớp con lắc thụ động.
+Cách đọc lệnh quay video
+------------------------
+``--video_length`` đếm theo BƯỚC ĐIỀU KHIỂN, không phải giây. Tần số điều khiển
+= 1 / (sim.dt × decimation), ghi kèm ở từng task bên dưới.
+Video xuất ra ``logs/rsl_rl/<experiment_name>/<run>/videos/play/``.
+``--load_run`` lấy checkpoint mới nhất trong thư mục run đó; muốn chỉ đúng một
+checkpoint thì thay bằng ``--checkpoint <đường/dẫn/model_xxx.pt>``.
+Bỏ ``--headless`` nếu muốn xem cửa sổ Isaac Sim trong lúc ghi.
 
-Train:
+Isaac-Cart-Pendulum-Double — xe đẩy điều khiển bằng lực, hai khớp con lắc thụ động
+    30 Hz (sim.dt 1/60, decimation 2) → 60 s = 1800 step, 120 s = 3600 step
+
     ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
         --task Isaac-Cart-Pendulum-Double --num_envs 4096 --headless
 
-Play:
     ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
-        --task Isaac-Cart-Pendulum-Double --num_envs 4
+        --task Isaac-Cart-Pendulum-Double --num_envs 4 --headless \
+        --video --video_length 1800 --load_run <tên_run>
 """
 
 import gymnasium as gym

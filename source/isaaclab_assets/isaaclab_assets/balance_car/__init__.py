@@ -3,18 +3,48 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Xe hai bánh tự cân bằng — giữ thăng bằng và điều hướng tới đích.
+r"""Xe hai bánh tự cân bằng — giữ thăng bằng và điều hướng tới đích.
 
-Task:
-    Isaac-Balance-Car                            giữ thăng bằng, bám lệnh vận tốc
-    Isaac-Balance-Car-Navigation                 tầng cao tới đích, học từ đầu
-    Isaac-Balance-Car-Navigation-Play            như trên, ít env
-    Isaac-Balance-Car-Navigation-Pretrained      tầng cao dùng policy thăng bằng đã train
-    Isaac-Balance-Car-Navigation-Pretrained-Play như trên, ít env
+Cách đọc lệnh quay video
+------------------------
+``--video_length`` đếm theo BƯỚC ĐIỀU KHIỂN, không phải giây. Tần số điều khiển
+= 1 / (sim.dt × decimation), ghi kèm ở từng task bên dưới.
+Video xuất ra ``logs/rsl_rl/<experiment_name>/<run>/videos/play/``.
+``--load_run`` lấy checkpoint mới nhất trong thư mục run đó; muốn chỉ đúng một
+checkpoint thì thay bằng ``--checkpoint <đường/dẫn/model_xxx.pt>``.
+Bỏ ``--headless`` nếu muốn xem cửa sổ Isaac Sim trong lúc ghi.
 
-Train:
+Isaac-Balance-Car — giữ thăng bằng, bám lệnh vận tốc
+    30 Hz (sim.dt 1/60, decimation 2) → 60 s = 1800 step
+
     ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
         --task Isaac-Balance-Car --num_envs 2048 --headless
+
+    ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
+        --task Isaac-Balance-Car --num_envs 4 --headless \
+        --video --video_length 1800 --load_run <tên_run>
+
+Isaac-Balance-Car-Navigation — tầng cao tới đích, học từ đầu
+    30 Hz → 60 s = 1800 step; mỗi episode 5 s = 150 step
+
+    ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
+        --task Isaac-Balance-Car-Navigation --num_envs 2048 --headless
+
+    ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
+        --task Isaac-Balance-Car-Navigation-Play --num_envs 16 --headless \
+        --video --video_length 1800 --load_run <tên_run>
+
+Isaac-Balance-Car-Navigation-Pretrained — tầng cao dùng policy thăng bằng đã train
+    6 Hz (decimation 2×5) → 60 s = 360 step; mỗi episode 5 s = 30 step
+    Phải train ``Isaac-Balance-Car`` trước, rồi sửa ``policy_path`` trong
+    ``navigation/navigation_pretrained_env_cfg.py`` trỏ tới ``exported/policy.pt``.
+
+    ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
+        --task Isaac-Balance-Car-Navigation-Pretrained --num_envs 2048 --headless
+
+    ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
+        --task Isaac-Balance-Car-Navigation-Pretrained-Play --num_envs 16 --headless \
+        --video --video_length 360 --load_run <tên_run>
 """
 
 import gymnasium as gym

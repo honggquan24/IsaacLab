@@ -3,18 +3,49 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Con lắc ngược quay (Furuta) — swing-up rồi giữ thăng bằng.
+r"""Con lắc ngược quay (Furuta) — swing-up rồi giữ thăng bằng.
 
-Task:
-    Isaac-Rotary-Pendulum-Balance         một giai đoạn: swing-up + giữ thăng bằng
-    Isaac-Rotary-Pendulum-Balance-Stage1  curriculum giai đoạn 1: chỉ swing-up
-    Isaac-Rotary-Pendulum-Balance-Stage2  curriculum giai đoạn 2: bám vị trí cánh tay
+Chi tiết curriculum: ``docs/ute/rotary_pendulum_curriculum.md``.
 
-Train:
+
+Cách đọc lệnh quay video
+------------------------
+``--video_length`` đếm theo BƯỚC ĐIỀU KHIỂN, không phải giây. Tần số điều khiển
+= 1 / (sim.dt × decimation), ghi kèm ở từng task bên dưới.
+Video xuất ra ``logs/rsl_rl/<experiment_name>/<run>/videos/play/``.
+``--load_run`` lấy checkpoint mới nhất trong thư mục run đó; muốn chỉ đúng một
+checkpoint thì thay bằng ``--checkpoint <đường/dẫn/model_xxx.pt>``.
+Bỏ ``--headless`` nếu muốn xem cửa sổ Isaac Sim trong lúc ghi.
+
+Isaac-Rotary-Pendulum-Balance — một giai đoạn: swing-up + giữ thăng bằng
+    60 Hz (sim.dt 1/60, decimation 1) → 60 s = 3600 step; mỗi episode 10 s = 600 step
+
     ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
         --task Isaac-Rotary-Pendulum-Balance --num_envs 4096 --headless
 
-Chi tiết curriculum: ``docs/ute/rotary_pendulum_curriculum.md``.
+    ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
+        --task Isaac-Rotary-Pendulum-Balance --num_envs 4 --headless \
+        --video --video_length 3600 --load_run <tên_run>
+
+Isaac-Rotary-Pendulum-Balance-Stage1 — curriculum giai đoạn 1: chỉ swing-up
+    60 Hz → 60 s = 3600 step; mỗi episode 20 s = 1200 step
+
+    ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
+        --task Isaac-Rotary-Pendulum-Balance-Stage1 --num_envs 4096 --headless
+
+    ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
+        --task Isaac-Rotary-Pendulum-Balance-Stage1 --num_envs 4 --headless \
+        --video --video_length 3600 --load_run <tên_run>
+
+Isaac-Rotary-Pendulum-Balance-Stage2 — curriculum giai đoạn 2: bám vị trí cánh tay
+    60 Hz → 60 s = 3600 step; mỗi episode 15 s = 900 step
+
+    ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
+        --task Isaac-Rotary-Pendulum-Balance-Stage2 --num_envs 4096 --headless
+
+    ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
+        --task Isaac-Rotary-Pendulum-Balance-Stage2 --num_envs 4 --headless \
+        --video --video_length 3600 --load_run <tên_run>
 """
 
 import gymnasium as gym

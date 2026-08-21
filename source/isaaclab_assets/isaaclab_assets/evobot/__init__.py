@@ -3,19 +3,84 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""evoBOT — robot hai bánh tự cân bằng có hai tay máy.
+r"""evoBOT — robot hai bánh tự cân bằng có hai tay máy.
 
-Task:
-    Isaac-Evobot-Balance            giữ thăng bằng tại chỗ
-    Isaac-Evobot-Velocity           bám lệnh vận tốc (kèm cả tay máy)
-    Isaac-Evobot-Velocity-Play      như trên, ít env, để xem lại policy
-    Isaac-Evobot-Arm-FineTune       tinh chỉnh riêng khớp tay
-    Isaac-Evobot-Gripper-FineTune   tinh chỉnh riêng kẹp
-    Isaac-Evobot-Navigation         tầng cao tới đích, dùng policy vận tốc đã train
-    Isaac-Evobot-Navigation-Play    như trên, ít env
-    Isaac-Evobot-Manipulation       vừa di chuyển vừa thao tác
+Lệnh train/play chi tiết cho từng biến thể cũ: xem ``docs/ute/evobot_tasks.md``.
 
-Lệnh train/play chi tiết cho từng task: xem ``docs/ute/evobot_tasks.md``.
+
+Cách đọc lệnh quay video
+------------------------
+``--video_length`` đếm theo BƯỚC ĐIỀU KHIỂN, không phải giây. Tần số điều khiển
+= 1 / (sim.dt × decimation), ghi kèm ở từng task bên dưới.
+Video xuất ra ``logs/rsl_rl/<experiment_name>/<run>/videos/play/``.
+``--load_run`` lấy checkpoint mới nhất trong thư mục run đó; muốn chỉ đúng một
+checkpoint thì thay bằng ``--checkpoint <đường/dẫn/model_xxx.pt>``.
+Bỏ ``--headless`` nếu muốn xem cửa sổ Isaac Sim trong lúc ghi.
+
+Isaac-Evobot-Balance — giữ thăng bằng tại chỗ
+    60 Hz (sim.dt 1/60, decimation 1) → 60 s = 3600 step; mỗi episode 10 s = 600 step
+
+    ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
+        --task Isaac-Evobot-Balance --num_envs 1024 --headless
+
+    ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
+        --task Isaac-Evobot-Balance --num_envs 4 --headless \
+        --video --video_length 3600 --load_run <tên_run>
+
+Isaac-Evobot-Velocity — bám lệnh vận tốc, có cả tay máy
+    60 Hz → 60 s = 3600 step; mỗi episode 10 s = 600 step
+
+    ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
+        --task Isaac-Evobot-Velocity --num_envs 1024 --headless
+
+    ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
+        --task Isaac-Evobot-Velocity-Play --num_envs 4 --headless \
+        --video --video_length 3600 --load_run <tên_run>
+
+Isaac-Evobot-Velocity-Play — như trên, 60 s mỗi episode nên hợp để quay liền mạch
+    60 Hz → mỗi episode 60 s = 3600 step (quay 3600 step là trọn một episode)
+
+Isaac-Evobot-Arm-FineTune — tinh chỉnh riêng khớp tay
+    60 Hz → 60 s = 3600 step
+
+    ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
+        --task Isaac-Evobot-Arm-FineTune --num_envs 1024 --headless
+
+    ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
+        --task Isaac-Evobot-Arm-FineTune --num_envs 4 --headless \
+        --video --video_length 3600 --load_run <tên_run>
+
+Isaac-Evobot-Gripper-FineTune — tinh chỉnh riêng kẹp
+    60 Hz → 60 s = 3600 step
+
+    ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
+        --task Isaac-Evobot-Gripper-FineTune --num_envs 1024 --headless
+
+    ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
+        --task Isaac-Evobot-Gripper-FineTune --num_envs 4 --headless \
+        --video --video_length 3600 --load_run <tên_run>
+
+Isaac-Evobot-Manipulation — vừa di chuyển vừa thao tác
+    60 Hz → 60 s = 3600 step; mỗi episode 10 s = 600 step
+
+    ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
+        --task Isaac-Evobot-Manipulation --num_envs 1024 --headless
+
+    ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
+        --task Isaac-Evobot-Manipulation --num_envs 4 --headless \
+        --video --video_length 3600 --load_run <tên_run>
+
+Isaac-Evobot-Navigation — tầng cao tới đích, dùng policy vận tốc đã train
+    15 Hz (decimation 1×4) → 60 s = 900 step; mỗi episode 5 s = 75 step
+    Phải train ``Isaac-Evobot-Velocity`` trước, rồi sửa ``policy_path`` trong
+    ``navigation/navigation_env_cfg.py`` trỏ tới ``exported/policy.pt``.
+
+    ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
+        --task Isaac-Evobot-Navigation --num_envs 1024 --headless
+
+    ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
+        --task Isaac-Evobot-Navigation-Play --num_envs 4 --headless \
+        --video --video_length 900 --load_run <tên_run>
 """
 
 import gymnasium as gym
