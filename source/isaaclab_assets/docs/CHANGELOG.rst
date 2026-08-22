@@ -1,6 +1,16 @@
 Changelog
 ---------
 
+0.7.1 (2026-08-22)
+~~~~~~~~~~~~~~~~~~
+
+Changed
+^^^^^^^
+
+* Shrank the actor and critic of all six cart pendulum runner configs from ``[512, 512, 256]`` to
+  ``[512, 512]``.
+
+
 0.7.0 (2026-08-22)
 ~~~~~~~~~~~~~~~~~~
 

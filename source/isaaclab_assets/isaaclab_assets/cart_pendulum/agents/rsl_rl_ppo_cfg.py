@@ -18,8 +18,8 @@ class CartPendulumPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         init_noise_std=0.2,
         actor_obs_normalization=True,
         critic_obs_normalization=True,
-        actor_hidden_dims=[512, 512, 256],
-        critic_hidden_dims=[512, 512, 256],
+        actor_hidden_dims=[512, 512],
+        critic_hidden_dims=[512, 512],
         activation="relu",
     )
     algorithm = RslRlPpoAlgorithmCfg(
@@ -50,7 +50,7 @@ class CartPendulumPositionPPORunnerCfg(CartPendulumPPORunnerCfg):
         init_noise_std=0.5,
         actor_obs_normalization=True,
         critic_obs_normalization=True,
-        actor_hidden_dims=[512, 512, 256],
-        critic_hidden_dims=[512, 512, 256],
+        actor_hidden_dims=[512, 512],
+        critic_hidden_dims=[512, 512],
         activation="relu",
     )
