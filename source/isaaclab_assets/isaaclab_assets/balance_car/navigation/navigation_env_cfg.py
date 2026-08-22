@@ -21,7 +21,12 @@ from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sensors import ImuCfg
 from isaaclab.utils import configclass
 
-from ..balance_car_cfg import BALANCE_CAR_CFG
+from ..balance_car_cfg import (
+    BALANCE_CAR_AXLE_OFFSET,
+    BALANCE_CAR_CFG,
+    BALANCE_CAR_GROUND_FRICTION,
+    BALANCE_CAR_TRACTION_TORQUE,
+)
 from ..mdp.observations import (
     angl_vel_b,
     lin_vel_b,
@@ -31,8 +36,8 @@ from ..mdp.observations import (
     obs_pos_world,
 )
 from ..mdp.rewards import (
-    reward_angle_r,
-    reward_angle_y,
+    cover_flat_exp,
+    cover_flat_l2,
     reward_roll_rate,
 )
 from ..mdp.terminations import reset_when_fall
@@ -58,7 +63,19 @@ class BalanceCarNavigationSceneCfg(InteractiveSceneCfg):
     # Ground plane
     ground = AssetBaseCfg(
         prim_path="/World/ground",
-        spawn=sim_utils.GroundPlaneCfg(),
+        spawn=sim_utils.GroundPlaneCfg(
+            # Ma sát PHẢI đặt tay: mặc định của Isaac Lab là 0.5, USD Onshape không mang vật
+            # liệu vật lý nào, và ở 0.5 thì xe không cứu nổi độ nghiêng quá 26.6° — triệu chứng
+            # nhìn ra là "bánh yếu" trong khi thật ra là bánh TRƯỢT. Xem BALANCE_CAR_GROUND_FRICTION.
+            physics_material=sim_utils.RigidBodyMaterialCfg(
+                static_friction=BALANCE_CAR_GROUND_FRICTION,
+                dynamic_friction=BALANCE_CAR_GROUND_FRICTION * 0.9,
+                restitution=0.0,
+                # "max" có ưu tiên cao nhất trong PhysX nên giá trị này thắng, không bị lấy
+                # trung bình với 0.5 mặc định của bánh
+                friction_combine_mode="max",
+            ),
+        ),
     )
 
     # Robot
@@ -66,12 +83,12 @@ class BalanceCarNavigationSceneCfg(InteractiveSceneCfg):
         prim_path="{ENV_REGEX_NS}/Robot",
     )
 
-    # IMU sensor
+    # IMU sensor — phải khớp y hệt BalanceCarSceneCfg của tầng thấp, xem chú thích ở đó
     imu = ImuCfg(
-        prim_path="/World/envs/env_.*/Robot/balance_robot/balance_robot/balance_body",
+        prim_path="/World/envs/env_.*/Robot/robot/robot/Group_1",
         offset=ImuCfg.OffsetCfg(
-            pos=(0.0, 0.0, -0.2),
-            rot=(0.0, 0.0, 0.0, 1.0),
+            pos=(0.0, 0.0, BALANCE_CAR_AXLE_OFFSET),
+            rot=(1.0, 0.0, 0.0, 0.0),
         ),
         update_period=0.0,
         debug_vis=True,
@@ -82,12 +99,13 @@ class BalanceCarNavigationSceneCfg(InteractiveSceneCfg):
 class ActionsCfg:
     """Action configuration for navigation."""
 
+    # dấu và trần mô-men lấy y hệt tầng thấp — xem ActionsCfg trong balance_env_cfg.py
     joint_effort = mdp.JointEffortActionCfg(
         asset_name="robot",
         joint_names=["Revolute_1", "Revolute_2"],
         scale={
-            "Revolute_1": 100.0,
-            "Revolute_2": 100.0,
+            "Revolute_1": BALANCE_CAR_TRACTION_TORQUE,
+            "Revolute_2": BALANCE_CAR_TRACTION_TORQUE,
         },
         debug_vis=True,
     )
@@ -254,10 +272,17 @@ class RewardsCfg:
     alive = RewTerm(func=mdp.is_alive, weight=1.0)
     terminating = RewTerm(func=mdp.is_terminated, weight=-100.0)
 
-    # Balance angle rewards
-    balance_roll = RewTerm(func=reward_angle_r, weight=2.0)
-    balance_yaw = RewTerm(func=reward_angle_y, weight=0.2)
+    # Balance angle rewards — dùng chung hàm với tầng thấp: đo bằng vector trọng lực trong hệ
+    # thân nên bắt cả roll lẫn pitch, xem chú thích trong ../mdp/rewards.py
+    balance_flat = RewTerm(func=cover_flat_l2, weight=-5.0)
+    balance_flat_bonus = RewTerm(func=cover_flat_exp, weight=2.0, params={"std": 0.05})
+    # bỏ balance_yaw: nó thưởng cho một hướng yaw TUYỆT ĐỐI, tức chống lại đúng việc rẽ để
+    # tới đích — mục tiêu duy nhất của task này
     balance_roll_rate = RewTerm(func=reward_roll_rate, weight=0.3)
+
+    # lực bánh mượt, cùng lý do như tầng thấp
+    action_rate = RewTerm(func=mdp.action_rate_l2, weight=-0.02)
+    joint_torque = RewTerm(func=mdp.joint_torques_l2, weight=-2.0e-5)
 
     # Navigation rewards
     position_tracking = RewTerm(
@@ -314,7 +339,7 @@ class BalanceCarNavigationEnvCfg(ManagerBasedRLEnvCfg):
         self.decimation = 2
         self.episode_length_s = 5.0
 
-        self.viewer.eye = (0.0, 8.0, 4.0)
+        self.viewer.eye = (0.0, 8.0, 16.0)
         self.viewer.lookat = (0.0, 0.0, 0.5)
 
         self.sim.dt = 1 / 60
@@ -328,5 +353,5 @@ class BalanceCarNavigationEnvCfg_PLAY(BalanceCarNavigationEnvCfg):
     def __post_init__(self) -> None:
         super().__post_init__()
         self.scene.num_envs = 16
-        self.scene.env_spacing = 5.0
+        self.scene.env_spacing = 15.0
         self.observations.policy.enable_corruption = False

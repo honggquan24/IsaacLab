@@ -202,3 +202,60 @@ def tilt_penalty(env: ManagerBasedRLEnv) -> torch.Tensor:
         1 - 2 * (quat[:, 1] ** 2 + quat[:, 2] ** 2),
     )
     return -(pitch.abs() + roll.abs())
+
+
+# =========================================================
+# BÁM QUỸ ĐẠO (dùng với PathCommand)
+# =========================================================
+#
+# Ba term dưới đây thay cho bộ reward "chạy tới đích" ở trên. Khác biệt cốt lõi: mục tiêu
+# CHUYỂN ĐỘNG, nên không có khái niệm "đã tới nơi" và cũng không cần term thưởng tiến độ.
+# Chỉ cần bám sát điểm đang chạy là đủ; tốc độ tự bị ràng buộc vì mục tiêu không đợi.
+
+
+def path_position_exp(
+    env: ManagerBasedRLEnv,
+    command_name: str = "path_command",
+    std: float = 0.5,
+) -> torch.Tensor:
+    """Thưởng theo khoảng cách tới điểm mục tiêu đang chạy. Bằng 1 khi trùng khít.
+
+    Dùng ``exp(-d²/std²)`` chứ không phải ``1 - tanh(d/std)``: ở đây mục tiêu luôn ở gần (nó
+    xuất phát ngay tại chỗ xe), nên thứ cần là độ phân giải CAO quanh 0 để phân biệt bám sát
+    với bám lỏng. ``tanh`` thì ngược lại — nó thoải ở gần và dốc ở xa, hợp với bài chạy tới
+    một đích ở xa hơn.
+
+    ``std = 0.5`` nghĩa là lệch 0.5 m còn được 37% điểm, lệch 1 m còn 2%.
+    """
+    command = env.command_manager.get_command(command_name)
+    distance = torch.norm(command[:, :2], dim=1)
+    return torch.exp(-torch.square(distance) / std**2)
+
+
+def path_heading_exp(
+    env: ManagerBasedRLEnv,
+    command_name: str = "path_command",
+    std: float = 0.6,
+) -> torch.Tensor:
+    """Thưởng khi mũi xe quay đúng chiều tiếp tuyến quỹ đạo.
+
+    Không có term này thì xe vẫn bám được điểm mục tiêu bằng cách **đi lùi** hoặc trượt ngang
+    qua các khúc cua — bám đúng vị trí mà nhìn thì sai hoàn toàn. Đây là term quyết định video
+    trông có ra hồn hay không.
+    """
+    command = env.command_manager.get_command(command_name)
+    return torch.exp(-torch.square(command[:, 2]) / std**2)
+
+
+def path_lateral_l2(
+    env: ManagerBasedRLEnv,
+    command_name: str = "path_command",
+) -> torch.Tensor:
+    """Phạt riêng phần lệch NGANG so với quỹ đạo. Dùng với trọng số âm.
+
+    ``path_position_exp`` gộp chung lệch dọc và lệch ngang, nhưng hai cái không tương đương:
+    tụt lại phía sau vài chục phân là chuyện bình thường và tự sửa được, còn cắt cua ra ngoài
+    đường thì đúng nghĩa là đi sai quỹ đạo. Tách ra để phạt nặng riêng phần ngang.
+    """
+    command = env.command_manager.get_command(command_name)
+    return torch.square(command[:, 1])

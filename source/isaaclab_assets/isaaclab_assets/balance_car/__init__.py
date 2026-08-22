@@ -5,6 +5,14 @@
 
 r"""Xe hai bánh tự cân bằng — giữ thăng bằng và điều hướng tới đích.
 
+Chuẩn bị USD
+------------
+``usd/balance_car_base.usd`` là bản Onshape thô, ``usd/balance_car_cfg.usd`` là bản đã vá và
+là bản env dùng. Sinh lại bằng::
+
+    ./isaaclab.sh -p scripts/ute/prepare_usd.py --package balance_car \
+        --floating-base --base-body Group_1 --max-angular-velocity 40 --verify
+
 Cách đọc lệnh quay video
 ------------------------
 ``--video_length`` đếm theo BƯỚC ĐIỀU KHIỂN, không phải giây. Tần số điều khiển
@@ -34,10 +42,14 @@ Isaac-Balance-Car-Navigation — tầng cao tới đích, học từ đầu
         --task Isaac-Balance-Car-Navigation-Play --num_envs 16 --headless \
         --video --video_length 1800 --load_run <tên_run>
 
-Isaac-Balance-Car-Navigation-Pretrained — tầng cao dùng policy thăng bằng đã train
-    6 Hz (decimation 2×5) → 60 s = 360 step; mỗi episode 5 s = 30 step
-    Phải train ``Isaac-Balance-Car`` trước, rồi sửa ``policy_path`` trong
-    ``navigation/navigation_pretrained_env_cfg.py`` trỏ tới ``exported/policy.pt``.
+Isaac-Balance-Car-Navigation-Pretrained — BÁM QUỸ ĐẠO, tầng cao dùng policy thăng bằng đã train
+    Mục tiêu là một điểm CHẠY LIÊN TỤC trên đường tròn hoặc hình số 8 (bán kính 1-2 m,
+    0.15-0.35 m/s), không phải một đích đứng yên. Quả cầu đỏ = mục tiêu đang chạy,
+    chuỗi chấm xanh = nguyên hình quỹ đạo.
+    6 Hz (decimation 2×5) → 60 s = 360 step; mỗi episode 20 s = 120 step
+    Điều kiện: đã train ``Isaac-Balance-Car`` VÀ chạy ``play.py`` của nó ít nhất một lần —
+    chính play.py mới sinh ra ``exported/policy.pt``. Không phải sửa ``policy_path`` bằng tay,
+    ``latest_exported_policy("carbalance_ppo")`` tự lấy run mới nhất có file đó.
 
     ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
         --task Isaac-Balance-Car-Navigation-Pretrained --num_envs 2048 --headless
@@ -100,7 +112,7 @@ gym.register(
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{__name__}.navigation.navigation_pretrained_env_cfg:BalanceCarNavigationPretrainedEnvCfg",
-        "rsl_rl_cfg_entry_point": f"{nav_agents.__name__}.rsl_rl_ppo_cfg:BalanceCarNavigationPPORunnerCfg",
+        "rsl_rl_cfg_entry_point": f"{nav_agents.__name__}.rsl_rl_ppo_cfg:BalanceCarNavigationPretrainedPPORunnerCfg",
     },
 )
 
@@ -110,6 +122,6 @@ gym.register(
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{__name__}.navigation.navigation_pretrained_env_cfg:BalanceCarNavigationPretrainedEnvCfg_PLAY",
-        "rsl_rl_cfg_entry_point": f"{nav_agents.__name__}.rsl_rl_ppo_cfg:BalanceCarNavigationPPORunnerCfg",
+        "rsl_rl_cfg_entry_point": f"{nav_agents.__name__}.rsl_rl_ppo_cfg:BalanceCarNavigationPretrainedPPORunnerCfg",
     },
 )

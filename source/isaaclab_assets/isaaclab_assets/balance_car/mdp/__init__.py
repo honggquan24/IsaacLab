@@ -3,6 +3,7 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
+from .commands import *
 from .rewards import *
 from .terminations import *
 from .observations import *

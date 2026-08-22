@@ -16,7 +16,7 @@ Chuẩn bị USD
 ``usd/cart_pendulum_triple_base.usd`` là bản Onshape thô,
 ``usd/cart_pendulum_triple_cfg.usd`` là bản đã vá và là bản env dùng. Sinh lại bằng::
 
-    ./isaaclab.sh -p scripts/ute/cart_pendulum/prepare_usd.py \
+    ./isaaclab.sh -p scripts/ute/prepare_usd.py \
         --package cart_pendulum_triple --verify
 
 Cách đọc lệnh quay video
@@ -24,7 +24,7 @@ Cách đọc lệnh quay video
 ``--video_length`` đếm theo BƯỚC ĐIỀU KHIỂN, không phải giây. Tần số điều khiển
 = 1 / (sim.dt × decimation). Video xuất ra ``logs/rsl_rl/<experiment_name>/<run>/videos/play/``.
 
-Isaac-Cart-Pendulum-Triple — swing-up rồi giữ ba khâu thẳng đứng
+Isaac-Cart-Pendulum-Triple — giữ ba khâu thẳng đứng
     60 Hz (sim.dt 1/60, decimation 1) → 60 s = 3600 step, 120 s = 7200 step
 
     ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \

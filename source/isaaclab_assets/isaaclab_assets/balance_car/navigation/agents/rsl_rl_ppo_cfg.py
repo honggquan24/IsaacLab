@@ -46,3 +46,17 @@ class BalanceCarNavigationPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         desired_kl=0.01,
         max_grad_norm=1.0,
     )
+
+
+@configclass
+class BalanceCarNavigationPretrainedPPORunnerCfg(BalanceCarNavigationPPORunnerCfg):
+    """Bản cascade: tầng cao xuất lệnh vận tốc cho policy thăng bằng đã đóng băng.
+
+    Phải có thư mục log RIÊNG. Hai task nav có obs/action khác hẳn nhau (bản phẳng xuất
+    2 mô-men bánh, bản này xuất 3 số vận tốc), dùng chung ``experiment_name`` thì ``--resume``
+    và ``play.py`` đều lấy run mới nhất bất kể nó thuộc task nào, và nạp nhầm là lệch shape.
+    """
+
+    experiment_name = "cart_v1_navigation_pretrained"
+    # tầng cao chạy 6 Hz, episode 5 s = 30 bước → 300 bước là 10 episode mỗi vòng
+    num_steps_per_env = 300

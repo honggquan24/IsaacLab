@@ -27,11 +27,14 @@ def use_triple_pendulum(cfg: CartPendulumEnvCfg) -> None:
     cfg.viewer.eye = (3.8, 0.0, 1.6)
     cfg.viewer.lookat = (0.0, 0.0, 0.8)
     cfg.scene.env_spacing = 3.0
+    # ba khâu thì miền hút hẹp hơn hẳn hai khâu: giữ nhiễu khởi động ở ~1.1° cho mỗi khâu,
+    # nếu không phần lớn env sinh ra đã ở trạng thái không cứu nổi
+    cfg.events.reset_pendulum.params["angle_noise"] = 0.02
 
 
 @configclass
 class CartPendulumTripleEnvCfg(CartPendulumEnvCfg):
-    """Swing-up con lắc ba: bắt đầu thõng xuống, lắc lên rồi giữ cả ba khâu thẳng đứng."""
+    """Con lắc ba: bắt đầu ở tư thế đứng, giữ cả ba khâu thẳng đứng (tự dựng lại nếu đổ)."""
 
     def __post_init__(self) -> None:
         super().__post_init__()
@@ -45,8 +48,6 @@ class CartPendulumTriplePositionEnvCfg(CartPendulumPositionEnvCfg):
     def __post_init__(self) -> None:
         super().__post_init__()
         use_triple_pendulum(self)
-        # bám vị trí đã khó, không bắt swing-up cùng lúc: mọi env bắt đầu ở tư thế đứng
-        self.events.reset_pendulum.params["hanging_prob"] = 0.0
 
 
 @configclass

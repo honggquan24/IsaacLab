@@ -7,7 +7,8 @@
 
 Hai task dùng chung scene và action:
 
-* ``CartPendulumEnvCfg`` — swing-up: con lắc bắt đầu thõng xuống, phải lắc lên rồi giữ đứng;
+* ``CartPendulumEnvCfg`` — giữ thăng bằng: con lắc bắt đầu đứng sẵn, phải giữ đứng (và tự
+  dựng lại nếu lỡ đổ);
 * ``CartPendulumPositionEnvCfg`` — vừa giữ con lắc đứng vừa chạy tới mốc vị trí được lệnh.
 
 Toạ độ đọc từ USD: ray nằm dọc trục **Y**, giới hạn ±0.555 m; ``Revolute_1`` bằng 0 là con
@@ -35,6 +36,10 @@ RAIL_AXIS = (0.0, 1.0, 0.0)
 
 UPRIGHT_ANGLE = 0.4
 """Ngưỡng [rad] coi là đã dựng lên — ranh giới giữa pha swing-up và pha giữ thăng bằng."""
+
+FALL_ANGLE = 0.8
+"""Ngưỡng [rad] coi là đổ hẳn, episode kết thúc. Phải LỚN HƠN ``UPRIGHT_ANGLE`` để chừa một
+dải 0.4–0.8 rad cho ``swing_up`` làm tín hiệu gượng dậy trước khi bị tính là ngã."""
 
 
 @configclass
@@ -116,10 +121,14 @@ class EventCfg:
         mode="reset",
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names=["Revolute_.*"]),
-            # một nửa số env khởi động ở tư thế thõng (phải lắc lên), nửa còn lại đứng sẵn
-            # (chỉ phải giữ) — hai kỹ năng được học song song thay vì nối tiếp
-            "hanging_prob": 0.5,
-            "angle_noise": 0.1,
+            # 0.0 = MỌI env khởi động ở tư thế đứng, chỉ phải giữ. Con lắc vẫn đổ được giữa
+            # episode và không có termination nào bắt cú đổ đó, nên reward swing_up vẫn còn
+            # việc: nó là tín hiệu dựng lại sau khi ngã, chứ không còn là bài toán xuất phát.
+            "hanging_prob": 0.0,
+            # 0.05 rad ≈ 2.9°. Chuỗi đảo ngược có miền hút rất hẹp và hẹp dần theo số khâu:
+            # 0.1 rad rơi độc lập trên từng khâu đã có thể là trạng thái không cứu được, tức
+            # là ép policy học từ những ván thua sẵn.
+            "angle_noise": 0.05,
             "velocity_noise": 0.05,
         },
     )
@@ -172,7 +181,20 @@ class RewardCfg:
         weight=-0.02,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=["Revolute_.*"])},
     )
-    # (6) làm mượt lực đẩy cho đỡ giật khi quay video
+    # (6) kéo xe về giữa ray.
+    #     Trước đây term này bị bỏ vì swing-up cần quét hết ray để bơm năng lượng. Nay mọi env
+    #     khởi động ở tư thế đứng nên lý do đó không còn, mà thiếu nó thì KHÔNG CÒN GÌ chống
+    #     lại việc xe trôi: ``cart_out_of_rail`` là truncation nên giá trị được bootstrap, tức
+    #     policy hoàn toàn BÀNG QUAN với chuyện chạm đầu ray, và bàng quan cộng trôi tự do ra
+    #     đúng 100% episode chết vì chạm ray.
+    #     Dạng bình phương nên gần tâm gần như bằng 0 (0.1 m → -0.005/bước, không cản việc lái
+    #     bắt con lắc) mà ở mép ray thì rõ (0.5 m → -0.125/bước).
+    cart_pos = RewardTermCfg(
+        func=project_mdp.joint_pos_target_l2,
+        weight=-0.5,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["Slider_1"]), "wrap": False},
+    )
+    # (7) làm mượt lực đẩy cho đỡ giật khi quay video
     action_rate = RewardTermCfg(func=rewards.action_rate_l2, weight=-0.005)
 
 
@@ -181,19 +203,30 @@ class TerminationsCfg:
     """Kết thúc khi hết giờ, con lắc đổ, hoặc xe chạy tới đầu ray."""
 
     time_out = TerminationTermCfg(func=terminations.time_out, time_out=True)
-    # Không còn reward nào kéo xe về giữa ray, nên term này là thứ duy nhất giới hạn xe. Đổi
-    # lại xe được tự do quét hết ray để bơm năng lượng — đo ở vòng 98 của con lắc ba thấy xe
-    # bị ghim trong bán kính 0.068 m quanh giữa ray trong khi con lắc quay 6.9 rad/s, tức là
-    # lực kéo về giữa đang chặn đúng cái chuyển động cần cho swing-up.
-    # KHÔNG kết thúc khi con lắc đổ: bài này bắt đầu từ tư thế thõng, đổ là trạng thái xuất phát.
+    # Hai điều kiện dưới đây đều là THẤT BẠI THẬT (``time_out=False``), nên ``terminating``
+    # -2.0 mới thật sự nổ. Bài đã đổi bản chất nên lập luận cũ không còn đúng:
     #
-    # Chạm đầu ray đánh dấu time_out=True (cắt ngang) chứ không phải thất bại, và đây là chỗ dễ
-    # sai: với reward L2, con lắc thõng bị phạt tới -π² ≈ -9.9 mỗi bước, nên nếu kết thúc sớm
-    # được tính là thất bại thì chịu -2.0 một lần vẫn lời hơn hẳn việc sống tiếp — policy sẽ học
-    # cách lao vào đầu ray cho xong. Đánh dấu cắt ngang thì value được bootstrap, hết động cơ đó.
+    # * Hồi còn swing-up, con lắc thõng bị phạt nặng mỗi bước nên chịu -2.0 một lần vẫn lời
+    #   hơn sống tiếp — phải đánh dấu truncation để chặn động cơ tự sát. Nay mọi env khởi
+    #   động ở tư thế đứng, phần thưởng thường trực là dương (alive +1.0, upright +3.0), nên
+    #   kết thúc sớm đã tự nó là mất mát.
+    # * Ngược lại, truncation lại sinh ra đúng lỗi ngược: giá trị được bootstrap nên policy
+    #   BÀNG QUAN với chuyện chạm đầu ray, và ở vòng 146 của con lắc ba thì 100% episode chết
+    #   vì chạm ray sau vỏn vẹn 39 bước (0.65 s).
+    #
+    # Quan trọng: HAI term phải cùng loại. Nếu chỉ đổ mới bị phạt còn chạm ray thì miễn phí,
+    # policy sẽ học cách phóng vào đầu ray TRƯỚC KHI con lắc kịp đổ để né -2.0.
+    pendulum_fell = TerminationTermCfg(
+        func=project_mdp.pendulum_fell,
+        time_out=False,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["Revolute_.*"]), "limit_angle": FALL_ANGLE},
+    )
+    # Không có term này thì sau cú đổ episode còn lê thêm ~19.8 s vung vẩy vô nghĩa: 1% dữ liệu
+    # là thăng bằng thật, 99% là rác. Cắt ngay lúc đổ biến bài toán thành đúng một câu hỏi
+    # "trụ được bao lâu", và đó là tín hiệu mà PPO gán công trạng tốt nhất.
     cart_out_of_rail = TerminationTermCfg(
         func=project_mdp.cart_out_of_rail,
-        time_out=True,
+        time_out=False,
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names=["Slider_1"]),
             "limit": CART_PENDULUM_RAIL_LIMIT - 0.05,
@@ -293,6 +326,9 @@ class CartPendulumPositionEnvCfg(CartPendulumEnvCfg):
 
     def __post_init__(self) -> None:
         super().__post_init__()
+        # mốc do command sinh ra, không phải giữa ray: để nguyên cart_pos là hai term kéo xe
+        # về hai chỗ khác nhau, mốc càng xa tâm thì càng bị chính cart_pos ghì lại
+        self.rewards.cart_pos.weight = 0.0
 
 
 @configclass

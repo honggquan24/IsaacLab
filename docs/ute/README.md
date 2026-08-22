@@ -194,7 +194,7 @@ bash scripts/ute/smoke_test_all.sh          # chạy lần lượt toàn bộ ta
 | --- | --- |
 | `scripts/ute/smoke_test.py`, `smoke_test_all.sh` | dựng thử env, báo shape action/observation |
 | `scripts/ute/wheeled_biped/prepare_usd.py` | vá USD robot bipedal wheel |
-| `scripts/ute/cart_pendulum/prepare_usd.py` | vá USD họ con lắc trên xe đẩy (đơn/kép/ba): tự dò cây khớp và đảo chiều cha-con, neo ray vào world, nâng khỏi sàn, thêm DriveAPI, đặt trần tốc độ khớp |
+| `scripts/ute/prepare_usd.py` | vá USD Onshape cho mọi robot trong dự án (họ con lắc + xe cân bằng): tự dò cây khớp và đảo chiều cha-con, thêm DriveAPI, đặt trần tốc độ khớp. Nền cố định thì neo vào world và nâng khỏi sàn; thân nổi thì chạy với `--floating-base` |
 | `scripts/ute/wheeled_biped/inspect_*.py` | soi USD và trạng thái runtime (khớp, khối lượng, trục, contact, trọng lực, vòng kín, dấu bánh) |
 | `scripts/ute/wheeled_biped/simtest_*.py` | chạy sim trần để thử spawn / motor / action |
 | `scripts/ute/report/report_*.py` | vẽ đường cong huấn luyện, chọn epoch tốt nhất, cắt log |

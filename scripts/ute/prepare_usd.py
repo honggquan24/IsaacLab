@@ -3,10 +3,17 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Vá USD họ con lắc trên xe đẩy (export từ Onshape) thành bản chạy được với Isaac Lab.
+"""Vá USD export từ Onshape thành bản chạy được với Isaac Lab.
 
-Dùng chung cho con lắc đơn, kép và ba: script tự dò cấu trúc trong stage chứ không ghim sẵn
-tên prim, nên thêm một khâu vào CAD cũng không phải sửa gì ở đây.
+Dùng chung cho mọi robot trong dự án — họ con lắc trên xe đẩy (đơn/kép/ba) và xe hai bánh tự
+cân bằng: script tự dò cấu trúc trong stage chứ không ghim sẵn tên prim, nên thêm một khâu vào
+CAD cũng không phải sửa gì ở đây.
+
+Hai kiểu robot, khác nhau ở chỗ có neo xuống world hay không:
+
+* **nền cố định** (con lắc): một thân được cố định xuống world, script tự dò khớp neo;
+* **thân nổi** (xe cân bằng): chạy với ``--floating-base --base-body <thân>``, script bỏ qua
+  bước neo và bước nâng khỏi sàn.
 
 Đọc ``usd/<package>_base.usd``, ghi ra ``usd/<package>_cfg.usd`` (không đụng bản gốc). Bốn
 việc, tất cả đều idempotent — chạy lại nhiều lần cho cùng kết quả:
@@ -35,9 +42,11 @@ Vì vậy mate phải đặt là ``Slider_1`` cho khớp trượt và ``Revolute
 cho các khâu con lắc tính từ xe ra. Tên thân thì tuỳ.
 
 Chạy:
-    ./isaaclab.sh -p scripts/ute/cart_pendulum/prepare_usd.py --package cart_pendulum --verify
-    ./isaaclab.sh -p scripts/ute/cart_pendulum/prepare_usd.py --package cart_pendulum_double
-    ./isaaclab.sh -p scripts/ute/cart_pendulum/prepare_usd.py --package cart_pendulum_triple
+    ./isaaclab.sh -p scripts/ute/prepare_usd.py --package cart_pendulum --verify
+    ./isaaclab.sh -p scripts/ute/prepare_usd.py --package cart_pendulum_double
+    ./isaaclab.sh -p scripts/ute/prepare_usd.py --package cart_pendulum_triple
+    ./isaaclab.sh -p scripts/ute/prepare_usd.py --package balance_car \
+        --floating-base --base-body Group_1 --max-angular-velocity 40 --verify
 """
 
 import argparse
@@ -56,6 +65,15 @@ parser.add_argument("--output", default=None, help="Ghi đè đường dẫn USD
 parser.add_argument("--verify", action="store_true", help="In lại trạng thái USD sau khi vá.")
 parser.add_argument("--clearance", type=float, default=0.04, help="Khoảng hở giữa đáy con lắc và sàn [m].")
 parser.add_argument("--base-body", default=None, help="Chỉ định thân gốc nếu script dò không ra.")
+parser.add_argument(
+    "--floating-base",
+    action="store_true",
+    help=(
+        "Robot KHÔNG neo xuống world (xe cân bằng, robot chân...). Bỏ bước neo FixedJoint và bỏ"
+        " bước nâng khỏi sàn — với thân nổi thì Isaac Lab ghi đè tư thế gốc bằng init_state.pos,"
+        " nâng trong USD chỉ tạo ảo giác."
+    ),
+)
 parser.add_argument(
     "--max-angular-velocity",
     type=float,
@@ -76,13 +94,23 @@ parser.add_argument(
 )
 args = parser.parse_args()
 
-from isaacsim import SimulationApp  # noqa: E402
+# Script chỉ đụng tới `pxr`, không gọi API nào của Kit. Nếu `pxr` đã import được sẵn (chạy
+# trong môi trường có USD trên PYTHONPATH) thì bỏ hẳn việc khởi động Isaac Sim — tiết kiệm
+# ~8 giây boot và một đống warning lúc tắt. Chạy bằng `./isaaclab.sh -p` thì `pxr` chưa sẵn,
+# lúc đó mới boot như cũ.
+simulation_app = None
+try:
+    from pxr import Gf, PhysxSchema, Sdf, Usd, UsdGeom, UsdPhysics  # noqa: E402
+except ImportError:
+    from isaacsim import SimulationApp  # noqa: E402
 
-simulation_app = SimulationApp({"headless": True})
+    simulation_app = SimulationApp({"headless": True})
 
-from pxr import Gf, PhysxSchema, Sdf, Usd, UsdGeom, UsdPhysics  # noqa: E402
+    from pxr import Gf, PhysxSchema, Sdf, Usd, UsdGeom, UsdPhysics  # noqa: E402, F811
 
-REPO_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+# script nằm ở <repo>/scripts/ute/prepare_usd.py — leo 3 cấp là tới gốc repo. Đừng đếm tay:
+# lần chuyển script từ scripts/ute/cart_pendulum/ ra scripts/ute/ đã làm sai số cấp một lần rồi.
+REPO_DIR = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 PACKAGE_DIR = os.path.join(REPO_DIR, "source", "isaaclab_assets", "isaaclab_assets", args.package)
 SOURCE_USD = args.input or os.path.join(PACKAGE_DIR, "usd", f"{args.package}_base.usd")
 OUTPUT_USD = args.output or os.path.join(PACKAGE_DIR, "usd", f"{args.package}_cfg.usd")
@@ -105,7 +133,28 @@ class Model:
             prim.GetPath().pathString for prim in Usd.PrimRange(self.root) if prim.HasAPI(UsdPhysics.RigidBodyAPI)
         ]
         self.joints = [prim for prim in Usd.PrimRange(self.root) if prim.GetTypeName() in JOINT_TYPES]
+        self._check_physics()
         self.anchor, self.base = self._find_anchor()
+
+    def _check_physics(self) -> None:
+        """Bắt sớm cái lỗi export hay gặp nhất: file chỉ có hình, không có vật lý.
+
+        Không có hai thứ này thì script bó tay — nó vá được chiều cha-con và thêm drive, chứ
+        không dựng ra được thân cứng hay khớp: trục quay của khớp chỉ Onshape mới biết.
+        """
+        meshes = [p for p in Usd.PrimRange(self.root, Usd.TraverseInstanceProxies()) if p.IsA(UsdGeom.Mesh)]
+        if not self.bodies:
+            raise RuntimeError(
+                f"USD không có thân cứng nào (thiếu UsdPhysics.RigidBodyAPI), dù tìm thấy {len(meshes)} mesh."
+                " Đây là file CHỈ CÓ HÌNH, chưa có vật lý — export lại từ Onshape với phần khớp/mate,"
+                " đừng dùng bản flatten hay bản save lại từ viewport."
+            )
+        if not [p for p in self.joints if p.GetTypeName() in MOVABLE_JOINT_TYPES]:
+            raise RuntimeError(
+                f"USD có {len(self.bodies)} thân cứng nhưng KHÔNG có khớp động nào."
+                " Onshape sinh khớp từ mate, nên bản export này thiếu mate hoặc bị bỏ khi export."
+                " Script không dựng khớp thay được: trục quay chỉ bên CAD mới biết."
+            )
 
     def _find_articulation_root(self) -> Usd.Prim:
         for prim in self.stage.Traverse():
@@ -135,9 +184,22 @@ class Model:
             if base not in self.bodies:
                 raise RuntimeError(f"--base-body '{args.base_body}' không phải thân trong articulation.")
             return None, base
+        if args.floating_base:
+            # thân nổi thì không có khớp neo để dò; lấy thân nối vào NHIỀU khớp nhất làm gốc —
+            # với xe hai bánh đó là khung xe (2 khớp) chứ không phải bánh (1 khớp)
+            degree: dict[str, int] = {body: 0 for body in self.bodies}
+            for prim in self.joints:
+                for which in (0, 1):
+                    for target in self.targets(prim, which):
+                        if target in degree:
+                            degree[target] += 1
+            base = max(degree, key=lambda b: degree[b])
+            print(f"  [dò]     thân gốc = {base.rsplit('/', 1)[-1]} ({degree[base]} khớp)")
+            return None, base
         raise RuntimeError(
             "Không dò được khớp neo xuống world. Trong Onshape phải cố định một thân (ví dụ ray)"
-            " xuống mặt phẳng gốc, hoặc chạy lại với --base-body <tên thân>."
+            " xuống mặt phẳng gốc, hoặc chạy lại với --base-body <tên thân>,"
+            " hoặc --floating-base nếu robot vốn không neo (xe cân bằng, robot chân)."
         )
 
     def movable_joints(self) -> list[Usd.Prim]:
@@ -379,15 +441,27 @@ def main() -> None:
 
     print(f"nguồn : {SOURCE_USD}")
     print(f"đích  : {OUTPUT_USD}\n")
-    model = Model(stage)
+    try:
+        model = Model(stage)
+    except Exception:
+        # bản copy chưa vá mà vẫn mang đúng tên file đích là cái bẫy: env sẽ nạp nó và chạy
+        # với robot không có drive, không báo lỗi gì. Dọn đi để lần chạy sau không nhầm.
+        stage = None
+        os.remove(OUTPUT_USD)
+        print(f"[dọn]    xoá {OUTPUT_USD} (bản copy chưa vá)\n")
+        raise
     print(f"  thân    : {[short(b) for b in model.bodies]}")
     print(f"  khớp    : {[p.GetName() for p in model.joints]}")
     print(f"  gốc     : {short(model.base)}\n")
 
     orient_joint_tree(model)
-    anchor_path = anchor_root_to_world(model)
-    remove_clutter(model)
-    lift_above_ground(model, anchor_path, args.clearance)
+    if args.floating_base:
+        print("  [bỏ qua] neo world + nâng khỏi sàn (--floating-base)")
+        remove_clutter(model)
+    else:
+        anchor_path = anchor_root_to_world(model)
+        remove_clutter(model)
+        lift_above_ground(model, anchor_path, args.clearance)
     add_joint_drives(model)
     limit_joint_velocity(model, args.max_angular_velocity, args.max_linear_velocity)
     if args.density is not None:
@@ -401,4 +475,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-    simulation_app.close()
+    if simulation_app is not None:
+        simulation_app.close()

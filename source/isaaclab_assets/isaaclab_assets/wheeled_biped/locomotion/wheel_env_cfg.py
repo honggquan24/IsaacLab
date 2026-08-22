@@ -15,7 +15,7 @@ Body names trong USD (từ Stage panel):
   wheel_01                       ← left wheel
 
 Train:
-    ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \\
+    ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
         --task Isaac-Wheeled-Biped-Wheel --num_envs 4096 --headless
 """
 

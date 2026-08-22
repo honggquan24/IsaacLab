@@ -14,7 +14,7 @@ Chuẩn bị USD
 ``usd/cart_pendulum_base.usd`` là bản Onshape thô, ``usd/cart_pendulum_cfg.usd`` là bản đã vá
 và là bản env dùng. Sinh lại bản vá bằng::
 
-    ./isaaclab.sh -p scripts/ute/cart_pendulum/prepare_usd.py --verify
+    ./isaaclab.sh -p scripts/ute/prepare_usd.py --verify
 
 Cách đọc lệnh quay video
 ------------------------

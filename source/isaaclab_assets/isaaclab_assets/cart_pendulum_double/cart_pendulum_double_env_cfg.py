@@ -31,7 +31,7 @@ def use_double_pendulum(cfg: CartPendulumEnvCfg) -> None:
 
 @configclass
 class CartPendulumDoubleEnvCfg(CartPendulumEnvCfg):
-    """Swing-up con lắc kép: bắt đầu thõng xuống, lắc lên rồi giữ cả hai khâu thẳng đứng."""
+    """Con lắc kép: bắt đầu ở tư thế đứng, giữ cả hai khâu thẳng đứng (tự dựng lại nếu đổ)."""
 
     def __post_init__(self) -> None:
         super().__post_init__()
@@ -45,8 +45,6 @@ class CartPendulumDoublePositionEnvCfg(CartPendulumPositionEnvCfg):
     def __post_init__(self) -> None:
         super().__post_init__()
         use_double_pendulum(self)
-        # bám vị trí đã khó, không bắt swing-up cùng lúc: mọi env bắt đầu ở tư thế đứng
-        self.events.reset_pendulum.params["hanging_prob"] = 0.0
 
 
 @configclass

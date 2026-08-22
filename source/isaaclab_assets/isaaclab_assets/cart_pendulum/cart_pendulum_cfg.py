@@ -6,7 +6,7 @@
 """Cấu hình robot con lắc đơn trên xe đẩy (CAD Onshape).
 
 Hình học lấy từ ``usd/cart_pendulum_cfg.usd``, sinh ra bởi
-``scripts/ute/cart_pendulum/prepare_usd.py``. Vài số đo đọc thẳng từ USD, ghi lại ở đây để
+``scripts/ute/prepare_usd.py``. Vài số đo đọc thẳng từ USD, ghi lại ở đây để
 khỏi phải mở stage mới biết:
 
 * ray dài 1.11 m nằm dọc trục **Y** của world, giới hạn khớp trượt ±0.555 m;

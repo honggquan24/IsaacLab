@@ -25,7 +25,9 @@ from isaaclab.utils import configclass
 
 from ..balance_env_cfg import BalanceCarEnvCfg
 from ..mdp.observations import angl_vel_b, lin_vel_b, obs_body_pitch, obs_body_roll, obs_body_yaw
+from ..mdp.rewards import cover_flat_exp, cover_flat_l2
 from ..mdp.terminations import reset_when_fall
+from .mdp.commands import PathCommandCfg
 from .mdp.pre_trained_policy_action import PreTrainedBalancePolicyActionCfg, latest_exported_policy
 from .mdp.rewards import *  # noqa: F403
 
@@ -92,7 +94,10 @@ class ActionsCfg:
         # để nó export ra logs/rsl_rl/carbalance_ppo/<run>/exported/policy.pt là dùng được ngay,
         # không phải quay lại sửa file này.
         policy_path=latest_exported_policy("carbalance_ppo"),
-        low_level_decimation=1,
+        # PHẢI bằng decimation của env tầng thấp (2 → 30 Hz). apply_actions() được gọi mỗi
+        # bước vật lý 60 Hz, nên để 1 là policy thăng bằng bị hỏi ở 60 Hz trong khi nó được
+        # train ở 30 Hz — sai tần số thì vận tốc/gia tốc nó thấy lệch hẳn so với lúc học.
+        low_level_decimation=LOW_LEVEL_ENV_CFG.decimation,
         low_level_actions=LOW_LEVEL_ENV_CFG.actions.joint_effort,
         low_level_observations=LowLevelObservationsCfg(),
         # debug_vis=True,
@@ -112,10 +117,10 @@ class ObservationsCfg:
         base_ang_vel = ObsTerm(func=mdp.base_ang_vel)
         projected_gravity = ObsTerm(func=mdp.projected_gravity)
 
-        # Navigation command (target position)
-        pose_command = ObsTerm(
+        # Lệnh quỹ đạo: [lệch dọc, lệch ngang, lệch hướng, tốc độ mục tiêu]
+        path_command = ObsTerm(
             func=mdp.generated_commands,
-            params={"command_name": "pose_command"},
+            params={"command_name": "path_command"},
         )
 
         def __post_init__(self) -> None:
@@ -144,95 +149,79 @@ class EventCfg:
 class CommandsCfg:
     """Command configuration for navigation."""
 
-    pose_command = mdp.UniformPose2dCommandCfg(
+    # BÁM QUỸ ĐẠO thay cho chạy tới một điểm đích. Mục tiêu chạy liên tục trên đường cong kín,
+    # nên không có khái niệm "đã tới nơi" — xem mdp/commands.py.
+    path_command = PathCommandCfg(
         asset_name="robot",
-        simple_heading=False,
-        resampling_time_range=(5.0, 5.0),
-        # debug_vis=True,
-        ranges=mdp.UniformPose2dCommandCfg.Ranges(
-            pos_x=(-3.0, 3.0),
-            pos_y=(-3.0, 3.0),
-            heading=(-math.pi, math.pi),  # sẽ bị IGNORE
-        ),
+        path_types=("circle", "figure8"),
+        radius_range=(1.0, 2.0),
+        # phải nằm trong dải lệnh của tầng thấp (lin_vel_x = ±0.5 m/s), nếu không mục tiêu
+        # chạy nhanh hơn khả năng bám và tín hiệu học chỉ còn là "luôn tụt lại"
+        speed_range=(0.15, 0.35),
+        # một quỹ đạo cho trọn một episode: đổi đường giữa chừng thì phần lớn thời gian là
+        # chạy tới đường mới chứ không phải bám đường
+        resampling_time_range=(20.0, 20.0),
+        debug_vis=True,
     )
 
 
 @configclass
 class RewardsCfg:
+    """Bám quỹ đạo, giữ thăng bằng, chạy mượt.
+
+    Bộ reward "chạy tới đích" cũ đã bỏ hết vì nó giải bài khác:
+
+    * ``goal_progress`` thưởng theo mức giảm khoảng cách — vô nghĩa khi đích tự chạy. Nó còn
+      giữ trạng thái trong ``env.extras["prev_dist"]``, một dict DÙNG CHUNG cho mọi env và
+      không được dọn lúc reset, nên ngay sau mỗi lần reset nó cho một cú thưởng/phạt rác;
+    * ``reached_bonus`` thưởng khi vào bán kính 0.3 m — mục tiêu không đứng yên nên "tới nơi"
+      không tồn tại;
+    * ``velocity_to_goal``, ``heading_alignment`` cũng đều gắn với một đích đứng yên.
+    """
+
     # =====================================================
-    # Termination
+    # Bám quỹ đạo — phần chính
     # =====================================================
-    termination_penalty = RewTerm(
-        func=mdp.is_terminated,
-        weight=-300.0,
+    path_position = RewTerm(
+        func=path_position_exp,
+        weight=6.0,
+        params={"command_name": "path_command", "std": 0.5},
+    )
+    # bám vị trí thôi thì xe vẫn có thể ĐI LÙI hoặc trượt ngang qua khúc cua mà vẫn ăn điểm.
+    # Term này bắt mũi xe quay đúng chiều tiếp tuyến — nó quyết định video có ra hồn không.
+    path_heading = RewTerm(
+        func=path_heading_exp,
+        weight=2.0,
+        params={"command_name": "path_command", "std": 0.6},
+    )
+    # tách riêng phần lệch NGANG: tụt lại sau vài chục phân là bình thường và tự sửa được,
+    # còn cắt cua ra ngoài đường mới đúng nghĩa đi sai quỹ đạo
+    path_lateral = RewTerm(
+        func=path_lateral_l2,
+        weight=-2.0,
+        params={"command_name": "path_command"},
     )
 
     # =====================================================
-    # Core navigation (QUAN TRỌNG NHẤT)
+    # Giữ thăng bằng — cùng hàm với tầng thấp
     # =====================================================
-    goal_progress = RewTerm(
-        func=goal_progress_reward,
-        weight=5.0,
-        params={"command_name": "pose_command"},
-    )
-
-    velocity_to_goal = RewTerm(
-        func=velocity_towards_goal,
-        weight=0.5,
-        params={"command_name": "pose_command"},
-    )
+    cover_flat = RewTerm(func=cover_flat_l2, weight=-5.0)
+    cover_flat_bonus = RewTerm(func=cover_flat_exp, weight=2.0, params={"std": 0.05})
 
     # =====================================================
-    # Orientation (nhẹ, chỉ hỗ trợ)
+    # Kết thúc sớm
     # =====================================================
-    heading_alignment = RewTerm(
-        func=heading_alignment_reward,
-        weight=0.2,
-        params={"command_name": "pose_command"},
-    )
-
-    # =====================================================
-    # Stability penalties
-    # =====================================================
-    lateral_drift = RewTerm(
-        func=lateral_velocity_penalty,
-        weight=0.2,
-    )
-
-    yaw_rate = RewTerm(
-        func=yaw_rate_penalty,
-        weight=0.2,
-    )
-
-    joint_vel = RewTerm(
-        func=joint_velocity_penalty,
-        weight=0.1,
-    )
+    # -300 của bản cũ là quá tay: nó áp đảo mọi tín hiệu bám đường, biến bài toán thành
+    # "đừng ngã" và policy học cách đứng yên tại chỗ cho an toàn. Đặt ngang tầm với phần
+    # thưởng bám đường tích luỹ trong vài giây.
+    termination_penalty = RewTerm(func=mdp.is_terminated, weight=-20.0)
 
     # =====================================================
-    # Sparse success reward
+    # Lệnh xuất ra tầng thấp phải mượt
     # =====================================================
-    reached_bonus = RewTerm(
-        func=position_reached_bonus,
-        weight=10.0,
-        params={
-            "threshold": 0.3,
-            "command_name": "pose_command",
-        },
-    )
-
-    # ===============================
-    # Balance (QUAN TRỌNG)
-    # ===============================
-    upright = RewTerm(
-        func=upright_reward,
-        weight=3.0,
-    )
-
-    tilt = RewTerm(
-        func=tilt_penalty,
-        weight=0.5,
-    )
+    # Tầng cao chạy 6 Hz. Lệnh vận tốc nhảy loạn mỗi bước thì tầng thấp — vốn được train trên
+    # lệnh đổi mỗi 3-6 s — gặp phân phối hoàn toàn khác lúc học và bám rất tệ.
+    action_rate = RewTerm(func=mdp.action_rate_l2, weight=-0.1)
 
 
 @configclass
@@ -266,8 +255,9 @@ class BalanceCarNavigationPretrainedEnvCfg(ManagerBasedRLEnvCfg):
         # Higher decimation for navigation (low-level runs faster)
         self.decimation = LOW_LEVEL_ENV_CFG.decimation * 5
 
-        # Episode length matches command resampling
-        self.episode_length_s = self.commands.pose_command.resampling_time_range[1]
+        # Một episode = trọn một lần bốc quỹ đạo. Ở 6 Hz thì 20 s = 120 bước tầng cao, đủ để
+        # chạy hết ~1 vòng đường bán kính 1.5 m ở 0.3 m/s.
+        self.episode_length_s = self.commands.path_command.resampling_time_range[1]
 
         # Viewer settings
         self.viewer.eye = (0.0, 8.0, 4.0)

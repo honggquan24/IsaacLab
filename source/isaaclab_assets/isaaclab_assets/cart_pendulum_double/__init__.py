@@ -9,15 +9,16 @@ Cùng ray 1.11 m dọc trục Y và cùng xe với con lắc đơn, nhưng hai k
 ``rack -> cart -> pendulum -> pendulum_01``. Mọi khớp quay bằng 0 là cả chuỗi thõng thẳng
 xuống; dựng đứng là ``Revolute_1`` = π và ``Revolute_2`` = 0 (khâu 2 thẳng hàng khâu 1).
 
-Bài mặc định là **swing-up**: robot bắt đầu ở tư thế thõng và phải lắc lên rồi giữ. Con lắc
-kép swing-up là bài khó — đừng trông đợi nó lên ngay trong vài trăm vòng lặp.
+Bài mặc định là **giữ thăng bằng**: mọi env khởi động ở tư thế đứng (``hanging_prob`` = 0.0)
+và chỉ phải giữ. Reward swing-up vẫn còn trong cfg vì không có termination nào bắt cú đổ —
+nếu chuỗi ngã giữa episode thì đó là tín hiệu để dựng lại.
 
 Chuẩn bị USD
 ------------
 ``usd/cart_pendulum_double_base.usd`` là bản Onshape thô,
 ``usd/cart_pendulum_double_cfg.usd`` là bản đã vá và là bản env dùng. Sinh lại bằng::
 
-    ./isaaclab.sh -p scripts/ute/cart_pendulum/prepare_usd.py \
+    ./isaaclab.sh -p scripts/ute/prepare_usd.py \
         --package cart_pendulum_double --verify
 
 Cách đọc lệnh quay video
@@ -26,7 +27,7 @@ Cách đọc lệnh quay video
 = 1 / (sim.dt × decimation), ghi kèm ở từng task bên dưới.
 Video xuất ra ``logs/rsl_rl/<experiment_name>/<run>/videos/play/``.
 
-Isaac-Cart-Pendulum-Double — swing-up rồi giữ hai khâu thẳng đứng
+Isaac-Cart-Pendulum-Double — giữ hai khâu thẳng đứng
     60 Hz (sim.dt 1/60, decimation 1) → 60 s = 3600 step, 120 s = 7200 step
 
     ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
