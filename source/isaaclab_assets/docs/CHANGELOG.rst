@@ -1,6 +1,23 @@
 Changelog
 ---------
 
+0.6.1 (2026-08-22)
+~~~~~~~~~~~~~~~~~~
+
+Fixed
+^^^^^
+
+* Sized the cart force to the rail instead of to the cart mass. Training ended 100% of episodes on
+  ``cart_out_of_rail`` after a mean of 8.7 steps: at 40 N the 0.13 kg cart covers the 0.3 m from the
+  reset spread to the rail limit in 2.6 control steps, while a quarter period of the 0.22 m pendulum
+  is 11.5 steps, so the episode was over before the pendulum could move. The action scale drops to
+  3 N (9.6 steps to the rail), the effort limit to 6 N and the slider ceiling to 2.5 m/s.
+  Force was never the scarce resource: 3 N over a 0.5 m stroke is 1.5 J against the 0.024 J needed
+  to raise the pendulum.
+* Raised the ``cart_pos`` weight from 0.05 to 0.2. ``cart_out_of_rail`` is a truncation and carries
+  no penalty of its own, so this term is the only signal telling the cart to stay off the rail ends.
+
+
 0.6.0 (2026-08-22)
 ~~~~~~~~~~~~~~~~~~
 

@@ -60,10 +60,16 @@ class ActionsCfg:
     joint_effort = actions.JointEffortActionCfg(
         asset_name="robot",
         joint_names=["Slider_1"],
-        # Gia tốc mới là thứ quyết định xe "nhạy" hay không, chứ không phải tốc độ đỉnh.
-        # Xe con lắc đơn ~0.13 kg → 40 N là ~300 m/s²; con lắc ba nặng gấp đôi nên còn
-        # ~150 m/s². Đây là số cần chỉnh trước tiên nếu thấy xe phản ứng chậm.
-        scale=40.0,
+        # Số này bị chặn trên bởi CHIỀU DÀI RAY, không phải bởi mong muốn xe nhạy.
+        #
+        # Con lắc 0.22 m có chu kỳ 0.77 s, tức 1/4 chu kỳ là 11.5 bước ở 60 Hz — đó là quỹ
+        # thời gian xe có để làm một nhịp bơm năng lượng. Xe ~0.13 kg đạp hết ga từ mép reset
+        # tới đầu ray mất: 40 N → 2.6 bước, 10 N → 5.2 bước, 3 N → 9.6 bước. Trên 5 N thì xe
+        # chạm đầu ray trước khi con lắc kịp nhúc nhích, và episode chết trước khi học được gì.
+        #
+        # Lực không phải thứ thiếu: 3 N trên quãng 0.5 m sinh 1.5 J, trong khi dựng con lắc
+        # lên chỉ cần 0.024 J. Thừa 60 lần.
+        scale=3.0,
     )
 
 
@@ -133,10 +139,11 @@ class RewardCfg:
         weight=-1.0,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=["Revolute_.*"])},
     )
-    # (4) định hình: xe đừng trôi ra đầu ray
+    # (4) định hình: xe đừng trôi ra đầu ray. Chạm ray là cắt ngang chứ không bị phạt, nên
+    #     đây là tín hiệu duy nhất dạy xe tránh đầu ray — để quá nhẹ thì nó không tránh.
     cart_pos = RewardTermCfg(
         func=project_mdp.joint_pos_target_l2,
-        weight=-0.05,
+        weight=-0.2,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=["Slider_1"]), "wrap": False},
     )
     # (5) định hình: giảm vận tốc xe

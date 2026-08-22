@@ -32,7 +32,7 @@ CART_PENDULUM_TRIPLE_CFG = ArticulationCfg(
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             rigid_body_enabled=True,
             # chặn thêm ở mức thân, cao hơn trần khớp một chút để trần khớp mới là cái ràng buộc
-            max_linear_velocity=40.0,
+            max_linear_velocity=8.0,
             max_angular_velocity=30.0,
             max_depenetration_velocity=1.0,
             enable_gyroscopic_forces=True,
@@ -47,10 +47,10 @@ CART_PENDULUM_TRIPLE_CFG = ArticulationCfg(
     actuators={
         "cart": ImplicitActuatorCfg(
             joint_names_expr=["Slider_1"],
-            effort_limit_sim=60.0,
+            effort_limit_sim=6.0,
             # trần khớp cũng đã ghi vào USD (physxJoint:maxJointVelocity), đặt trùng ở đây
             # để actuator không cố lệnh vượt qua mức PhysX sẽ cắt
-            velocity_limit_sim=20.0,
+            velocity_limit_sim=2.5,
             stiffness=0.0,
             # damping là lực cản tỉ lệ vận tốc, ăn thẳng vào lực điều khiển: ở 5 m/s thì
             # damping 0.5 đã nuốt 2.5 N. Để 0.05 cho gần như không cản mà drive vẫn không
