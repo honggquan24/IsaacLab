@@ -158,9 +158,14 @@ class RewardCfg:
     )
     # (4) định hình: xe đừng trôi ra đầu ray. Chạm ray là cắt ngang chứ không bị phạt, nên
     #     đây là tín hiệu duy nhất dạy xe tránh đầu ray — để quá nhẹ thì nó không tránh.
+    #
+    #     Số này phải đọ được với thưởng đứng (3.0), không phải đọ với 0. Ở -0.2, việc chạy về
+    #     giữa ray chỉ đáng 1.2% của thưởng đứng nên policy bỏ qua: đo ở vòng 63 thấy xe đậu
+    #     lì ở RMS 0.437 m trong khi giới hạn ray là 0.505 m, và 45% episode chết vì chạm ray.
+    #     Ở -1.0 thì đáng 6%, đủ để xe chịu về giữa mà vẫn không lấn át việc giữ thăng bằng.
     cart_pos = RewardTermCfg(
         func=project_mdp.joint_pos_target_l2,
-        weight=-0.2,
+        weight=-1.0,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=["Slider_1"]), "wrap": False},
     )
     # (5) định hình: giảm vận tốc xe
@@ -267,6 +272,10 @@ class PositionObservationsCfg(ObservationsCfg):
 class PositionRewardCfg(RewardCfg):
     """Thêm phần bám mốc. Cũng chỉ chạy ở pha TRÊN, xem ``joint_pos_command_l2``."""
 
+    #     Trần an toàn của trọng số này là 1.65, đừng vượt. Term bị cổng "đã dựng" chặn, mà nó
+    #     là PHẠT, nên buông con lắc xuống là tắt luôn phần phạt: nặng quá thì buông lại lời
+    #     hơn giữ. Ở sai số tệ nhất (0.84 m): w=1.0 giữ được +2.30 so với +1.84 nếu buông,
+    #     còn w=2.0 chỉ còn +1.60 — policy sẽ học cách thả con lắc cho khỏi bị phạt bám mốc.
     track_position = RewardTermCfg(
         func=project_mdp.joint_pos_command_l2,
         weight=-1.0,
