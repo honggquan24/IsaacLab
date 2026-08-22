@@ -17,7 +17,9 @@ khỏi phải mở stage mới biết:
   để (0, 0, 0) chứ không phải bù bằng tay như trước.
 
 ``rack`` được neo vào world bằng ``FixedJoint`` ngay trong USD nên đây là articulation nền
-cố định; không cần ``fix_root_link``, Isaac Lab tự nhận ra khớp đó.
+cố định; không cần ``fix_root_link``, Isaac Lab tự nhận ra khớp đó. Cũng không đặt
+``articulation_root_prim_path``: bỏ trống thì Isaac Lab tự dò prim mang ``ArticulationRootAPI``
+dưới prim spawn, nhờ vậy đổi tên document bên Onshape cũng không phải sửa gì ở đây.
 """
 
 import math
@@ -40,8 +42,9 @@ CART_PENDULUM_CFG = ArticulationCfg(
         usd_path=CART_PENDULUM_USD_PATH,
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             rigid_body_enabled=True,
-            max_linear_velocity=100.0,
-            max_angular_velocity=100.0,
+            # chặn thêm ở mức thân, cao hơn trần khớp một chút để trần khớp mới là cái ràng buộc
+            max_linear_velocity=20.0,
+            max_angular_velocity=30.0,
             max_depenetration_velocity=1.0,
             enable_gyroscopic_forces=True,
         ),
@@ -52,29 +55,33 @@ CART_PENDULUM_CFG = ArticulationCfg(
             solver_velocity_iteration_count=0,
         ),
     ),
-    # ArticulationRootAPI nằm ở Xform bọc ba thân, không phải ở prim gốc của file
-    articulation_root_prim_path="/pendulum_1/pendulum_1",
     actuators={
         "cart": ImplicitActuatorCfg(
             joint_names_expr=["Slider_1"],
             # xe + con lắc nặng cỡ 0.15 kg (PhysX tự tính từ convex hull, khối lượng riêng
             # mặc định 1000 kg/m³), nên 10 N đã là ~65 m/s² — thừa sức cho việc giữ thăng bằng
             effort_limit_sim=10.0,
-            velocity_limit_sim=20.0,
+            # trần khớp cũng đã ghi vào USD (physxJoint:maxJointVelocity), đặt trùng ở đây
+            # để actuator không cố lệnh vượt qua mức PhysX sẽ cắt
+            velocity_limit_sim=5.0,
             stiffness=0.0,
             damping=0.5,
         ),
         "pole": ImplicitActuatorCfg(
-            joint_names_expr=["Revolute_1"],
-            # khớp con lắc thụ động: không mô-men, không ma sát
-            effort_limit_sim=0.0,
-            velocity_limit_sim=100.0,
-            stiffness=0.0,
+            joint_names_expr=["Revolute_.*"],
+            # khớp con lắc thụ động. Stiffness để 1e-5 chứ không phải 0: đủ nhỏ để không ảnh
+            # hưởng động lực học (mô-men cỡ 1e-5 N·m ở lệch 1 rad) nhưng giữ cho PhysX coi bậc
+            # tự do này là có drive, tránh trạng thái khớp thả hoàn toàn. effort_limit phải > 0
+            # thì stiffness đó mới có tác dụng.
+            effort_limit_sim=1.0,
+            velocity_limit_sim=15.0,
+            stiffness=1.0e-5,
             damping=0.0,
         ),
     },
     init_state=ArticulationCfg.InitialStateCfg(
         pos=(0.0, 0.0, 0.0),
+        # mặc định = tư thế ĐÍCH (dựng đứng); reset lúc chạy mới quyết định bắt đầu ở đâu
         joint_pos={"Slider_1": 0.0, "Revolute_1": math.pi},
         joint_vel={"Slider_1": 0.0, "Revolute_1": 0.0},
     ),

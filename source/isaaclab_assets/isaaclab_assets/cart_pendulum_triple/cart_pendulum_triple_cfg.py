@@ -3,20 +3,12 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Cấu hình robot con lắc kép trên xe đẩy (CAD Onshape).
+"""Cấu hình robot con lắc ba trên xe đẩy (CAD Onshape).
 
-Cùng ray và cùng xe với con lắc đơn, chỉ khác là có hai khâu nối tiếp:
-``rack -> cart -> pendulum -> pendulum_01``.
-
-Quy ước góc (đọc từ ``usd/cart_pendulum_double_cfg.usd``):
-
-* ``Revolute_1`` bằng 0 là khâu 1 thõng xuống, dựng đứng là π;
-* ``Revolute_2`` bằng 0 là khâu 2 **thẳng hàng với khâu 1**, nên khi cả chuỗi dựng đứng thì
-  ``Revolute_2`` vẫn bằng 0, không phải π.
-
-Nói cách khác: mọi khớp quay bằng 0 tuyệt đối là cả chuỗi thõng thẳng xuống, còn vị trí khớp
-mặc định dưới đây là cả chuỗi dựng thẳng đứng. Reward đo lệch so với mặc định nên chỉ cần khai
-đúng ``init_state`` là xong.
+Cùng ray và cùng xe với con lắc đơn/kép, ba khâu nối tiếp nhau. Quy ước góc giữ nguyên:
+``Revolute_1`` bằng 0 là khâu 1 thõng xuống (dựng đứng là π), còn ``Revolute_2`` và
+``Revolute_3`` bằng 0 nghĩa là thẳng hàng với khâu trước. Mọi khớp bằng 0 tuyệt đối là cả
+chuỗi thõng thẳng xuống; vị trí khớp mặc định dưới đây là cả chuỗi dựng thẳng đứng.
 """
 
 import math
@@ -28,15 +20,15 @@ from isaaclab.assets import ArticulationCfg
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-CART_PENDULUM_DOUBLE_USD_PATH = os.path.join(CURRENT_DIR, "usd", "cart_pendulum_double_cfg.usd")
-"""USD đã vá. Bản Onshape thô nằm cạnh nó ở ``cart_pendulum_double_base.usd``."""
+CART_PENDULUM_TRIPLE_USD_PATH = os.path.join(CURRENT_DIR, "usd", "cart_pendulum_triple_cfg.usd")
+"""USD đã vá. Bản Onshape thô nằm cạnh nó ở ``cart_pendulum_triple_base.usd``."""
 
-CART_PENDULUM_DOUBLE_RAIL_LIMIT = 0.555
-"""Nửa chiều dài ray [m], đúng bằng giới hạn khớp ``Slider_1`` trong USD."""
+CART_PENDULUM_TRIPLE_RAIL_LIMIT = 0.555
+"""Nửa chiều dài ray [m]. Sửa lại nếu ray trong CAD của bạn khác con lắc đơn."""
 
-CART_PENDULUM_DOUBLE_CFG = ArticulationCfg(
+CART_PENDULUM_TRIPLE_CFG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(
-        usd_path=CART_PENDULUM_DOUBLE_USD_PATH,
+        usd_path=CART_PENDULUM_TRIPLE_USD_PATH,
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             rigid_body_enabled=True,
             # chặn thêm ở mức thân, cao hơn trần khớp một chút để trần khớp mới là cái ràng buộc
@@ -47,9 +39,9 @@ CART_PENDULUM_DOUBLE_CFG = ArticulationCfg(
         ),
         articulation_props=sim_utils.ArticulationRootPropertiesCfg(
             enabled_self_collisions=False,
-            # chuỗi dài hơn thì cần thêm vòng lặp solver, nếu không hai khâu sẽ giãn ra khi lắc mạnh
-            solver_position_iteration_count=16,
-            solver_velocity_iteration_count=1,
+            # ba khâu nối tiếp là chuỗi dài và nhẹ, thiếu vòng lặp solver là khớp giãn ra khi lắc
+            solver_position_iteration_count=24,
+            solver_velocity_iteration_count=2,
         ),
     ),
     actuators={
@@ -64,8 +56,7 @@ CART_PENDULUM_DOUBLE_CFG = ArticulationCfg(
         ),
         "pole": ImplicitActuatorCfg(
             joint_names_expr=["Revolute_.*"],
-            # xem chú thích trong cart_pendulum_cfg.py: stiffness 1e-5 là để PhysX vẫn coi bậc
-            # tự do này có drive, nhỏ tới mức không ảnh hưởng động lực học
+            # xem chú thích trong cart_pendulum_cfg.py
             effort_limit_sim=1.0,
             velocity_limit_sim=15.0,
             stiffness=1.0e-5,
@@ -75,7 +66,7 @@ CART_PENDULUM_DOUBLE_CFG = ArticulationCfg(
     init_state=ArticulationCfg.InitialStateCfg(
         pos=(0.0, 0.0, 0.0),
         # mặc định = tư thế ĐÍCH (cả chuỗi dựng đứng); reset lúc chạy mới quyết định bắt đầu ở đâu
-        joint_pos={"Slider_1": 0.0, "Revolute_1": math.pi, "Revolute_2": 0.0},
-        joint_vel={"Slider_1": 0.0, "Revolute_1": 0.0, "Revolute_2": 0.0},
+        joint_pos={"Slider_1": 0.0, "Revolute_1": math.pi, "Revolute_2": 0.0, "Revolute_3": 0.0},
+        joint_vel={"Slider_1": 0.0, "Revolute_1": 0.0, "Revolute_2": 0.0, "Revolute_3": 0.0},
     ),
 )

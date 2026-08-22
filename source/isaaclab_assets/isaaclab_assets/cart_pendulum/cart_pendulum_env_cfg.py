@@ -7,15 +7,13 @@
 
 Hai task dùng chung scene và action:
 
-* ``CartPendulumEnvCfg`` — giữ con lắc đứng, xe bám quanh giữa ray;
+* ``CartPendulumEnvCfg`` — swing-up: con lắc bắt đầu thõng xuống, phải lắc lên rồi giữ đứng;
 * ``CartPendulumPositionEnvCfg`` — vừa giữ con lắc đứng vừa chạy tới mốc vị trí được lệnh.
 
 Toạ độ đọc từ USD: ray nằm dọc trục **Y**, giới hạn ±0.555 m; ``Revolute_1`` bằng 0 là con
 lắc thõng xuống, tư thế đứng là π và đã được đặt làm vị trí khớp mặc định trong
 ``CART_PENDULUM_CFG``. Mọi reward/termination đo lệch so với mặc định đó.
 """
-
-import math
 
 import isaaclab.envs.mdp as mdp
 import isaaclab.sim as sim_utils
@@ -102,14 +100,15 @@ class EventCfg:
             "velocity_range": (-0.1, 0.1),
         },
     )
-    reset_pole = EventTerm(
-        func=events.reset_joints_by_offset,
+    reset_pendulum = EventTerm(
+        func=project_mdp.reset_pendulum_chain,
         mode="reset",
         params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names=["Revolute_1"]),
-            # lệch tối đa 22.5° so với tư thế đứng
-            "position_range": (-0.125 * math.pi, 0.125 * math.pi),
-            "velocity_range": (-0.01 * math.pi, 0.01 * math.pi),
+            "asset_cfg": SceneEntityCfg("robot", joint_names=["Revolute_.*"]),
+            # bắt đầu ở tư thế thõng xuống: đây là bài swing-up, phải lắc từ dưới lên
+            "hanging": True,
+            "angle_noise": 0.1,
+            "velocity_noise": 0.05,
         },
     )
 
@@ -122,22 +121,27 @@ class RewardCfg:
     alive = RewardTermCfg(func=rewards.is_alive, weight=1.0)
     terminating = RewardTermCfg(func=rewards.is_terminated, weight=-4.0)
 
-    # (2) giữ con lắc đứng
+    # (2) lắc lên rồi giữ đứng. Hai tầng: cos định hình cho cả vòng tròn, exp lo phần chính xác
+    upright_shaping = RewardTermCfg(
+        func=project_mdp.pendulum_upright_cos,
+        weight=1.5,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["Revolute_.*"])},
+    )
     upright = RewardTermCfg(
         func=project_mdp.upright_pendulum_exp,
         weight=3.0,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["Revolute_1"]), "std": 0.35},
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["Revolute_.*"]), "std": 0.35},
     )
     pendulum_rate = RewardTermCfg(
         func=project_mdp.pendulum_ang_vel_l2,
         weight=-0.02,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["Revolute_1"])},
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["Revolute_.*"])},
     )
 
     # (3) đừng trôi ra đầu ray
     cart_position = RewardTermCfg(
         func=project_mdp.cart_position_l2,
-        weight=-0.5,
+        weight=-0.1,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=["Slider_1"])},
     )
     cart_velocity = RewardTermCfg(
@@ -155,10 +159,7 @@ class TerminationsCfg:
     """Kết thúc khi hết giờ, con lắc đổ, hoặc xe chạy tới đầu ray."""
 
     time_out = TerminationTermCfg(func=terminations.time_out, time_out=True)
-    pendulum_fell = TerminationTermCfg(
-        func=project_mdp.pendulum_fell,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["Revolute_1"]), "limit_angle": 0.8},
-    )
+    # KHÔNG kết thúc khi con lắc đổ: bài này bắt đầu từ tư thế thõng, đổ là trạng thái xuất phát
     cart_out_of_rail = TerminationTermCfg(
         func=project_mdp.cart_out_of_rail,
         params={

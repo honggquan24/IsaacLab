@@ -1,6 +1,48 @@
 Changelog
 ---------
 
+0.5.0 (2026-08-22)
+~~~~~~~~~~~~~~~~~~
+
+Added
+^^^^^
+
+* Added the ``cart_pendulum_triple`` package with ``Isaac-Cart-Pendulum-Triple``,
+  ``-Triple-Position`` and ``-Triple-Position-Play``, and added the matching ``-Double-Position``
+  tasks. The double and triple environment configs subclass the single-pendulum ones and only swap
+  the robot, the viewer and the rail limit; every reward and termination resolves joints with
+  ``Revolute_.*`` so a longer chain needs no new code.
+* Added ``isaaclab_assets.cart_pendulum.mdp.events.reset_pendulum_chain``. Every revolute at zero is
+  the chain hanging straight down and the default joint position is the chain standing up, so one
+  ``hanging`` flag switches a task between swing-up and balance-only.
+* Added ``pendulum_upright_cos``, a ``(1 + cos(error)) / 2`` shaping reward. ``upright_pendulum_exp``
+  with ``std=0.35`` is about ``exp(-80)`` when the chain hangs, which is flat, so swing-up has
+  nothing to follow without this term.
+
+Changed
+^^^^^^^
+
+* Generalized ``scripts/ute/cart_pendulum/prepare_usd.py`` to any chain length. It discovers the
+  articulation root, the bodies and the anchor joint from the stage and orients the joint tree by
+  breadth-first search from the base body, so it no longer hard-codes prim names and works for the
+  single, double and triple exports unchanged.
+* ``prepare_usd.py`` now writes ``physxJoint:maxJointVelocity`` on every movable joint --
+  ``--max-angular-velocity`` (15 rad/s) and ``--max-linear-velocity`` (5 m/s). A long chain reaches
+  speeds within one simulation step that the solver cannot resolve, and capping the degree of
+  freedom is far cheaper than shrinking ``sim.dt``. The actuator ``velocity_limit_sim`` values match.
+* The cart pendulum tasks are now swing-up: the chain starts hanging and has to be swung up. The
+  pendulum-fell termination is gone, since a fallen pendulum is the starting state, and the cart
+  position penalty drops from 0.5 to 0.1 so it does not block the energy-pumping swings.
+* The pendulum joints carry ``stiffness=1e-5`` with ``effort_limit_sim=1.0`` rather than a fully
+  free joint, and the actor and critic grow to ``[512, 512, 256]``.
+* Dropped ``articulation_root_prim_path`` from the robot configs. Left unset, Isaac Lab finds the
+  prim carrying ``ArticulationRootAPI`` itself, so renaming the Onshape document no longer breaks
+  the config.
+* Reward and termination terms now pass ``asset_cfg`` explicitly, and ``resolve_joint_ids`` falls
+  back to a name lookup, so a term that relies on the signature default no longer hits an unresolved
+  ``slice(None)``.
+
+
 0.4.0 (2026-08-22)
 ~~~~~~~~~~~~~~~~~~
 

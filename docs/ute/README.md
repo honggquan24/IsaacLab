@@ -84,6 +84,7 @@ Hai thứ trong log GUI **không phải lỗi**, không cần xử lý:
 | `rotary_pendulum_v2` | `rotary_pendulum` | `Isaac-RotaryPendulum-V2-*` → `Isaac-Rotary-Pendulum-*` |
 | `cartpole_v1` | `cart_pendulum` | `Isaac-Cartpole-V1-Run` → `Isaac-Cart-Pendulum` |
 | `cartpole_v2` | `cart_pendulum_double` | `Isaac-Cartpole-V2-Run` → `Isaac-Cart-Pendulum-Double` |
+| *(mới)* | `cart_pendulum_triple` | `Isaac-Cart-Pendulum-Triple` |
 | `balancecar_v1` | `balance_car` | `Isaac-Cartbalance-V1-*` → `Isaac-Balance-Car-*` |
 | `evobot_v1` | `evobot` | `Isaac-Evobot-V1-*` → `Isaac-Evobot-*` |
 | `legged_v1`, `legged_v2`, `legged_v3` | *(bỏ)* | vẫn còn trên nhánh `legged_v3`, `dev/robot_legged_v2` |
@@ -193,7 +194,7 @@ bash scripts/ute/smoke_test_all.sh          # chạy lần lượt toàn bộ ta
 | --- | --- |
 | `scripts/ute/smoke_test.py`, `smoke_test_all.sh` | dựng thử env, báo shape action/observation |
 | `scripts/ute/wheeled_biped/prepare_usd.py` | vá USD robot bipedal wheel |
-| `scripts/ute/cart_pendulum/prepare_usd.py` | vá USD con lắc trên xe đẩy: đảo chiều cha-con của khớp, neo ray vào world, nâng khỏi sàn, thêm DriveAPI |
+| `scripts/ute/cart_pendulum/prepare_usd.py` | vá USD họ con lắc trên xe đẩy (đơn/kép/ba): tự dò cây khớp và đảo chiều cha-con, neo ray vào world, nâng khỏi sàn, thêm DriveAPI, đặt trần tốc độ khớp |
 | `scripts/ute/wheeled_biped/inspect_*.py` | soi USD và trạng thái runtime (khớp, khối lượng, trục, contact, trọng lực, vòng kín, dấu bánh) |
 | `scripts/ute/wheeled_biped/simtest_*.py` | chạy sim trần để thử spawn / motor / action |
 | `scripts/ute/report/report_*.py` | vẽ đường cong huấn luyện, chọn epoch tốt nhất, cắt log |

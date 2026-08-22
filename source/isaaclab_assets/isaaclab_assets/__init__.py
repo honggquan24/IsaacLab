@@ -31,6 +31,7 @@ from .sensors import *  # noqa: F403
 from . import balance_car  # noqa: F401
 from . import cart_pendulum  # noqa: F401
 from . import cart_pendulum_double  # noqa: F401
+from . import cart_pendulum_triple  # noqa: F401
 from . import evobot  # noqa: F401
 from . import rotary_pendulum  # noqa: F401
 from . import uav  # noqa: F401

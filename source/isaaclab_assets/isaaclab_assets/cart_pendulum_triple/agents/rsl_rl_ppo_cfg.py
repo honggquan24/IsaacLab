@@ -9,13 +9,14 @@ from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, R
 
 
 @configclass
-class CartPendulumPPORunnerCfg(RslRlOnPolicyRunnerCfg):
-    num_steps_per_env = 200
-    max_iterations = 1000
+class CartPendulumTriplePPORunnerCfg(RslRlOnPolicyRunnerCfg):
+    num_steps_per_env = 100
+    max_iterations = 3000
     save_interval = 100
-    experiment_name = "cartpole_v1_ppo"
+    experiment_name = "cartpole_v3_triple_ppo"
     policy = RslRlPpoActorCriticCfg(
-        init_noise_std=0.2,
+        # chuỗi ba khâu hỗn loạn hơn hẳn, cần nhiễu khám phá lớn để tìm được nhịp bơm năng lượng
+        init_noise_std=0.6,
         actor_obs_normalization=True,
         critic_obs_normalization=True,
         actor_hidden_dims=[512, 512, 256],
@@ -39,18 +40,8 @@ class CartPendulumPPORunnerCfg(RslRlOnPolicyRunnerCfg):
 
 
 @configclass
-class CartPendulumPositionPPORunnerCfg(CartPendulumPPORunnerCfg):
-    """Task bám vị trí khó hơn task cân bằng: cần thêm vòng lặp và nhiễu khám phá lớn hơn."""
+class CartPendulumTriplePositionPPORunnerCfg(CartPendulumTriplePPORunnerCfg):
+    """Bám vị trí: khởi động sẵn ở tư thế đứng nên không cần nhiều vòng như swing-up."""
 
-    max_iterations = 1500
-    save_interval = 100
-    experiment_name = "cartpole_v1_position_ppo"
-    policy = RslRlPpoActorCriticCfg(
-        # nhiễu ban đầu lớn hơn 0.2 để xe dám chạy hết ray đi tìm mốc ở xa
-        init_noise_std=0.5,
-        actor_obs_normalization=True,
-        critic_obs_normalization=True,
-        actor_hidden_dims=[512, 512, 256],
-        critic_hidden_dims=[512, 512, 256],
-        activation="relu",
-    )
+    max_iterations = 2000
+    experiment_name = "cartpole_v3_triple_position_ppo"
