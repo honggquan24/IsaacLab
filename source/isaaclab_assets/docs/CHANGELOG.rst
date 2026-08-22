@@ -1,6 +1,20 @@
 Changelog
 ---------
 
+0.7.2 (2026-08-22)
+~~~~~~~~~~~~~~~~~~
+
+Fixed
+^^^^^
+
+* Raised ``num_steps_per_env`` from 100 to 200 on the double and triple pendulums. At 60 Hz a
+  100-step rollout is 1.67 s, shorter than one swing of either chain (1.09 s and 1.33 s), so a
+  rollout was cut off part-way through a swing and swing-up credit assignment had nothing to work
+  with. 200 steps covers 3.1 and 2.5 swings.
+* Corrected two comments in the robot configs that no longer matched their values, for the cart
+  effort limit and the drive damping.
+
+
 0.7.1 (2026-08-22)
 ~~~~~~~~~~~~~~~~~~
 

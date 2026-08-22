@@ -53,8 +53,8 @@ CART_PENDULUM_TRIPLE_CFG = ArticulationCfg(
             velocity_limit_sim=20.0,
             stiffness=0.0,
             # damping là lực cản tỉ lệ vận tốc, ăn thẳng vào lực điều khiển: ở 5 m/s thì
-            # damping 0.5 đã nuốt 2.5 N. Để 0.05 cho gần như không cản mà drive vẫn không
-            # hoàn toàn không tắt dần.
+            # damping 0.5 đã nuốt 2.5 N. Để 0.02 cho gần như không cản mà drive vẫn không
+            # hoàn toàn buông.
             damping=0.02,
         ),
         "pole": ImplicitActuatorCfg(

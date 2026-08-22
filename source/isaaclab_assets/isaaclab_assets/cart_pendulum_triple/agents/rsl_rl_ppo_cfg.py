@@ -10,7 +10,10 @@ from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, R
 
 @configclass
 class CartPendulumTriplePPORunnerCfg(RslRlOnPolicyRunnerCfg):
-    num_steps_per_env = 100
+    # chuỗi này có chu kỳ lắc 1.33 s; 100 bước ở 60 Hz mới được 1.67 s, chưa đủ một nhịp
+    # lắc nên rollout cắt ngang giữa chừng và credit assignment của swing-up bị hỏng.
+    # 200 bước = 3.33 s, phủ 2.5 chu kỳ.
+    num_steps_per_env = 200
     max_iterations = 3000
     save_interval = 100
     experiment_name = "cartpole_v3_triple_ppo"
