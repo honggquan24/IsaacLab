@@ -174,10 +174,13 @@ class RewardCfg:
         weight=-0.01,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=["Slider_1"])},
     )
-    # (6) định hình: giảm vận tốc góc các khâu
+    # (6) định hình: giảm vận tốc góc các khâu.
+    #     Ở -0.005 (giá trị của cartpole gốc) thì với chuỗi ba khâu quay 6.9 rad/s nó chỉ đóng
+    #     góp -0.10/bước, quá nhẹ để cản việc quay mạnh. -0.02 cho khoảng -0.41/bước ở tốc độ
+    #     đó, đủ để thừa năng lượng thành tốn kém mà vẫn không chặn nhịp bơm lúc swing-up.
     pole_vel = RewardTermCfg(
         func=rewards.joint_vel_l1,
-        weight=-0.005,
+        weight=-0.02,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=["Revolute_.*"])},
     )
     # (7) làm mượt lực đẩy cho đỡ giật khi quay video

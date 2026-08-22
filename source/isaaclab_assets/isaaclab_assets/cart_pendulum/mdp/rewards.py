@@ -105,13 +105,22 @@ def swing_up_height(
     -π² ≈ -9.9 mỗi bước: một hằng số phạt khổng lồ áp đảo mọi tín hiệu khác, trong khi ``cos``
     bị chặn trong [-1, 1] nên độ dốc của nó mới là thứ policy nhìn thấy.
 
+    Lấy ``min`` trên các khâu chứ **không** phải ``mean``. Khâu sau đo góc so với khâu trước,
+    nên với chuỗi ba khâu thõng thẳng xuống thì lệch là ``(π, 0, 0)`` và ``mean(cos)`` ra
+    **+0.33** — bằng đúng điểm của tư thế "khâu 1 dựng lên, hai khâu sau quẹo ngang 90°".
+    Tức là ``mean`` chấm tư thế tệ nhất ngang với tư thế nửa vời, và policy khai thác đúng chỗ
+    đó: nó quay mạnh cho khâu đầu vẫy quanh đỉnh còn hai khâu sau văng lung tung, ăn điểm mà
+    không bao giờ phải xếp thẳng chuỗi. ``min`` chấm theo khâu tệ nhất — thõng ra -1, nửa vời
+    ra 0, thẳng đứng ra +1 — nên muốn điểm cao chỉ còn một cách là xếp thẳng cả chuỗi, đúng
+    thứ mà cổng :func:`pendulum_is_upright` đòi.
+
     .. important::
         Pha "đã dựng" **phải** kèm một phần thưởng đủ lớn (:func:`pendulum_is_upright` với
         trọng số dương), nếu không sẽ có vực: ngay dưới ngưỡng, term này còn cho
         ``2·cos(0.4) ≈ 1.84``; vượt qua ngưỡng nó tắt và chỉ còn phạt L2 — tức là lắc lên
         được lại bị trừ điểm, và policy sẽ học cách lửng lơ ngay dưới ngưỡng mãi mãi.
     """
-    height = torch.mean(torch.cos(joint_deviation(env, asset_cfg, wrap=True)), dim=1)
+    height = torch.min(torch.cos(joint_deviation(env, asset_cfg, wrap=True)), dim=1).values
     return height * (1.0 - pendulum_is_upright(env, asset_cfg, upright_angle))
 
 

@@ -1,6 +1,24 @@
 Changelog
 ---------
 
+0.7.3 (2026-08-22)
+~~~~~~~~~~~~~~~~~~
+
+Fixed
+^^^^^
+
+* ``swing_up_height`` now takes the minimum cosine across the links instead of the mean. Because a
+  later link measures its angle against the link before it, a three-link chain hanging straight down
+  has errors ``(π, 0, 0)`` and scored ``mean(cos) = +0.33`` -- the same as a chain with the first
+  link up and the other two folded out at 90°. The worst pose and a half-finished one paid equally,
+  and the triple pendulum exploited exactly that: it spun the first link around the top at 6.9 rad/s
+  while the other two flailed, upright only 21% of the time and never assembling the chain. Under
+  ``min`` the score follows the worst link -- hanging scores -1, folded 0, straight up +1 -- so the
+  only way to earn it is to line the whole chain up, which is what ``pendulum_is_upright`` asks for.
+* Raised the ``pole_vel`` weight from 0.005 to 0.02. At the shipped cartpole value a chain spinning
+  at 6.9 rad/s per joint was charged only 0.10 per step, far too little to make excess energy costly.
+
+
 0.7.2 (2026-08-22)
 ~~~~~~~~~~~~~~~~~~
 

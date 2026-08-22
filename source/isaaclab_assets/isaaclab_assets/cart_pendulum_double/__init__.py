@@ -30,7 +30,7 @@ Isaac-Cart-Pendulum-Double — swing-up rồi giữ hai khâu thẳng đứng
     60 Hz (sim.dt 1/60, decimation 1) → 60 s = 3600 step, 120 s = 7200 step
 
     ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
-        --task Isaac-Cart-Pendulum-Double --num_envs 4096 --headless
+        --task Isaac-Cart-Pendulum-Double --num_envs 4096 --video --video_length 3600 --rendering_mode quality --headless 
 
     ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
         --task Isaac-Cart-Pendulum-Double --num_envs 4 --headless \
