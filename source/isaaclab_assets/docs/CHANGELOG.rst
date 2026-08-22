@@ -1,6 +1,39 @@
 Changelog
 ---------
 
+0.4.0 (2026-08-22)
+~~~~~~~~~~~~~~~~~~
+
+Added
+^^^^^
+
+* Added ``scripts/ute/cart_pendulum/prepare_usd.py``, which turns the raw Onshape export
+  ``cart_pendulum_base.usd`` into ``cart_pendulum_cfg.usd``: it reverses the parent/child order of
+  ``Slider_1`` and ``Revolute_1``, replaces the D6 joint anchored to a helper plane with a
+  ``UsdPhysics.FixedJoint`` to the world, lifts the assembly clear of the ground, and applies the
+  missing ``UsdPhysics.DriveAPI``.
+* Added ``isaaclab_assets.cart_pendulum.mdp.terminations`` with ``pendulum_fell`` and
+  ``cart_out_of_rail``. ``pendulum_fell`` wraps the angle error to :math:`[-\pi, \pi]`, which
+  ``joint_pos_out_of_manual_limit`` cannot do for a joint that spins without limits.
+
+Changed
+^^^^^^^
+
+* Rebuilt the cart pendulum asset from a new Onshape import. The rail runs along **Y**, the slider
+  limit is ±0.555 m, and joint zero is the pendulum hanging **down** — upright is :math:`\pi`, which
+  is now the default joint position, so rewards measure deviation from the default rather than from
+  zero.
+* Rewrote ``isaaclab_assets.cart_pendulum.mdp.rewards``. The old ``cartpole_reward_joint_pos``
+  compared pendulum velocity against a target of 2.0 rad/s, so it scored an upright, motionless
+  pendulum near zero. The terms now resolve joints through :class:`SceneEntityCfg` and are split by
+  what they measure.
+* ``Isaac-Cart-Pendulum`` now ends an episode when the pendulum falls or the cart reaches the end of
+  the rail, and the action drives only ``Slider_1`` (action dimension 2 to 1). The effort scale drops
+  from 100 to 5 N to match the ~0.13 kg cart, and the viewer moved onto the X axis so the camera no
+  longer looks down the length of the rail.
+* ``CartPositionCommandCfg`` for this robot now uses ``rail_axis=(0, 1, 0)``.
+
+
 0.3.1 (2026-08-22)
 ~~~~~~~~~~~~~~~~~~
 

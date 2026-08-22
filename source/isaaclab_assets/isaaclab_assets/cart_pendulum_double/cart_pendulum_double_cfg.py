@@ -23,7 +23,7 @@ from isaaclab.assets import ArticulationCfg
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-CART_PENDULUM_DOUBLE_USD_PATH = os.path.join(CURRENT_DIR, "usd", "cartpole_v2_cfg_up.usd")
+CART_PENDULUM_DOUBLE_USD_PATH = os.path.join(CURRENT_DIR, "usd", "cart_pendulum_double_cfg.usd")
 
 CART_PENDULUM_DOUBLE_CFG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(

@@ -175,9 +175,10 @@ theo tần số điều khiển của task đó — mở file, copy, chạy.
 `Isaac-Cart-Pendulum-Position` cho xe đẩy bám mốc vị trí thay vì chỉ đứng cân bằng — mốc
 đổi sau mỗi 3–5 s và hiện bằng quả cầu đỏ trên ray, nhìn ra ngay trong video. Khoảng lấy mẫu
 suy từ giới hạn khớp `Slider_1` trong USD (60% giới hạn mềm) nên không phụ thuộc ray dài bao
-nhiêu. Vị trí quả cầu được tính bằng `root_pos_w + rail_axis * lệnh`, giả sử ray nằm dọc trục
-X và xe ở toạ độ khớp 0 trùng gốc thân robot; nếu chạy thấy quả cầu lệch thì chỉnh
-`rail_axis` / `marker_offset` trong `CommandsCfg` của `cart_pendulum_env_cfg.py`.
+nhiêu. Vị trí quả cầu được tính bằng `root_pos_w + rail_axis * lệnh`; ray của robot này nằm
+dọc trục **Y** (đọc từ USD: rack trải từ y=-0.555 tới y=+0.555) nên `rail_axis` đặt là
+`(0, 1, 0)`. Nếu chạy thấy quả cầu lệch thì chỉnh `rail_axis` / `marker_offset` trong
+`CommandsCfg` của `cart_pendulum_env_cfg.py`.
 
 Kiểm tra một task còn dựng được sau khi sửa code:
 
@@ -192,6 +193,7 @@ bash scripts/ute/smoke_test_all.sh          # chạy lần lượt toàn bộ ta
 | --- | --- |
 | `scripts/ute/smoke_test.py`, `smoke_test_all.sh` | dựng thử env, báo shape action/observation |
 | `scripts/ute/wheeled_biped/prepare_usd.py` | vá USD robot bipedal wheel |
+| `scripts/ute/cart_pendulum/prepare_usd.py` | vá USD con lắc trên xe đẩy: đảo chiều cha-con của khớp, neo ray vào world, nâng khỏi sàn, thêm DriveAPI |
 | `scripts/ute/wheeled_biped/inspect_*.py` | soi USD và trạng thái runtime (khớp, khối lượng, trục, contact, trọng lực, vòng kín, dấu bánh) |
 | `scripts/ute/wheeled_biped/simtest_*.py` | chạy sim trần để thử spawn / motor / action |
 | `scripts/ute/report/report_*.py` | vẽ đường cong huấn luyện, chọn epoch tốt nhất, cắt log |

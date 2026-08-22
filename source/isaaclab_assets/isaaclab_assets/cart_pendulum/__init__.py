@@ -3,7 +3,18 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-r"""Con lắc đơn trên xe đẩy (CAD Onshape) — giữ thăng bằng.
+r"""Con lắc đơn trên xe đẩy (CAD Onshape).
+
+Ray dài 1.11 m nằm dọc trục Y, xe trượt trên ray, con lắc dài 0.22 m gắn trên xe và quay tự
+do. Ở góc khớp 0 con lắc thõng xuống; tư thế đứng là π và được đặt làm vị trí khớp mặc định,
+nên reward đo lệch so với mặc định chứ không so với 0.
+
+Chuẩn bị USD
+------------
+``usd/cart_pendulum_base.usd`` là bản Onshape thô, ``usd/cart_pendulum_cfg.usd`` là bản đã vá
+và là bản env dùng. Sinh lại bản vá bằng::
+
+    ./isaaclab.sh -p scripts/ute/cart_pendulum/prepare_usd.py --verify
 
 Cách đọc lệnh quay video
 ------------------------
@@ -14,7 +25,7 @@ Video xuất ra ``logs/rsl_rl/<experiment_name>/<run>/videos/play/``.
 checkpoint thì thay bằng ``--checkpoint <đường/dẫn/model_xxx.pt>``.
 Bỏ ``--headless`` nếu muốn xem cửa sổ Isaac Sim trong lúc ghi.
 
-Isaac-Cart-Pendulum — xe đẩy trên ray, khớp con lắc thụ động
+Isaac-Cart-Pendulum — giữ con lắc đứng, xe bám quanh giữa ray
     30 Hz (sim.dt 1/60, decimation 2) → 60 s = 1800 step, 120 s = 3600 step
 
     ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
