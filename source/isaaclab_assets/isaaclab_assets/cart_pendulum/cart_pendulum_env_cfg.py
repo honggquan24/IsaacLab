@@ -116,8 +116,9 @@ class EventCfg:
         mode="reset",
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names=["Revolute_.*"]),
-            # bắt đầu ở tư thế thõng xuống: đây là bài swing-up, phải lắc từ dưới lên
-            "hanging": True,
+            # một nửa số env khởi động ở tư thế thõng (phải lắc lên), nửa còn lại đứng sẵn
+            # (chỉ phải giữ) — hai kỹ năng được học song song thay vì nối tiếp
+            "hanging_prob": 0.5,
             "angle_noise": 0.1,
             "velocity_noise": 0.05,
         },
@@ -156,25 +157,13 @@ class RewardCfg:
         weight=-1.0,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=["Revolute_.*"]), "upright_angle": UPRIGHT_ANGLE},
     )
-    # (4) định hình: xe đừng trôi ra đầu ray. Chạm ray là cắt ngang chứ không bị phạt, nên
-    #     đây là tín hiệu duy nhất dạy xe tránh đầu ray — để quá nhẹ thì nó không tránh.
-    #
-    #     Số này phải đọ được với thưởng đứng (3.0), không phải đọ với 0. Ở -0.2, việc chạy về
-    #     giữa ray chỉ đáng 1.2% của thưởng đứng nên policy bỏ qua: đo ở vòng 63 thấy xe đậu
-    #     lì ở RMS 0.437 m trong khi giới hạn ray là 0.505 m, và 45% episode chết vì chạm ray.
-    #     Ở -1.0 thì đáng 6%, đủ để xe chịu về giữa mà vẫn không lấn át việc giữ thăng bằng.
-    cart_pos = RewardTermCfg(
-        func=project_mdp.joint_pos_target_l2,
-        weight=-1.0,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["Slider_1"]), "wrap": False},
-    )
-    # (5) định hình: giảm vận tốc xe
+    # (4) định hình: giảm vận tốc xe
     cart_vel = RewardTermCfg(
         func=rewards.joint_vel_l1,
         weight=-0.01,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=["Slider_1"])},
     )
-    # (6) định hình: giảm vận tốc góc các khâu.
+    # (5) định hình: giảm vận tốc góc các khâu.
     #     Ở -0.005 (giá trị của cartpole gốc) thì với chuỗi ba khâu quay 6.9 rad/s nó chỉ đóng
     #     góp -0.10/bước, quá nhẹ để cản việc quay mạnh. -0.02 cho khoảng -0.41/bước ở tốc độ
     #     đó, đủ để thừa năng lượng thành tốn kém mà vẫn không chặn nhịp bơm lúc swing-up.
@@ -183,7 +172,7 @@ class RewardCfg:
         weight=-0.02,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=["Revolute_.*"])},
     )
-    # (7) làm mượt lực đẩy cho đỡ giật khi quay video
+    # (6) làm mượt lực đẩy cho đỡ giật khi quay video
     action_rate = RewardTermCfg(func=rewards.action_rate_l2, weight=-0.005)
 
 
@@ -192,6 +181,10 @@ class TerminationsCfg:
     """Kết thúc khi hết giờ, con lắc đổ, hoặc xe chạy tới đầu ray."""
 
     time_out = TerminationTermCfg(func=terminations.time_out, time_out=True)
+    # Không còn reward nào kéo xe về giữa ray, nên term này là thứ duy nhất giới hạn xe. Đổi
+    # lại xe được tự do quét hết ray để bơm năng lượng — đo ở vòng 98 của con lắc ba thấy xe
+    # bị ghim trong bán kính 0.068 m quanh giữa ray trong khi con lắc quay 6.9 rad/s, tức là
+    # lực kéo về giữa đang chặn đúng cái chuyển động cần cho swing-up.
     # KHÔNG kết thúc khi con lắc đổ: bài này bắt đầu từ tư thế thõng, đổ là trạng thái xuất phát.
     #
     # Chạm đầu ray đánh dấu time_out=True (cắt ngang) chứ không phải thất bại, và đây là chỗ dễ
@@ -300,11 +293,6 @@ class CartPendulumPositionEnvCfg(CartPendulumEnvCfg):
 
     def __post_init__(self) -> None:
         super().__post_init__()
-        # Mốc mới là thứ quyết định xe đứng ở đâu, nên hạ lực kéo về giữa ray xuống cho khỏi
-        # giành nhau — nhưng KHÔNG tắt hẳn: lúc chưa lắc lên thì term bám mốc đang bị cổng
-        # chặn, và chạm đầu ray chỉ là cắt ngang chứ không bị phạt, nên nếu bỏ nốt cái này
-        # thì cả pha swing-up không còn tín hiệu nào bảo xe tránh đầu ray.
-        self.rewards.cart_pos.weight = -0.05
 
 
 @configclass

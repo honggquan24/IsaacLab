@@ -45,8 +45,8 @@ class CartPendulumTriplePositionEnvCfg(CartPendulumPositionEnvCfg):
     def __post_init__(self) -> None:
         super().__post_init__()
         use_triple_pendulum(self)
-        # bám vị trí đã khó, không bắt swing-up cùng lúc: bắt đầu ngay ở tư thế đứng
-        self.events.reset_pendulum.params["hanging"] = False
+        # bám vị trí đã khó, không bắt swing-up cùng lúc: mọi env bắt đầu ở tư thế đứng
+        self.events.reset_pendulum.params["hanging_prob"] = 0.0
 
 
 @configclass

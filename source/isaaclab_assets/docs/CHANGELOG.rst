@@ -1,6 +1,23 @@
 Changelog
 ---------
 
+0.8.0 (2026-08-22)
+~~~~~~~~~~~~~~~~~~
+
+Changed
+^^^^^^^
+
+* Removed the ``cart_pos`` reward. Nothing pulls the cart to the middle of the rail any more, so it
+  is free to sweep the full length to pump energy; ``cart_out_of_rail`` is now the only thing
+  bounding it. At iteration 98 of the triple the cart was pinned within 0.068 m of centre while the
+  chain spun at 6.9 rad/s, which is the cart motion swing-up depends on being suppressed.
+* ``reset_pendulum_chain`` takes ``hanging_prob`` instead of a ``hanging`` flag and draws per
+  environment, defaulting to 0.5. Half the environments start hanging and half start upright, so
+  swinging up and balancing are learned side by side rather than one after the other: balance can
+  only be practised near the top, and an environment that always starts hanging rarely gets there
+  under a random policy. The ``-Position`` tasks on the double and triple set it to 0.0.
+
+
 0.7.3 (2026-08-22)
 ~~~~~~~~~~~~~~~~~~
 
