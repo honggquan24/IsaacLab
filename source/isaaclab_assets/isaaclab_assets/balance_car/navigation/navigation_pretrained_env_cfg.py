@@ -24,9 +24,9 @@ from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.utils import configclass
 
 from ..balance_env_cfg import BalanceCarEnvCfg
-from ..mdp.observations import angl_vel_b, lin_vel_b, obs_body_pitch, obs_body_roll, obs_body_yaw, obs_pos_world
+from ..mdp.observations import angl_vel_b, lin_vel_b, obs_body_pitch, obs_body_roll, obs_body_yaw
 from ..mdp.terminations import reset_when_fall
-from .mdp.pre_trained_policy_action import PreTrainedBalancePolicyActionCfg
+from .mdp.pre_trained_policy_action import PreTrainedBalancePolicyActionCfg, latest_exported_policy
 from .mdp.rewards import *  # noqa: F403
 
 # Load low-level balance environment config
@@ -70,9 +70,11 @@ class LowLevelObservationsCfg(ObsGroup):
         func=angl_vel_b,
         params={"asset_cfg": SceneEntityCfg("imu")},
     )
-    obs_pos_w = ObsTerm(
-        func=obs_pos_world,
-        params={"asset_cfg": SceneEntityCfg("robot")},
+    # Chỗ giữ sẵn cho lệnh vận tốc; PreTrainedBalancePolicyAction ghi đè func lúc khởi tạo để
+    # nó trả về action của tầng cao. Thứ tự term phải khớp đúng PolicyCfg của tầng thấp.
+    velocity_commands = ObsTerm(
+        func=mdp.generated_commands,
+        params={"command_name": "base_velocity"},
     )
 
     def __post_init__(self) -> None:
@@ -86,18 +88,13 @@ class ActionsCfg:
 
     pre_trained_policy_action: PreTrainedBalancePolicyActionCfg = PreTrainedBalancePolicyActionCfg(
         asset_name="robot",
-        # Path to pre-trained balance policy
-        # Run play.py first to export: ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
-        #   --task Isaac-Balance-Car --num_envs 1 'agent.load_run=<run_name>' 'agent.load_checkpoint="model_.pt"'
-        # Then update this path to point to the exported policy.pt
-        # Đường dẫn tới policy tầng thấp đã export. Máy này CHƯA có checkpoint tương ứng —
-        # train task tầng thấp trước rồi trỏ lại đúng thư mục run.
-        policy_path="logs/rsl_rl/carbalance_ppo/2026-01-09_08-48-26/exported/policy.pt",
+        # Tự lấy run mới nhất của tầng thấp. Train Isaac-Balance-Car rồi chạy play.py một lần
+        # để nó export ra logs/rsl_rl/carbalance_ppo/<run>/exported/policy.pt là dùng được ngay,
+        # không phải quay lại sửa file này.
+        policy_path=latest_exported_policy("carbalance_ppo"),
         low_level_decimation=1,
         low_level_actions=LOW_LEVEL_ENV_CFG.actions.joint_effort,
         low_level_observations=LowLevelObservationsCfg(),
-        velocity_scale=0.3,
-        turn_scale=0.3,
         # debug_vis=True,
     )
 

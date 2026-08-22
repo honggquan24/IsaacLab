@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+import glob
+import os
 from dataclasses import MISSING
 from typing import TYPE_CHECKING
 
@@ -22,6 +24,20 @@ from isaaclab.utils.assets import check_file_path, read_file
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
+
+
+def latest_exported_policy(experiment_name: str) -> str:
+    """Đường dẫn tới ``policy.pt`` được export gần nhất của một experiment.
+
+    Ghim cứng tên run vào config thì cứ train lại một lần là phải sửa file, và lỗi chỉ hiện ra
+    lúc dựng env. Tên run là dấu thời gian nên sắp xếp chuỗi là ra bản mới nhất.
+
+    Không tìm thấy thì trả về chính cái pattern, để thông báo lỗi của
+    :class:`PreTrainedBalancePolicyAction` nói rõ nó đã tìm ở đâu.
+    """
+    pattern = os.path.join("logs", "rsl_rl", experiment_name, "*", "exported", "policy.pt")
+    matches = sorted(glob.glob(pattern))
+    return matches[-1] if matches else pattern
 
 
 class PreTrainedBalancePolicyAction(ActionTerm):
@@ -66,6 +82,13 @@ class PreTrainedBalancePolicyAction(ActionTerm):
         # cfg.low_level_observations.actions.params = dict()
 
         # Create observation manager for low level policy
+        # Lệnh vận tốc của tầng cao đi vào QUAN SÁT của tầng thấp, không cộng vào đầu ra của nó.
+        # Tầng thấp đã được train để bám lệnh này, nên nó biết mình đang được yêu cầu làm gì và
+        # tự phối hợp nghiêng thân với quay bánh. Bản cũ cộng thẳng vào mô-men bánh: tầng thấp
+        # không hề biết có ai vừa đẩy nó, chỉ thấy xe bị nghiêng rồi bù lại — hai tầng chống nhau.
+        cfg.low_level_observations.velocity_commands.func = lambda dummy_env: self._raw_actions
+        cfg.low_level_observations.velocity_commands.params = dict()
+
         self._low_level_obs_manager = ObservationManager({"ll_policy": cfg.low_level_observations}, env)
 
         self._counter = 0
@@ -93,32 +116,8 @@ class PreTrainedBalancePolicyAction(ActionTerm):
             # Get observations for low-level policy
             low_level_obs = self._low_level_obs_manager.compute_group("ll_policy")
 
-            # Run balance policy to get base wheel efforts
-            balance_actions = self.policy(low_level_obs)
-
-            # Modulate actions based on velocity commands
-            # raw_actions: [vx, vy, omega] where:
-            # - vx: forward velocity command
-            # - vy: lateral velocity (not used for diff drive)
-            # - omega: angular velocity (turning)
-            vx = self._raw_actions[:, 0:1]  # Forward velocity
-            omega = self._raw_actions[:, 2:3]  # Angular velocity
-
-            # Differential drive: left wheel, right wheel
-            # Forward motion: both wheels same direction
-            # Turning: wheels opposite direction
-            vel_scale = self.cfg.velocity_scale
-            turn_scale = self.cfg.turn_scale
-
-            # Add velocity commands to balance actions
-            # Left wheel: +forward, -turn (for positive omega = turn left)
-            # Right wheel: +forward, +turn
-            velocity_modulation = torch.zeros_like(balance_actions)
-            velocity_modulation[:, 0:1] = vx * vel_scale - omega * turn_scale  # Left wheel
-            velocity_modulation[:, 1:2] = vx * vel_scale + omega * turn_scale  # Right wheel
-
-            # Combine balance policy output with velocity modulation
-            self.low_level_actions[:] = balance_actions + velocity_modulation
+            # Tầng thấp tự xử: lệnh đã nằm trong low_level_obs rồi
+            self.low_level_actions[:] = self.policy(low_level_obs)
 
             self._low_level_action_term.process_actions(self.low_level_actions)
             self._counter = 0
@@ -198,12 +197,6 @@ class PreTrainedBalancePolicyActionCfg(ActionTermCfg):
 
     low_level_observations: ObservationGroupCfg = MISSING
     """Low level observation configuration for balance policy."""
-
-    velocity_scale: float = 1.0
-    """Scale factor for forward velocity commands."""
-
-    turn_scale: float = 1.0
-    """Scale factor for turning commands."""
 
     debug_vis: bool = True
     """Whether to visualize debug information."""

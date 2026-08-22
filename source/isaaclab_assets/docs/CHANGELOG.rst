@@ -1,6 +1,31 @@
 Changelog
 ---------
 
+0.9.0 (2026-08-22)
+~~~~~~~~~~~~~~~~~~
+
+Changed
+^^^^^^^
+
+* ``Isaac-Balance-Car`` now tracks velocity commands instead of balancing in place. It gains a
+  ``UniformVelocityCommandCfg`` (vx ±0.5 m/s, wz ±1.0 rad/s, 20% of environments told to stand
+  still), the command enters both the policy and critic observations, and ``track_lin_vel_exp`` and
+  ``track_ang_vel_exp`` reward following it. Balancing on its own left the high level nothing to
+  steer with.
+* Dropped three rewards that paid the robot to hold still and therefore fought every command:
+  ``reward_vel`` (wheel speed to zero), ``reward_li_vel`` (forward speed to zero) and
+  ``reward_angle_y``, which tracked an absolute world yaw of 90° and so prevented turning.
+* Dropped ``obs_pos_world`` from the low-level policy observations. Absolute position inside the
+  environment ties the policy to one spot, which is the opposite of what navigation needs.
+* The pre-trained cascade now feeds the high-level velocity command into the low-level policy's
+  observation rather than adding it to that policy's wheel torques. Under the old scheme the low
+  level never knew a command had been issued -- it only saw the robot tilt and corrected back, so
+  the two levels worked against each other.
+* ``policy_path`` resolves the newest exported run of ``carbalance_ppo`` through
+  ``latest_exported_policy`` instead of naming a run that does not exist on this machine.
+* The low-level episode drops from 100 s to 20 s, enough for four to six commands.
+
+
 0.8.0 (2026-08-22)
 ~~~~~~~~~~~~~~~~~~
 

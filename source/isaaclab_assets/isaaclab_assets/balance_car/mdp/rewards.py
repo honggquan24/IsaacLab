@@ -116,3 +116,51 @@ def reward_roll_rate(
 
     reward = torch.exp(-scale * err**2)
     return reward
+
+
+"""
+Bám lệnh vận tốc — reward của TẦNG THẤP sau khi đổi từ "đứng yên giữ thăng bằng"
+sang "vừa giữ thăng bằng vừa chạy theo lệnh".
+"""
+
+
+def track_lin_vel_exp(
+    env: ManagerBasedRLEnv,
+    command_name: str = "base_velocity",
+    std: float = 0.25,
+    forward_sign: float = 1.0,
+):
+    """Thưởng khi vận tốc tiến của xe bám lệnh ``vx``.
+
+    Lấy ``imu.data.lin_vel_b[:, 1]`` làm vận tốc tiến — đúng thành phần mà quan sát
+    :func:`~..observations.lin_vel_b` đang đưa vào mạng, nên reward và quan sát nói cùng một
+    thứ. Thân xe bị xoay 90° quanh trục roll (tư thế đứng là ``|roll| = 90°``) nên KHÔNG dùng
+    được ``root_lin_vel_b[:, 0]`` như các task locomotion của Isaac Lab.
+
+    .. important::
+        ``forward_sign`` phải kiểm bằng mắt một lần. Nếu +y của IMU chỉ về phía sau xe thì
+        lệnh tiến sẽ làm xe lùi, mà reward vẫn báo bám tốt — sai kiểu này không lộ ra trong
+        log, chỉ thấy khi nhìn robot chạy. Thấy ngược thì đặt -1.0.
+    """
+    imu = env.scene["imu"]
+    command = env.command_manager.get_command(command_name)
+    lin_vel = forward_sign * imu.data.lin_vel_b[:, 1]
+    return torch.exp(-torch.square(command[:, 0] - lin_vel) / std**2)
+
+
+def track_ang_vel_exp(
+    env: ManagerBasedRLEnv,
+    command_name: str = "base_velocity",
+    std: float = 0.5,
+    turn_sign: float = 1.0,
+):
+    """Thưởng khi tốc độ quay của xe bám lệnh ``wz``.
+
+    Đo trong hệ WORLD (``root_ang_vel_w[:, 2]``) chứ không phải hệ thân: thân xe xoay 90° nên
+    trục nào của nó là trục quay đứng còn tuỳ tư thế, trong khi z của world thì luôn là trục
+    quay của việc rẽ.
+    """
+    robot = env.scene["robot"]
+    command = env.command_manager.get_command(command_name)
+    ang_vel = turn_sign * robot.data.root_ang_vel_w[:, 2]
+    return torch.exp(-torch.square(command[:, 2] - ang_vel) / std**2)
