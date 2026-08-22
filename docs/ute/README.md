@@ -52,6 +52,30 @@ Kiểm tra nhanh:
 ./isaaclab.sh -p scripts/environments/list_envs.py | grep Isaac-Wheeled-Biped
 ```
 
+### Vá extension Onshape importer của Isaac Sim
+
+Hai bản vá dưới đây nằm **ngoài repo**, trong `site-packages` của `env_ute`, vì lỗi nằm
+trong extension do Isaac Sim bundle sẵn. Mỗi file đều có bản `.bak` cạnh nó.
+**Cài lại hoặc nâng cấp `isaacsim` là mất, phải vá lại.**
+
+| File | Lỗi | Sửa |
+| --- | --- | --- |
+| `omni.importer.onshape-1.0.1+107.3.0/pip_prebundle/pint/facets/numpy/numpy_func.py` | `AttributeError: module 'numpy' has no attribute 'cumproduct'` ngay khi bấm menu Import from Onshape. NumPy 2.0 đã bỏ alias `np.cumproduct`, bản `pint` bundle sẵn còn gọi `getattr(np, func_str)` không có mặc định. | Đổi thành `getattr(np, func_str, None)` và bỏ qua hàm không tồn tại, ở cả `implement_atleast_nd` lẫn `implement_single_dimensionless_argument_func`. |
+| `omni.importer.onshape-1.0.1+107.3.0/omni/importer/onshape/widgets/assembly_widget.py` | `ValueError: could not convert string to float: '(-1110/2)'` khi dựng mate. Onshape trả về **biểu thức người vẽ gõ** chứ không phải số, `float()` chịu. Một limit lạ làm hỏng cả lần import. | Thêm `eval_numeric_expression()` (tính bằng `ast`, chỉ cho số và `+ - * / **`, không dùng `eval`) và `split_value_and_unit()`; `get_limits_values()` bọc `try/except` để limit đọc không được thì chỉ cảnh báo và bỏ qua. Sửa luôn chỗ đọc góc cone của khớp BALL. |
+
+Sau khi vá phải **tắt hẳn Isaac Sim rồi mở lại** — module lỗi đã nằm trong `sys.modules`
+của phiên đang chạy.
+
+Hai thứ trong log GUI **không phải lỗi**, không cần xử lý:
+
+- `ConvexMeshCookingTask: failed to cook GPU-compatible mesh` — mesh quá phức tạp để cook
+  convex trên GPU, PhysX lùi về va chạm CPU. Muốn hết thì làm collision mesh đơn giản riêng
+  cho prim đó, hoặc bỏ collider nếu nó chỉ để nhìn.
+- `KeyError: <class 'NoneType'>` trong `omni.kit.manipulator.prim.core` kèm
+  `Ill-formed SdfPath <>` — bug UI của Kit: danh sách selection có một path rỗng, gizmo
+  không gắn được cho cú click đó. Không ảnh hưởng USD hay lúc train (chạy headless không
+  nạp extension này).
+
 ## 3. Đổi tên
 
 | Cũ (rải rác ở các nhánh) | Mới (nhánh `demo`) | Task id cũ → mới |
