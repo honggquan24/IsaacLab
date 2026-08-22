@@ -65,7 +65,7 @@ parser.add_argument(
 parser.add_argument(
     "--max-linear-velocity",
     type=float,
-    default=2.5,
+    default=20.0,
     help="Trần tốc độ cho khớp trượt [m/s]. 0 = không đặt.",
 )
 parser.add_argument(

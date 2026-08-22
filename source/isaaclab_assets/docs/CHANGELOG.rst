@@ -1,6 +1,37 @@
 Changelog
 ---------
 
+0.7.0 (2026-08-22)
+~~~~~~~~~~~~~~~~~~
+
+Added
+^^^^^
+
+* Split the pendulum reward into two phases that meet at ``UPRIGHT_ANGLE`` (0.4 rad).
+  ``swing_up_height`` rewards the height of the chain, ``mean(cos(error))``, and runs only while
+  the chain is down; ``pendulum_is_upright`` and ``balance_pole_pos_l2`` run only once it is up. The
+  swing-up phase uses a cosine rather than L2 because L2 reaches -π² ≈ -9.9 per step when the chain
+  hangs, a constant large enough to drown out every other term.
+* Added the bonus that makes the split safe. ``pendulum_is_upright`` is also used directly as a
+  reward with weight 3.0, so crossing the threshold pays +2.85 against +1.83 just below it. Without
+  it the swing-up term switches off at the boundary and leaves only the L2 penalty, which makes
+  succeeding cost less than hovering just below the threshold forever.
+
+Changed
+^^^^^^^
+
+* ``joint_pos_command_l2`` is now gated on the chain being upright, so a position command has no
+  effect until the pendulum has been swung up. Chasing a marker while the pendulum hangs works
+  directly against pumping energy, which needs the cart to sweep back and forth.
+* The ``-Position`` tasks keep ``cart_pos`` at weight 0.05 instead of switching it off. While the
+  chain is down the tracking term is gated off and ``cart_out_of_rail`` is a truncation carrying no
+  penalty, so without it nothing would tell the cart to stay off the rail ends during swing-up.
+* Carried the cart parameters set on the single pendulum over to the double and triple: 100 N effort
+  limit, 20 m/s on the slider, 20 m/s on the bodies. The USD ``physxJoint:maxJointVelocity`` is
+  regenerated to 20 m/s to match -- PhysX clamps to whatever is in the USD, so
+  ``velocity_limit_sim`` alone would have had no effect.
+
+
 0.6.1 (2026-08-22)
 ~~~~~~~~~~~~~~~~~~
 

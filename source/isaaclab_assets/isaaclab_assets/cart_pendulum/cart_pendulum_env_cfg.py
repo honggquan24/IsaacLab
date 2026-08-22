@@ -33,6 +33,9 @@ from .cart_pendulum_cfg import CART_PENDULUM_CFG, CART_PENDULUM_RAIL_LIMIT
 RAIL_AXIS = (0.0, 1.0, 0.0)
 """Hướng ray trong world. Đọc từ USD: rack trải từ y=-0.555 tới y=+0.555."""
 
+UPRIGHT_ANGLE = 0.4
+"""Ngưỡng [rad] coi là đã dựng lên — ranh giới giữa pha swing-up và pha giữ thăng bằng."""
+
 
 @configclass
 class CartPendulumSceneCfg(InteractiveSceneCfg):
@@ -69,7 +72,7 @@ class ActionsCfg:
         #
         # Lực không phải thứ thiếu: 3 N trên quãng 0.5 m sinh 1.5 J, trong khi dựng con lắc
         # lên chỉ cần 0.024 J. Thừa 60 lần.
-        scale=3.0,
+        scale=20.0,
     )
 
 
@@ -133,11 +136,25 @@ class RewardCfg:
     alive = RewardTermCfg(func=rewards.is_alive, weight=1.0)
     # (2) phạt khi kết thúc vì thất bại
     terminating = RewardTermCfg(func=rewards.is_terminated, weight=-2.0)
-    # (3) việc chính: đưa cả chuỗi về tư thế đứng
+    # (3a) pha DƯỚI: chưa dựng lên thì thưởng theo độ cao chuỗi, kéo con lắc đi lên
+    swing_up = RewardTermCfg(
+        func=project_mdp.swing_up_height,
+        weight=2.0,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["Revolute_.*"]), "upright_angle": UPRIGHT_ANGLE},
+    )
+    # (3b) pha TRÊN: thưởng cố định cho việc đã dựng được.
+    #      Bắt buộc phải có và phải lớn hơn đỉnh của swing_up (2·cos(0.4) ≈ 1.84), nếu không
+    #      vượt qua ngưỡng sẽ bị mất điểm và policy học cách lửng lơ ngay dưới ngưỡng.
+    upright = RewardTermCfg(
+        func=project_mdp.pendulum_is_upright,
+        weight=3.0,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["Revolute_.*"]), "upright_angle": UPRIGHT_ANGLE},
+    )
+    # (3c) pha TRÊN: L2 lệch góc như cũ, lo phần giữ cho chính xác
     pole_pos = RewardTermCfg(
-        func=project_mdp.joint_pos_target_l2,
+        func=project_mdp.balance_pole_pos_l2,
         weight=-1.0,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["Revolute_.*"])},
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["Revolute_.*"]), "upright_angle": UPRIGHT_ANGLE},
     )
     # (4) định hình: xe đừng trôi ra đầu ray. Chạm ray là cắt ngang chứ không bị phạt, nên
     #     đây là tín hiệu duy nhất dạy xe tránh đầu ray — để quá nhẹ thì nó không tránh.
@@ -248,12 +265,16 @@ class PositionObservationsCfg(ObservationsCfg):
 
 @configclass
 class PositionRewardCfg(RewardCfg):
-    """Thêm phần bám mốc; phần kéo xe về giữa ray bị tắt trong ``__post_init__`` của env."""
+    """Thêm phần bám mốc. Cũng chỉ chạy ở pha TRÊN, xem ``joint_pos_command_l2``."""
 
     track_position = RewardTermCfg(
         func=project_mdp.joint_pos_command_l2,
         weight=-1.0,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["Slider_1"])},
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names=["Slider_1"]),
+            "pole_cfg": SceneEntityCfg("robot", joint_names=["Revolute_.*"]),
+            "upright_angle": UPRIGHT_ANGLE,
+        },
     )
 
 
@@ -267,8 +288,11 @@ class CartPendulumPositionEnvCfg(CartPendulumEnvCfg):
 
     def __post_init__(self) -> None:
         super().__post_init__()
-        # mốc mới là thứ quyết định xe đứng ở đâu, giữ thêm lực kéo về giữa ray là mâu thuẫn
-        self.rewards.cart_pos = None
+        # Mốc mới là thứ quyết định xe đứng ở đâu, nên hạ lực kéo về giữa ray xuống cho khỏi
+        # giành nhau — nhưng KHÔNG tắt hẳn: lúc chưa lắc lên thì term bám mốc đang bị cổng
+        # chặn, và chạm đầu ray chỉ là cắt ngang chứ không bị phạt, nên nếu bỏ nốt cái này
+        # thì cả pha swing-up không còn tín hiệu nào bảo xe tránh đầu ray.
+        self.rewards.cart_pos.weight = -0.05
 
 
 @configclass

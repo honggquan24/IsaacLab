@@ -43,7 +43,7 @@ CART_PENDULUM_CFG = ArticulationCfg(
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             rigid_body_enabled=True,
             # chặn thêm ở mức thân, cao hơn trần khớp một chút để trần khớp mới là cái ràng buộc
-            max_linear_velocity=8.0,
+            max_linear_velocity=20.0,
             max_angular_velocity=30.0,
             max_depenetration_velocity=1.0,
             enable_gyroscopic_forces=True,
@@ -61,10 +61,10 @@ CART_PENDULUM_CFG = ArticulationCfg(
             # xe + con lắc nặng cỡ 0.15 kg (PhysX tự tính từ convex hull, khối lượng riêng
             # mặc định 1000 kg/m³). Lực đẩy do action quyết định (scale bên ActionsCfg), giới
             # hạn 20 N ở đây chỉ là trần cứng để lệnh lỗi không văng xe đi.
-            effort_limit_sim=6.0,
+            effort_limit_sim=100.0,
             # trần khớp cũng đã ghi vào USD (physxJoint:maxJointVelocity), đặt trùng ở đây
             # để actuator không cố lệnh vượt qua mức PhysX sẽ cắt
-            velocity_limit_sim=2.5,
+            velocity_limit_sim=20.0,
             stiffness=0.0,
             # damping là lực cản tỉ lệ vận tốc, ăn thẳng vào lực điều khiển: ở 5 m/s thì
             # damping 0.5 đã nuốt 2.5 N. Để 0.05 cho gần như không cản mà drive vẫn không
@@ -77,7 +77,7 @@ CART_PENDULUM_CFG = ArticulationCfg(
             # hưởng động lực học (mô-men cỡ 1e-5 N·m ở lệch 1 rad) nhưng giữ cho PhysX coi bậc
             # tự do này là có drive, tránh trạng thái khớp thả hoàn toàn. effort_limit phải > 0
             # thì stiffness đó mới có tác dụng.
-            effort_limit_sim=1.0,
+            effort_limit_sim=100.0,
             velocity_limit_sim=15.0,
             stiffness=1.0e-5,
             damping=0.0,

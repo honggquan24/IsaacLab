@@ -7,8 +7,15 @@
 
 Cùng dạng với cartpole gốc của Isaac Lab
 (``isaaclab_tasks/manager_based/classic/cartpole/mdp/rewards.py``): phạt bình phương sai số
-vị trí và phạt trị tuyệt đối vận tốc, không dùng exp. L2 có độ dốc ở mọi góc nên bài swing-up
-vẫn có cái để bám, khác với ``exp(-e²/std²)`` bão hoà về 0 khi con lắc thõng.
+vị trí và phạt trị tuyệt đối vận tốc, không dùng exp.
+
+Reward chia làm hai pha, cắt nhau ở ``upright_angle``:
+
+* chưa dựng lên → :func:`swing_up_height`, thưởng theo độ cao chuỗi;
+* đã dựng lên → :func:`pendulum_is_upright` (thưởng cố định) cộng :func:`balance_pole_pos_l2`
+  (L2 như cũ).
+
+Hai pha loại trừ nhau nên mỗi lúc chỉ một cái chạy.
 
 Quy ước góc
 -----------
@@ -73,13 +80,64 @@ def joint_pos_target_l2(
     return torch.sum(torch.square(joint_deviation(env, asset_cfg, wrap=wrap)), dim=1)
 
 
+def pendulum_is_upright(
+    env: ManagerBasedRLEnv,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot", joint_names=["Revolute_.*"]),
+    upright_angle: float = 0.4,
+) -> torch.Tensor:
+    """1.0 khi MỌI khâu nằm trong ``upright_angle`` rad quanh tư thế đứng, 0.0 nếu không.
+
+    Vừa là cổng chia pha cho các hàm dưới, vừa dùng thẳng làm reward thưởng cho việc lên
+    được — xem chú thích ở :func:`swing_up_height` về lý do phải có phần thưởng đó.
+    """
+    within = torch.abs(joint_deviation(env, asset_cfg, wrap=True)) < upright_angle
+    return torch.all(within, dim=1).float()
+
+
+def swing_up_height(
+    env: ManagerBasedRLEnv,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot", joint_names=["Revolute_.*"]),
+    upright_angle: float = 0.4,
+) -> torch.Tensor:
+    """Độ cao của chuỗi, chỉ tính khi CHƯA dựng lên. Bằng 1 lúc đứng, -1 lúc thõng.
+
+    Đây là reward của pha swing-up. Dùng ``cos`` chứ không phải L2 vì L2 ở tư thế thõng cho
+    -π² ≈ -9.9 mỗi bước: một hằng số phạt khổng lồ áp đảo mọi tín hiệu khác, trong khi ``cos``
+    bị chặn trong [-1, 1] nên độ dốc của nó mới là thứ policy nhìn thấy.
+
+    .. important::
+        Pha "đã dựng" **phải** kèm một phần thưởng đủ lớn (:func:`pendulum_is_upright` với
+        trọng số dương), nếu không sẽ có vực: ngay dưới ngưỡng, term này còn cho
+        ``2·cos(0.4) ≈ 1.84``; vượt qua ngưỡng nó tắt và chỉ còn phạt L2 — tức là lắc lên
+        được lại bị trừ điểm, và policy sẽ học cách lửng lơ ngay dưới ngưỡng mãi mãi.
+    """
+    height = torch.mean(torch.cos(joint_deviation(env, asset_cfg, wrap=True)), dim=1)
+    return height * (1.0 - pendulum_is_upright(env, asset_cfg, upright_angle))
+
+
+def balance_pole_pos_l2(
+    env: ManagerBasedRLEnv,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot", joint_names=["Revolute_.*"]),
+    upright_angle: float = 0.4,
+) -> torch.Tensor:
+    """L2 lệch góc như cũ, nhưng chỉ tính khi đã dựng lên — reward của pha giữ thăng bằng."""
+    return joint_pos_target_l2(env, asset_cfg) * pendulum_is_upright(env, asset_cfg, upright_angle)
+
+
 def joint_pos_command_l2(
     env: ManagerBasedRLEnv,
     command_name: str = "cart_position",
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot", joint_names=["Slider_1"]),
+    pole_cfg: SceneEntityCfg = SceneEntityCfg("robot", joint_names=["Revolute_.*"]),
+    upright_angle: float = 0.4,
 ) -> torch.Tensor:
-    """Phạt bình phương sai số giữa vị trí xe và mốc được lệnh."""
+    """Phạt bình phương sai số giữa vị trí xe và mốc — chỉ khi chuỗi đã dựng lên.
+
+    Bám mốc lúc con lắc còn thõng là mâu thuẫn trực tiếp với việc lắc lên: bơm năng lượng thì
+    phải chạy qua chạy lại, còn mốc lại giữ xe đứng yên một chỗ. Cổng này tắt hẳn term lúc
+    chưa lên, để policy lo swing-up trước rồi mới lo bám vị trí.
+    """
     asset: Articulation = env.scene[asset_cfg.name]
     cart_pos = asset.data.joint_pos[:, resolve_joint_ids(asset, asset_cfg)[0]]
     target = env.command_manager.get_command(command_name)[:, 0]
-    return torch.square(cart_pos - target)
+    return torch.square(cart_pos - target) * pendulum_is_upright(env, pole_cfg, upright_angle)
