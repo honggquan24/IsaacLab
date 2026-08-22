@@ -61,9 +61,9 @@ class ActionsCfg:
         asset_name="robot",
         joint_names=["Slider_1"],
         # Gia tốc mới là thứ quyết định xe "nhạy" hay không, chứ không phải tốc độ đỉnh.
-        # Xe con lắc đơn ~0.13 kg → 15 N là ~115 m/s²; con lắc ba nặng gấp đôi nên còn
-        # ~58 m/s². Đây là số cần chỉnh trước tiên nếu thấy xe phản ứng chậm.
-        scale=15.0,
+        # Xe con lắc đơn ~0.13 kg → 40 N là ~300 m/s²; con lắc ba nặng gấp đôi nên còn
+        # ~150 m/s². Đây là số cần chỉnh trước tiên nếu thấy xe phản ứng chậm.
+        scale=40.0,
     )
 
 
@@ -117,42 +117,41 @@ class EventCfg:
 
 @configclass
 class RewardCfg:
-    """Reward của task giữ thăng bằng."""
+    """Reward theo đúng dạng cartpole gốc của Isaac Lab: L2 cho vị trí, L1 cho vận tốc.
 
-    # (1) sống sót / ngã
+    Không dùng exp. L2 có độ dốc ở mọi góc nên swing-up vẫn có cái để bám, còn
+    ``exp(-e²/std²)`` thì ở tư thế thõng đã bão hoà về 0 và phẳng lì.
+    """
+
+    # (1) thưởng đều mỗi bước còn sống
     alive = RewardTermCfg(func=rewards.is_alive, weight=1.0)
-    terminating = RewardTermCfg(func=rewards.is_terminated, weight=-4.0)
-
-    # (2) lắc lên rồi giữ đứng. Hai tầng: cos định hình cho cả vòng tròn, exp lo phần chính xác
-    upright_shaping = RewardTermCfg(
-        func=project_mdp.pendulum_upright_cos,
-        weight=1.5,
+    # (2) phạt khi kết thúc vì thất bại
+    terminating = RewardTermCfg(func=rewards.is_terminated, weight=-2.0)
+    # (3) việc chính: đưa cả chuỗi về tư thế đứng
+    pole_pos = RewardTermCfg(
+        func=project_mdp.joint_pos_target_l2,
+        weight=-1.0,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=["Revolute_.*"])},
     )
-    upright = RewardTermCfg(
-        func=project_mdp.upright_pendulum_exp,
-        weight=3.0,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["Revolute_.*"]), "std": 0.35},
+    # (4) định hình: xe đừng trôi ra đầu ray
+    cart_pos = RewardTermCfg(
+        func=project_mdp.joint_pos_target_l2,
+        weight=-0.05,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["Slider_1"]), "wrap": False},
     )
-    pendulum_rate = RewardTermCfg(
-        func=project_mdp.pendulum_ang_vel_l2,
-        weight=-0.02,
+    # (5) định hình: giảm vận tốc xe
+    cart_vel = RewardTermCfg(
+        func=rewards.joint_vel_l1,
+        weight=-0.01,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["Slider_1"])},
+    )
+    # (6) định hình: giảm vận tốc góc các khâu
+    pole_vel = RewardTermCfg(
+        func=rewards.joint_vel_l1,
+        weight=-0.005,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=["Revolute_.*"])},
     )
-
-    # (3) đừng trôi ra đầu ray
-    cart_position = RewardTermCfg(
-        func=project_mdp.cart_position_l2,
-        weight=-0.1,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["Slider_1"])},
-    )
-    cart_velocity = RewardTermCfg(
-        func=project_mdp.cart_velocity_l2,
-        weight=-0.02,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["Slider_1"])},
-    )
-
-    # (4) làm mượt lực đẩy cho đỡ giật khi quay video
+    # (7) làm mượt lực đẩy cho đỡ giật khi quay video
     action_rate = RewardTermCfg(func=rewards.action_rate_l2, weight=-0.005)
 
 
@@ -161,9 +160,15 @@ class TerminationsCfg:
     """Kết thúc khi hết giờ, con lắc đổ, hoặc xe chạy tới đầu ray."""
 
     time_out = TerminationTermCfg(func=terminations.time_out, time_out=True)
-    # KHÔNG kết thúc khi con lắc đổ: bài này bắt đầu từ tư thế thõng, đổ là trạng thái xuất phát
+    # KHÔNG kết thúc khi con lắc đổ: bài này bắt đầu từ tư thế thõng, đổ là trạng thái xuất phát.
+    #
+    # Chạm đầu ray đánh dấu time_out=True (cắt ngang) chứ không phải thất bại, và đây là chỗ dễ
+    # sai: với reward L2, con lắc thõng bị phạt tới -π² ≈ -9.9 mỗi bước, nên nếu kết thúc sớm
+    # được tính là thất bại thì chịu -2.0 một lần vẫn lời hơn hẳn việc sống tiếp — policy sẽ học
+    # cách lao vào đầu ray cho xong. Đánh dấu cắt ngang thì value được bootstrap, hết động cơ đó.
     cart_out_of_rail = TerminationTermCfg(
         func=project_mdp.cart_out_of_rail,
+        time_out=True,
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names=["Slider_1"]),
             "limit": CART_PENDULUM_RAIL_LIMIT - 0.05,
@@ -183,7 +188,10 @@ class CartPendulumEnvCfg(ManagerBasedRLEnvCfg):
     terminations: TerminationsCfg = TerminationsCfg()
 
     def __post_init__(self) -> None:
-        self.decimation = 2  # tần số điều khiển = 60/2 = 30 Hz
+        # Tần số điều khiển 60 Hz. Ở 30 Hz cũ, với trần 20 m/s thì mỗi bước điều khiển xe đi
+        # 0.67 m — hơn 60% chiều dài ray, tức policy không kịp lái: nới trần tốc độ mà không
+        # nới nhịp ra quyết định thì chỉ đổi lấy việc xe đâm đầu ray.
+        self.decimation = 1  # tần số điều khiển = 60/1 = 60 Hz
         self.episode_length_s = 20.0
 
         # ray nằm dọc Y nên đặt camera trên trục X, nếu không sẽ nhìn dọc thân ray
@@ -236,14 +244,9 @@ class PositionRewardCfg(RewardCfg):
     """Thêm phần bám mốc; phần kéo xe về giữa ray bị tắt trong ``__post_init__`` của env."""
 
     track_position = RewardTermCfg(
-        func=project_mdp.track_cart_position_exp,
-        weight=3.0,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["Slider_1"]), "std": 0.25},
-    )
-    stop_at_goal = RewardTermCfg(
-        func=project_mdp.cart_velocity_near_goal_l2,
-        weight=-0.2,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["Slider_1"]), "std": 0.25},
+        func=project_mdp.joint_pos_command_l2,
+        weight=-1.0,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["Slider_1"])},
     )
 
 
@@ -258,8 +261,7 @@ class CartPendulumPositionEnvCfg(CartPendulumEnvCfg):
     def __post_init__(self) -> None:
         super().__post_init__()
         # mốc mới là thứ quyết định xe đứng ở đâu, giữ thêm lực kéo về giữa ray là mâu thuẫn
-        self.rewards.cart_position = None
-        self.rewards.cart_velocity = None
+        self.rewards.cart_pos = None
 
 
 @configclass
@@ -270,6 +272,6 @@ class CartPendulumPositionPlayEnvCfg(CartPendulumPositionEnvCfg):
         super().__post_init__()
         self.scene.num_envs = 4
         self.scene.env_spacing = 3.0
-        # 60 s liền mạch, khớp với --video_length 1800 ở 30 Hz
+        # 60 s liền mạch, khớp với --video_length 3600 ở 60 Hz
         self.episode_length_s = 60.0
         self.observations.policy.enable_corruption = False

@@ -26,17 +26,17 @@ checkpoint thì thay bằng ``--checkpoint <đường/dẫn/model_xxx.pt>``.
 Bỏ ``--headless`` nếu muốn xem cửa sổ Isaac Sim trong lúc ghi.
 
 Isaac-Cart-Pendulum — giữ con lắc đứng, xe bám quanh giữa ray
-    30 Hz (sim.dt 1/60, decimation 2) → 60 s = 1800 step, 120 s = 3600 step
+    60 Hz (sim.dt 1/60, decimation 1) → 60 s = 3600 step, 120 s = 7200 step
 
     ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
-        --task Isaac-Cart-Pendulum --num_envs 4096 --video --video_length 1800 --rendering_mode quality --headless
+        --task Isaac-Cart-Pendulum --num_envs 4096 --video --video_length 3600 --rendering_mode quality --headless
 
     ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
         --task Isaac-Cart-Pendulum --num_envs 4 --headless \
-        --video --video_length 1800 --load_run <tên_run>
+        --video --video_length 3600 --load_run <tên_run>
 
 Isaac-Cart-Pendulum-Position — vừa giữ con lắc vừa chạy tới mốc vị trí được lệnh
-    30 Hz (sim.dt 1/60, decimation 2) → 60 s = 1800 step, 120 s = 3600 step
+    60 Hz (sim.dt 1/60, decimation 1) → 60 s = 3600 step, 120 s = 7200 step
     Mốc đổi sau mỗi 3–5 s, hiện bằng quả cầu đỏ trên ray (``debug_vis``).
 
     ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
@@ -47,7 +47,7 @@ Isaac-Cart-Pendulum-Position — vừa giữ con lắc vừa chạy tới mốc 
 
     ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
         --task Isaac-Cart-Pendulum-Position-Play --num_envs 4 --headless \
-        --video --video_length 1800 --load_run <tên_run>
+        --video --video_length 3600 --load_run <tên_run>
 """
 
 import gymnasium as gym

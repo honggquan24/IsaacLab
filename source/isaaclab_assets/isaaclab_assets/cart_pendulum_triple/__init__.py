@@ -25,24 +25,24 @@ Cách đọc lệnh quay video
 = 1 / (sim.dt × decimation). Video xuất ra ``logs/rsl_rl/<experiment_name>/<run>/videos/play/``.
 
 Isaac-Cart-Pendulum-Triple — swing-up rồi giữ ba khâu thẳng đứng
-    30 Hz (sim.dt 1/60, decimation 2) → 60 s = 1800 step, 120 s = 3600 step
+    60 Hz (sim.dt 1/60, decimation 1) → 60 s = 3600 step, 120 s = 7200 step
 
     ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
         --task Isaac-Cart-Pendulum-Triple --num_envs 4096 --headless
 
     ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
         --task Isaac-Cart-Pendulum-Triple --num_envs 4 --headless \
-        --video --video_length 1800 --load_run <tên_run>
+        --video --video_length 3600 --load_run <tên_run>
 
 Isaac-Cart-Pendulum-Triple-Position — bám mốc vị trí, bắt đầu sẵn ở tư thế đứng
-    30 Hz → 60 s = 1800 step. Mốc đổi sau mỗi 3–5 s, hiện bằng quả cầu đỏ trên ray.
+    60 Hz → 60 s = 3600 step. Mốc đổi sau mỗi 3–5 s, hiện bằng quả cầu đỏ trên ray.
 
     ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
         --task Isaac-Cart-Pendulum-Triple-Position --num_envs 4096 --headless
 
     ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
         --task Isaac-Cart-Pendulum-Triple-Position-Play --num_envs 4 --headless \
-        --video --video_length 1800 --load_run <tên_run>
+        --video --video_length 3600 --load_run <tên_run>
 """
 
 import gymnasium as gym

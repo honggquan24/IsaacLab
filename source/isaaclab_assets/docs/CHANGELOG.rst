@@ -1,6 +1,33 @@
 Changelog
 ---------
 
+0.6.0 (2026-08-22)
+~~~~~~~~~~~~~~~~~~
+
+Changed
+^^^^^^^
+
+* Rewrote the cart pendulum rewards in the shape Isaac Lab's own cartpole uses -- squared position
+  error and absolute velocity, no exponentials. ``joint_pos_target_l2`` mirrors
+  ``isaaclab_tasks.manager_based.classic.cartpole.mdp.rewards.joint_pos_target_l2``, wrapping the
+  error to :math:`[-\pi, \pi]`, except that the target is ``default_joint_pos`` rather than a
+  constant, since a chain has no single target angle. Velocity terms now call the core
+  ``joint_vel_l1`` directly. The weights follow the shipped cartpole: alive 1.0, terminating -2.0,
+  pole position -1.0, cart velocity -0.01, pole velocity -0.005.
+* Removed ``upright_pendulum_exp`` and ``pendulum_upright_cos``. L2 already has a gradient at every
+  angle, which is what swing-up needs, so the cosine shaping term is redundant.
+* Marked ``cart_out_of_rail`` as ``time_out=True``. With an L2 penalty a hanging chain costs about
+  :math:`-\pi^2` per step, so a failure termination worth -2.0 once would be the cheapest option
+  available and the policy would learn to drive into the rail end on purpose. Flagging it as a
+  truncation bootstraps the value and removes that incentive.
+* Raised the cart authority again: action scale 15 to 40 N (about 300 m/s² on the single pendulum),
+  effort limit 60 N, slider ceiling 12 to 20 m/s, drive damping 0.05 to 0.02.
+* Doubled the control rate to 60 Hz (``decimation`` 2 to 1). At 30 Hz and 20 m/s the cart covers
+  0.67 m per control step, over 60% of the rail, so raising the speed ceiling without raising the
+  decision rate only buys collisions with the rail end. Every ``--video_length`` in the package
+  docstrings doubles accordingly: 60 s is now 3600 steps.
+
+
 0.5.1 (2026-08-22)
 ~~~~~~~~~~~~~~~~~~
 

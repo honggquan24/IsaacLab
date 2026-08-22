@@ -3,17 +3,21 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Reward riêng của dự án con lắc đơn trên xe đẩy.
+"""Reward riêng của họ robot con lắc trên xe đẩy (đơn, kép, ba).
+
+Cùng dạng với cartpole gốc của Isaac Lab
+(``isaaclab_tasks/manager_based/classic/cartpole/mdp/rewards.py``): phạt bình phương sai số
+vị trí và phạt trị tuyệt đối vận tốc, không dùng exp. L2 có độ dốc ở mọi góc nên bài swing-up
+vẫn có cái để bám, khác với ``exp(-e²/std²)`` bão hoà về 0 khi con lắc thõng.
 
 Quy ước góc
 -----------
-Trong USD xuất từ Onshape, ``Revolute_1`` bằng 0 là lúc con lắc **thõng xuống** — đó là tư
-thế CAD. Tư thế đứng nằm ở góc :math:`\\pi`, và nó được đặt làm ``init_state.joint_pos`` của
-:data:`CART_PENDULUM_CFG`. Vì vậy mọi hàm ở đây đo lệch so với ``default_joint_pos`` chứ
-không so với 0: đổi tư thế mặc định thì reward tự đi theo, không phải sửa hằng số ở đây.
+``Revolute_1`` bằng 0 là khâu đầu **thõng xuống**; các khâu sau bằng 0 là **thẳng hàng với
+khâu trước**. Nên mọi khớp quay bằng 0 tuyệt đối là cả chuỗi thõng thẳng, còn vị trí khớp mặc
+định của robot (``Revolute_1`` = π, còn lại 0) là cả chuỗi dựng đứng. Vì vậy mặc định các hàm
+ở đây lấy mục tiêu là ``default_joint_pos``: đổi tư thế đích chỉ cần sửa ``init_state``.
 
-Khớp được tra theo tên qua :class:`SceneEntityCfg`, không dùng chỉ số cứng, nên thứ tự khớp
-mà PhysX sinh ra có đổi cũng không sai.
+Khớp tra theo tên qua :class:`SceneEntityCfg` nên thêm khâu vào CAD không phải sửa gì ở đây.
 """
 
 from __future__ import annotations
@@ -48,118 +52,34 @@ def resolve_joint_ids(asset: Articulation, asset_cfg: SceneEntityCfg) -> list[in
 
 
 def joint_deviation(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg, wrap: bool = False) -> torch.Tensor:
-    """Lệch của các khớp so với vị trí mặc định. Shape là (num_envs, num_joints).
-
-    ``asset_cfg`` chọn được nhiều khớp, nên cùng một hàm dùng cho con lắc đơn, kép và ba: hễ
-    ``joint_names`` là ``["Revolute_.*"]`` thì bao nhiêu khâu cũng vào hết.
-    """
+    """Lệch của các khớp so với vị trí mặc định. Shape là (num_envs, num_joints)."""
     asset: Articulation = env.scene[asset_cfg.name]
     ids = resolve_joint_ids(asset, asset_cfg)
     error = asset.data.joint_pos[:, ids] - asset.data.default_joint_pos[:, ids]
     return wrap_to_pi(error) if wrap else error
 
 
-def joint_velocity(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg) -> torch.Tensor:
-    """Vận tốc của các khớp ``asset_cfg`` chọn. Shape là (num_envs, num_joints)."""
-    asset: Articulation = env.scene[asset_cfg.name]
-    return asset.data.joint_vel[:, resolve_joint_ids(asset, asset_cfg)]
-
-
-"""
-Giữ con lắc thăng bằng.
-"""
-
-
-def upright_pendulum_exp(
+def joint_pos_target_l2(
     env: ManagerBasedRLEnv,
-    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot", joint_names=["Revolute_.*"]),
-    std: float = 0.35,
+    asset_cfg: SceneEntityCfg,
+    wrap: bool = True,
 ) -> torch.Tensor:
-    """Thưởng khi cả chuỗi con lắc thẳng và dựng đứng, dạng exp(-e²/std²).
+    """Phạt bình phương lệch vị trí khớp so với vị trí mặc định, cộng trên các khớp.
 
-    Với con lắc kép/ba, khâu đầu lệch so với tư thế đứng còn các khâu sau lệch so với khâu
-    trước, vì vậy "thẳng đứng" đúng bằng "mọi khớp về vị trí mặc định". Lấy trung bình để
-    trọng số không đổi theo số khâu.
+    Giống ``joint_pos_target_l2`` của cartpole gốc, chỉ khác chỗ mục tiêu lấy từ
+    ``default_joint_pos`` thay vì một hằng số: chuỗi nhiều khâu không có chung một góc đích.
+    Đặt ``wrap=False`` cho khớp trượt, vì bọc về [-π, π] chỉ đúng với góc.
     """
-    return torch.mean(torch.exp(-torch.square(joint_deviation(env, asset_cfg, wrap=True) / std)), dim=1)
+    return torch.sum(torch.square(joint_deviation(env, asset_cfg, wrap=wrap)), dim=1)
 
 
-def pendulum_upright_cos(
-    env: ManagerBasedRLEnv,
-    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot", joint_names=["Revolute_.*"]),
-) -> torch.Tensor:
-    """Thưởng định hình cho bài swing-up: (1 + cos(lệch)) / 2, trung bình trên các khâu.
-
-    Bằng 1 khi chuỗi dựng đứng và 0 khi thõng xuống, và quan trọng là **có độ dốc ở mọi góc**.
-    :func:`upright_pendulum_exp` với std 0.35 ở tư thế thõng chỉ còn cỡ e⁻⁸⁰, tức phẳng lì,
-    nên nếu chỉ có mình nó thì policy không có gì để bám mà lắc lên. Dùng cả hai: hàm này kéo
-    con lắc đi lên, hàm exp lo phần đứng cho chính xác.
-    """
-    return torch.mean(0.5 * (1.0 + torch.cos(joint_deviation(env, asset_cfg, wrap=True))), dim=1)
-
-
-def pendulum_ang_vel_l2(
-    env: ManagerBasedRLEnv,
-    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot", joint_names=["Revolute_.*"]),
-) -> torch.Tensor:
-    """Phạt bình phương vận tốc góc của mọi khâu để hạn chế rung."""
-    return torch.sum(torch.square(joint_velocity(env, asset_cfg)), dim=1)
-
-
-"""
-Giữ xe đẩy quanh gốc ray.
-"""
-
-
-def cart_position_l2(
-    env: ManagerBasedRLEnv,
-    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot", joint_names=["Slider_1"]),
-) -> torch.Tensor:
-    """Phạt bình phương khoảng cách từ xe tới giữa ray."""
-    return torch.sum(torch.square(joint_deviation(env, asset_cfg)), dim=1)
-
-
-def cart_velocity_l2(
-    env: ManagerBasedRLEnv,
-    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot", joint_names=["Slider_1"]),
-) -> torch.Tensor:
-    """Phạt bình phương vận tốc xe."""
-    return torch.sum(torch.square(joint_velocity(env, asset_cfg)), dim=1)
-
-
-"""
-Bám vị trí xe đẩy (các task ``-Position``).
-"""
-
-
-def track_cart_position_exp(
+def joint_pos_command_l2(
     env: ManagerBasedRLEnv,
     command_name: str = "cart_position",
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot", joint_names=["Slider_1"]),
-    std: float = 0.25,
 ) -> torch.Tensor:
-    """Thưởng theo sai số vị trí xe so với lệnh, dạng exp(-e²/std²)."""
+    """Phạt bình phương sai số giữa vị trí xe và mốc được lệnh."""
     asset: Articulation = env.scene[asset_cfg.name]
     cart_pos = asset.data.joint_pos[:, resolve_joint_ids(asset, asset_cfg)[0]]
     target = env.command_manager.get_command(command_name)[:, 0]
-    return torch.exp(-torch.square((cart_pos - target) / std))
-
-
-def cart_velocity_near_goal_l2(
-    env: ManagerBasedRLEnv,
-    command_name: str = "cart_position",
-    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot", joint_names=["Slider_1"]),
-    std: float = 0.25,
-) -> torch.Tensor:
-    """Phạt vận tốc xe, có trọng số theo mức độ gần mục tiêu.
-
-    Ở xa mục tiêu thì gần như không phạt (xe được phép chạy nhanh), tới nơi mới phạt mạnh,
-    nên xe dừng hẳn tại mốc thay vì dao động quanh nó.
-    """
-    asset: Articulation = env.scene[asset_cfg.name]
-    index = resolve_joint_ids(asset, asset_cfg)[0]
-    cart_pos = asset.data.joint_pos[:, index]
-    cart_vel = asset.data.joint_vel[:, index]
-    target = env.command_manager.get_command(command_name)[:, 0]
-    closeness = torch.exp(-torch.square((cart_pos - target) / std))
-    return closeness * torch.square(cart_vel)
+    return torch.square(cart_pos - target)
