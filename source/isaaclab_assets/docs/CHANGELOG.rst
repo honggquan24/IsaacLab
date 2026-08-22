@@ -1,6 +1,20 @@
 Changelog
 ---------
 
+0.5.1 (2026-08-22)
+~~~~~~~~~~~~~~~~~~
+
+Changed
+^^^^^^^
+
+* Gave the cart more authority on all three pendulums; at the previous settings it was too slow to
+  respond. The action scale goes from 5 to 15 N (about 115 m/s² on the single pendulum, 58 m/s² on
+  the triple) with the effort limit at 20 N, and the slider speed ceiling goes from 5 to 12 m/s in
+  both the USD and ``velocity_limit_sim``.
+* Cut the cart drive damping from 0.5 to 0.05. Damping is drag proportional to velocity and is
+  subtracted from the control force, so at 5 m/s it was eating 2.5 N of a 5 N command.
+
+
 0.5.0 (2026-08-22)
 ~~~~~~~~~~~~~~~~~~
 

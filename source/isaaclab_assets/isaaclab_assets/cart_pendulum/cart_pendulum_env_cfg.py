@@ -60,8 +60,10 @@ class ActionsCfg:
     joint_effort = actions.JointEffortActionCfg(
         asset_name="robot",
         joint_names=["Slider_1"],
-        # xe nặng cỡ 0.13 kg, 5 N là khoảng 38 m/s² — đủ mạnh mà không làm xe giật cục
-        scale=5.0,
+        # Gia tốc mới là thứ quyết định xe "nhạy" hay không, chứ không phải tốc độ đỉnh.
+        # Xe con lắc đơn ~0.13 kg → 15 N là ~115 m/s²; con lắc ba nặng gấp đôi nên còn
+        # ~58 m/s². Đây là số cần chỉnh trước tiên nếu thấy xe phản ứng chậm.
+        scale=15.0,
     )
 
 

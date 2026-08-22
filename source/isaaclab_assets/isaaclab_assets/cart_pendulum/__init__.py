@@ -29,7 +29,7 @@ Isaac-Cart-Pendulum — giữ con lắc đứng, xe bám quanh giữa ray
     30 Hz (sim.dt 1/60, decimation 2) → 60 s = 1800 step, 120 s = 3600 step
 
     ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
-        --task Isaac-Cart-Pendulum --num_envs 4096 --headless
+        --task Isaac-Cart-Pendulum --num_envs 4096 --video --video_length 1800 --rendering_mode quality --headless
 
     ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
         --task Isaac-Cart-Pendulum --num_envs 4 --headless \
