@@ -123,12 +123,28 @@ class RewardCfg:
     terminating = RewardTermCfg(func=rewards.is_terminated, weight=-4.0)
 
     # (2) giữ con lắc đứng
-    upright = RewardTermCfg(func=project_mdp.upright_pendulum_exp, weight=3.0, params={"std": 0.35})
-    pendulum_rate = RewardTermCfg(func=project_mdp.pendulum_ang_vel_l2, weight=-0.02)
+    upright = RewardTermCfg(
+        func=project_mdp.upright_pendulum_exp,
+        weight=3.0,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["Revolute_1"]), "std": 0.35},
+    )
+    pendulum_rate = RewardTermCfg(
+        func=project_mdp.pendulum_ang_vel_l2,
+        weight=-0.02,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["Revolute_1"])},
+    )
 
     # (3) đừng trôi ra đầu ray
-    cart_position = RewardTermCfg(func=project_mdp.cart_position_l2, weight=-0.5)
-    cart_velocity = RewardTermCfg(func=project_mdp.cart_velocity_l2, weight=-0.02)
+    cart_position = RewardTermCfg(
+        func=project_mdp.cart_position_l2,
+        weight=-0.5,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["Slider_1"])},
+    )
+    cart_velocity = RewardTermCfg(
+        func=project_mdp.cart_velocity_l2,
+        weight=-0.02,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["Slider_1"])},
+    )
 
     # (4) làm mượt lực đẩy cho đỡ giật khi quay video
     action_rate = RewardTermCfg(func=rewards.action_rate_l2, weight=-0.005)
@@ -139,10 +155,16 @@ class TerminationsCfg:
     """Kết thúc khi hết giờ, con lắc đổ, hoặc xe chạy tới đầu ray."""
 
     time_out = TerminationTermCfg(func=terminations.time_out, time_out=True)
-    pendulum_fell = TerminationTermCfg(func=project_mdp.pendulum_fell, params={"limit_angle": 0.8})
+    pendulum_fell = TerminationTermCfg(
+        func=project_mdp.pendulum_fell,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["Revolute_1"]), "limit_angle": 0.8},
+    )
     cart_out_of_rail = TerminationTermCfg(
         func=project_mdp.cart_out_of_rail,
-        params={"limit": CART_PENDULUM_RAIL_LIMIT - 0.05},
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names=["Slider_1"]),
+            "limit": CART_PENDULUM_RAIL_LIMIT - 0.05,
+        },
     )
 
 
@@ -210,8 +232,16 @@ class PositionObservationsCfg(ObservationsCfg):
 class PositionRewardCfg(RewardCfg):
     """Thêm phần bám mốc; phần kéo xe về giữa ray bị tắt trong ``__post_init__`` của env."""
 
-    track_position = RewardTermCfg(func=project_mdp.track_cart_position_exp, weight=3.0, params={"std": 0.25})
-    stop_at_goal = RewardTermCfg(func=project_mdp.cart_velocity_near_goal_l2, weight=-0.2, params={"std": 0.25})
+    track_position = RewardTermCfg(
+        func=project_mdp.track_cart_position_exp,
+        weight=3.0,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["Slider_1"]), "std": 0.25},
+    )
+    stop_at_goal = RewardTermCfg(
+        func=project_mdp.cart_velocity_near_goal_l2,
+        weight=-0.2,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["Slider_1"]), "std": 0.25},
+    )
 
 
 @configclass

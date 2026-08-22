@@ -30,10 +30,27 @@ if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
 
 
+def resolve_joint_index(asset: Articulation, asset_cfg: SceneEntityCfg) -> int:
+    """Chỉ số của khớp mà ``asset_cfg`` chọn.
+
+    Manager chỉ resolve những :class:`SceneEntityCfg` nằm trong ``params`` của term. Nếu term
+    không truyền ``asset_cfg`` mà xài giá trị mặc định trong chữ ký hàm thì ``joint_ids`` vẫn
+    còn là ``slice(None)`` và không lấy chỉ số ra được. Trường hợp đó tự tra theo tên rồi ghi
+    ngược lại vào ``asset_cfg`` để lần sau khỏi tra.
+    """
+    if isinstance(asset_cfg.joint_ids, slice):
+        if not asset_cfg.joint_names:
+            raise ValueError(
+                f"SceneEntityCfg cho '{asset_cfg.name}' không nêu joint_names nên không biết lấy khớp nào."
+            )
+        asset_cfg.joint_ids = asset.find_joints(asset_cfg.joint_names)[0]
+    return asset_cfg.joint_ids[0]
+
+
 def joint_deviation(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg, wrap: bool = False) -> torch.Tensor:
     """Lệch của một khớp so với vị trí mặc định. Shape là (num_envs,)."""
     asset: Articulation = env.scene[asset_cfg.name]
-    index = asset_cfg.joint_ids[0]
+    index = resolve_joint_index(asset, asset_cfg)
     error = asset.data.joint_pos[:, index] - asset.data.default_joint_pos[:, index]
     return wrap_to_pi(error) if wrap else error
 
@@ -58,7 +75,7 @@ def pendulum_ang_vel_l2(
 ) -> torch.Tensor:
     """Phạt bình phương vận tốc góc con lắc để hạn chế rung."""
     asset: Articulation = env.scene[asset_cfg.name]
-    return torch.square(asset.data.joint_vel[:, asset_cfg.joint_ids[0]])
+    return torch.square(asset.data.joint_vel[:, resolve_joint_index(asset, asset_cfg)])
 
 
 """
@@ -80,7 +97,7 @@ def cart_velocity_l2(
 ) -> torch.Tensor:
     """Phạt bình phương vận tốc xe."""
     asset: Articulation = env.scene[asset_cfg.name]
-    return torch.square(asset.data.joint_vel[:, asset_cfg.joint_ids[0]])
+    return torch.square(asset.data.joint_vel[:, resolve_joint_index(asset, asset_cfg)])
 
 
 """
@@ -96,7 +113,7 @@ def track_cart_position_exp(
 ) -> torch.Tensor:
     """Thưởng theo sai số vị trí xe so với lệnh, dạng exp(-e²/std²)."""
     asset: Articulation = env.scene[asset_cfg.name]
-    cart_pos = asset.data.joint_pos[:, asset_cfg.joint_ids[0]]
+    cart_pos = asset.data.joint_pos[:, resolve_joint_index(asset, asset_cfg)]
     target = env.command_manager.get_command(command_name)[:, 0]
     return torch.exp(-torch.square((cart_pos - target) / std))
 
@@ -113,8 +130,8 @@ def cart_velocity_near_goal_l2(
     nên xe dừng hẳn tại mốc thay vì dao động quanh nó.
     """
     asset: Articulation = env.scene[asset_cfg.name]
-    cart_pos = asset.data.joint_pos[:, asset_cfg.joint_ids[0]]
-    cart_vel = asset.data.joint_vel[:, asset_cfg.joint_ids[0]]
+    cart_pos = asset.data.joint_pos[:, resolve_joint_index(asset, asset_cfg)]
+    cart_vel = asset.data.joint_vel[:, resolve_joint_index(asset, asset_cfg)]
     target = env.command_manager.get_command(command_name)[:, 0]
     closeness = torch.exp(-torch.square((cart_pos - target) / std))
     return closeness * torch.square(cart_vel)
