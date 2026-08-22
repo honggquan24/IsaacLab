@@ -28,24 +28,24 @@ Cách đọc lệnh quay video
 Video xuất ra ``logs/rsl_rl/<experiment_name>/<run>/videos/play/``.
 
 Isaac-Cart-Pendulum-Double — giữ hai khâu thẳng đứng
-    60 Hz (sim.dt 1/60, decimation 1) → 60 s = 3600 step, 120 s = 7200 step
+    120 Hz (sim.dt 1/120, decimation 1) → 60 s = 7200 step, 120 s = 14400 step
 
     ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
-        --task Isaac-Cart-Pendulum-Double --num_envs 4096 --video --video_length 3600 --rendering_mode quality --headless 
+        --task Isaac-Cart-Pendulum-Double --num_envs 4096 --video --video_length 7200 --rendering_mode quality --headless 
 
     ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
         --task Isaac-Cart-Pendulum-Double --num_envs 4 --headless \
-        --video --video_length 3600 --load_run <tên_run>
+        --video --video_length 7200 --load_run <tên_run>
 
 Isaac-Cart-Pendulum-Double-Position — bám mốc vị trí, bắt đầu sẵn ở tư thế đứng
-    60 Hz → 60 s = 3600 step. Mốc đổi sau mỗi 3–5 s, hiện bằng quả cầu đỏ trên ray.
+    120 Hz → 60 s = 7200 step. Mốc đổi sau mỗi 3–5 s, hiện bằng quả cầu đỏ trên ray.
 
     ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
         --task Isaac-Cart-Pendulum-Double-Position --num_envs 4096 --headless
 
     ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
         --task Isaac-Cart-Pendulum-Double-Position-Play --num_envs 4 --headless \
-        --video --video_length 3600 --load_run <tên_run>
+        --video --video_length 7200 --load_run <tên_run>
 """
 
 import gymnasium as gym

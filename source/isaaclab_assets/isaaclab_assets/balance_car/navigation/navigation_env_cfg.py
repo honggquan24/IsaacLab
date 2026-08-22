@@ -3,355 +3,120 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Navigation environment configuration for balance car v1."""
+"""Tầng navigation học TỪ ĐẦU — vừa giữ thăng bằng vừa chạy tới đích, một mạng duy nhất.
+
+Khác :mod:`.navigation_pretrained_env_cfg` (cascade hai tầng): ở đây policy xuất thẳng mô-men
+bánh và phải tự học cả hai việc cùng lúc. Bài này **khó hơn hẳn** — không có tầng nào lo phần
+cân bằng — nên nó dùng để đối chứng cho thấy vì sao chia tầng đáng giá, chứ không phải phương
+án chính cho video.
+
+Toàn bộ file là **một biến thể của** :class:`~..balance_env_cfg.BalanceCarEnvCfg`: cùng scene,
+cùng action, cùng event, cùng termination. Chỉ đổi ba thứ — lệnh, quan sát, reward. Bản trước
+chép lại toàn bộ scene, IMU, ground, action và observation thành 357 dòng riêng; hai bản chép
+sau đó trôi khỏi nhau và ma sát/tần số/ngưỡng ngã ở hai nơi không còn giống nhau.
+
+.. note::
+    Không có term thưởng **hướng cuối** ở đây. ``UniformPose2dCommand`` tính sai số hướng theo
+    ``data.heading_w``, tức góc của **body +X** trong world; xe này tiến theo **body +Y** nên
+    sai số đó luôn lệch một hằng số 90°. Đích chỉ có vị trí, không có hướng.
+"""
 
 import math
 
 import isaaclab.envs.mdp as mdp
-import isaaclab.sim as sim_utils
-from isaaclab.assets import AssetBaseCfg
-from isaaclab.envs import ManagerBasedRLEnvCfg
-from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import ObservationGroupCfg as ObsGroup
 from isaaclab.managers import ObservationTermCfg as ObsTerm
 from isaaclab.managers import RewardTermCfg as RewTerm
-from isaaclab.managers import SceneEntityCfg
-from isaaclab.managers import TerminationTermCfg as DoneTerm
-from isaaclab.scene import InteractiveSceneCfg
-from isaaclab.sensors import ImuCfg
 from isaaclab.utils import configclass
+from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
 
-from ..balance_car_cfg import (
-    BALANCE_CAR_AXLE_OFFSET,
-    BALANCE_CAR_CFG,
-    BALANCE_CAR_GROUND_FRICTION,
-    BALANCE_CAR_TRACTION_TORQUE,
-)
-from ..mdp.observations import (
-    angl_vel_b,
-    lin_vel_b,
-    obs_body_pitch,
-    obs_body_roll,
-    obs_body_yaw,
-    obs_pos_world,
-)
-from ..mdp.rewards import (
-    cover_flat_exp,
-    cover_flat_l2,
-    reward_roll_rate,
-)
-from ..mdp.terminations import reset_when_fall
-from .mdp.rewards import (
-    heading_command_error_abs,
-    position_command_error_tanh,
-    position_reached_bonus,
-)
+from ..balance_env_cfg import BalanceCarEnvCfg
+from .mdp.rewards import position_command_error_tanh
 
 
 @configclass
-class BalanceCarNavigationSceneCfg(InteractiveSceneCfg):
-    """Scene configuration for balance car navigation."""
-
-    num_envs: int = 1
-
-    # Add light
-    dome_light = AssetBaseCfg(
-        prim_path="/World/DomeLight",
-        spawn=sim_utils.DomeLightCfg(color=(0.9, 0.9, 0.9), intensity=500.0),
-    )
-
-    # Ground plane
-    ground = AssetBaseCfg(
-        prim_path="/World/ground",
-        spawn=sim_utils.GroundPlaneCfg(
-            # Ma sát PHẢI đặt tay: mặc định của Isaac Lab là 0.5, USD Onshape không mang vật
-            # liệu vật lý nào, và ở 0.5 thì xe không cứu nổi độ nghiêng quá 26.6° — triệu chứng
-            # nhìn ra là "bánh yếu" trong khi thật ra là bánh TRƯỢT. Xem BALANCE_CAR_GROUND_FRICTION.
-            physics_material=sim_utils.RigidBodyMaterialCfg(
-                static_friction=BALANCE_CAR_GROUND_FRICTION,
-                dynamic_friction=BALANCE_CAR_GROUND_FRICTION * 0.9,
-                restitution=0.0,
-                # "max" có ưu tiên cao nhất trong PhysX nên giá trị này thắng, không bị lấy
-                # trung bình với 0.5 mặc định của bánh
-                friction_combine_mode="max",
-            ),
-        ),
-    )
-
-    # Robot
-    robot = BALANCE_CAR_CFG.replace(
-        prim_path="{ENV_REGEX_NS}/Robot",
-    )
-
-    # IMU sensor — phải khớp y hệt BalanceCarSceneCfg của tầng thấp, xem chú thích ở đó
-    imu = ImuCfg(
-        prim_path="/World/envs/env_.*/Robot/robot/robot/Group_1",
-        offset=ImuCfg.OffsetCfg(
-            pos=(0.0, 0.0, BALANCE_CAR_AXLE_OFFSET),
-            rot=(1.0, 0.0, 0.0, 0.0),
-        ),
-        update_period=0.0,
-        debug_vis=True,
-    )
-
-
-@configclass
-class ActionsCfg:
-    """Action configuration for navigation."""
-
-    # dấu và trần mô-men lấy y hệt tầng thấp — xem ActionsCfg trong balance_env_cfg.py
-    joint_effort = mdp.JointEffortActionCfg(
-        asset_name="robot",
-        joint_names=["Revolute_1", "Revolute_2"],
-        scale={
-            "Revolute_1": BALANCE_CAR_TRACTION_TORQUE,
-            "Revolute_2": BALANCE_CAR_TRACTION_TORQUE,
-        },
-        debug_vis=True,
-    )
-
-
-@configclass
-class ObservationsCfg:
-    """Observation configuration for navigation."""
-
-    @configclass
-    class PolicyCfg(ObsGroup):
-        """Policy observations."""
-
-        # Robot state observations
-        joint_pos = ObsTerm(
-            func=mdp.joint_pos,
-            params={"asset_cfg": SceneEntityCfg("robot")},
-        )
-        joint_vel = ObsTerm(
-            func=mdp.joint_vel,
-            params={"asset_cfg": SceneEntityCfg("robot")},
-        )
-
-        # IMU observations
-        pitch_angle = ObsTerm(
-            func=obs_body_pitch,
-            params={"asset_cfg": SceneEntityCfg("imu")},
-        )
-        roll_angle = ObsTerm(
-            func=obs_body_roll,
-            params={"asset_cfg": SceneEntityCfg("imu")},
-        )
-        yaw_angle = ObsTerm(
-            func=obs_body_yaw,
-            params={"asset_cfg": SceneEntityCfg("imu")},
-        )
-        linear_vel = ObsTerm(
-            func=lin_vel_b,
-            params={"asset_cfg": SceneEntityCfg("imu")},
-        )
-        angular_vel = ObsTerm(
-            func=angl_vel_b,
-            params={"asset_cfg": SceneEntityCfg("imu")},
-        )
-
-        # Position observation
-        robot_pos = ObsTerm(
-            func=obs_pos_world,
-            params={"asset_cfg": SceneEntityCfg("robot")},
-        )
-
-        # Navigation command (target position)
-        pose_command = ObsTerm(
-            func=mdp.generated_commands,
-            params={"command_name": "pose_command"},
-        )
-
-        def __post_init__(self) -> None:
-            self.enable_corruption = False
-            self.concatenate_terms = True
-
-    @configclass
-    class CriticCfg(ObsGroup):
-        """Critic observations."""
-
-        joint_pos = ObsTerm(
-            func=mdp.joint_pos,
-            params={"asset_cfg": SceneEntityCfg("robot")},
-        )
-        joint_vel = ObsTerm(
-            func=mdp.joint_vel,
-            params={"asset_cfg": SceneEntityCfg("robot")},
-        )
-        pitch_angle = ObsTerm(
-            func=obs_body_pitch,
-            params={"asset_cfg": SceneEntityCfg("imu")},
-        )
-        roll_angle = ObsTerm(
-            func=obs_body_roll,
-            params={"asset_cfg": SceneEntityCfg("imu")},
-        )
-        yaw_angle = ObsTerm(
-            func=obs_body_yaw,
-            params={"asset_cfg": SceneEntityCfg("imu")},
-        )
-        linear_vel = ObsTerm(
-            func=lin_vel_b,
-            params={"asset_cfg": SceneEntityCfg("imu")},
-        )
-        angular_vel = ObsTerm(
-            func=angl_vel_b,
-            params={"asset_cfg": SceneEntityCfg("imu")},
-        )
-        robot_pos = ObsTerm(
-            func=obs_pos_world,
-            params={"asset_cfg": SceneEntityCfg("robot")},
-        )
-        pose_command = ObsTerm(
-            func=mdp.generated_commands,
-            params={"command_name": "pose_command"},
-        )
-
-        def __post_init__(self) -> None:
-            self.enable_corruption = False
-            self.concatenate_terms = True
-
-    policy: PolicyCfg = PolicyCfg()
-    critic: CriticCfg = CriticCfg()
-
-
-@configclass
-class EventCfg:
-    """Event configuration for navigation."""
-
-    # reset_base = EventTerm(
-    #     func=mdp.reset_root_state_uniform,
-    #     mode="reset",
-    #     params={
-    #         "pose_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5), "yaw": (-0.1, 0.1)},
-    #         "velocity_range": {
-    #             "x": (0.0, 0.0),
-    #             "y": (0.0, 0.0),
-    #             "z": (0.0, 0.0),
-    #             "roll": (0.0, 0.0),
-    #             "pitch": (0.0, 0.0),
-    #             "yaw": (0.0, 0.0),
-    #         },
-    #     },
-    # )
-
-    reset_joints = EventTerm(
-        func=mdp.reset_joints_by_offset,
-        mode="reset",
-        params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names=["Revolute_[1-2]"]),
-            "position_range": (-0.1, 0.1),
-            "velocity_range": (-0.01, 0.01),
-        },
-    )
-
-
-@configclass
-class CommandsCfg:
-    """Command configuration for navigation."""
+class NavigationCommandsCfg:
+    """Một điểm đích ngẫu nhiên trong ô env."""
 
     pose_command = mdp.UniformPose2dCommandCfg(
         asset_name="robot",
-        simple_heading=True,
-        resampling_time_range=(2.0, 2.0),
+        simple_heading=False,
+        resampling_time_range=(15.0, 15.0),
         debug_vis=True,
         ranges=mdp.UniformPose2dCommandCfg.Ranges(
-            pos_x=(-2.0, 2.0),
-            pos_y=(-2.0, 2.0),
+            pos_x=(-3.0, 3.0),
+            pos_y=(-3.0, 3.0),
+            # bắt buộc phải khai, nhưng không term reward nào đọc tới — xem note ở đầu module
             heading=(-math.pi, math.pi),
         ),
     )
 
 
 @configclass
-class RewardsCfg:
-    """Reward configuration for navigation."""
+class NavigationObservationsCfg:
+    """Bằng quan sát của tầng thấp, thay ``velocity_commands`` bằng vị trí đích."""
 
-    # Balance rewards (keep upright)
-    alive = RewTerm(func=mdp.is_alive, weight=1.0)
-    terminating = RewTerm(func=mdp.is_terminated, weight=-100.0)
+    @configclass
+    class PolicyCfg(ObsGroup):
+        base_lin_vel = ObsTerm(func=mdp.base_lin_vel, noise=Unoise(n_min=-0.1, n_max=0.1))
+        base_ang_vel = ObsTerm(func=mdp.base_ang_vel, noise=Unoise(n_min=-0.2, n_max=0.2))
+        projected_gravity = ObsTerm(func=mdp.projected_gravity, noise=Unoise(n_min=-0.05, n_max=0.05))
+        pose_command = ObsTerm(func=mdp.generated_commands, params={"command_name": "pose_command"})
+        joint_vel = ObsTerm(func=mdp.joint_vel_rel, noise=Unoise(n_min=-1.5, n_max=1.5))
+        actions = ObsTerm(func=mdp.last_action)
 
-    # Balance angle rewards — dùng chung hàm với tầng thấp: đo bằng vector trọng lực trong hệ
-    # thân nên bắt cả roll lẫn pitch, xem chú thích trong ../mdp/rewards.py
-    balance_flat = RewTerm(func=cover_flat_l2, weight=-5.0)
-    balance_flat_bonus = RewTerm(func=cover_flat_exp, weight=2.0, params={"std": 0.05})
-    # bỏ balance_yaw: nó thưởng cho một hướng yaw TUYỆT ĐỐI, tức chống lại đúng việc rẽ để
-    # tới đích — mục tiêu duy nhất của task này
-    balance_roll_rate = RewTerm(func=reward_roll_rate, weight=0.3)
+        def __post_init__(self) -> None:
+            self.enable_corruption = True
+            self.concatenate_terms = True
 
-    # lực bánh mượt, cùng lý do như tầng thấp
-    action_rate = RewTerm(func=mdp.action_rate_l2, weight=-0.02)
-    joint_torque = RewTerm(func=mdp.joint_torques_l2, weight=-2.0e-5)
+    policy: PolicyCfg = PolicyCfg()
 
-    # Navigation rewards
+
+@configclass
+class NavigationRewardsCfg:
+    """Trọng số là **điểm mỗi giây** (Isaac Lab nhân reward với ``step_dt``)."""
+
+    # -- tới đích: hai thang, thô để kéo từ xa và mịn để đứng đúng chỗ. Đây là cặp mà mẫu
+    #    navigation của Isaac Lab dùng.
     position_tracking = RewTerm(
-        func=position_command_error_tanh,
-        weight=3.0,
-        params={"std": 1.5, "command_name": "pose_command"},
+        func=position_command_error_tanh, weight=2.0, params={"command_name": "pose_command", "std": 2.0}
     )
     position_tracking_fine = RewTerm(
-        func=position_command_error_tanh,
-        weight=2.0,
-        params={"std": 0.3, "command_name": "pose_command"},
-    )
-    heading_tracking = RewTerm(
-        func=heading_command_error_abs,
-        weight=-0.3,
-        params={"command_name": "pose_command"},
-    )
-    position_reached = RewTerm(
-        func=position_reached_bonus,
-        weight=5.0,
-        params={"threshold": 0.3, "command_name": "pose_command"},
+        func=position_command_error_tanh, weight=2.0, params={"command_name": "pose_command", "std": 0.2}
     )
 
-    # Velocity penalties
-    # joint_vel_penalty = RewTerm(func=reward_vel, weight=0.1)
-    # linear_vel_penalty = RewTerm(func=reward_li_vel, weight=0.1)
+    # -- giữ thăng bằng: cùng bộ term với tầng thấp, cùng trọng số
+    flat_orientation_l2 = RewTerm(func=mdp.flat_orientation_l2, weight=-2.0)
+    ang_vel_xy_l2 = RewTerm(func=mdp.ang_vel_xy_l2, weight=-0.05)
+    lin_vel_z_l2 = RewTerm(func=mdp.lin_vel_z_l2, weight=-2.0)
+
+    # -- lực bánh mượt
+    dof_torques_l2 = RewTerm(func=mdp.joint_torques_l2, weight=-1.0e-5)
+    dof_acc_l2 = RewTerm(func=mdp.joint_acc_l2, weight=-2.5e-7)
+    action_rate_l2 = RewTerm(func=mdp.action_rate_l2, weight=-0.01)
+
+    termination_penalty = RewTerm(func=mdp.is_terminated, weight=-100.0)
 
 
 @configclass
-class TerminationsCfg:
-    """Termination configuration for navigation."""
+class BalanceCarNavigationEnvCfg(BalanceCarEnvCfg):
+    """Giữ thăng bằng + chạy tới đích, học từ đầu bằng một mạng."""
 
-    time_out = DoneTerm(func=mdp.time_out, time_out=True)
-    fall = DoneTerm(func=reset_when_fall)
-
-
-@configclass
-class BalanceCarNavigationEnvCfg(ManagerBasedRLEnvCfg):
-    """Configuration for balance car navigation environment."""
-
-    scene: BalanceCarNavigationSceneCfg = BalanceCarNavigationSceneCfg(
-        num_envs=1,
-        env_spacing=4.0,
-    )
-    observations: ObservationsCfg = ObservationsCfg()
-    actions: ActionsCfg = ActionsCfg()
-    events: EventCfg = EventCfg()
-    commands: CommandsCfg = CommandsCfg()
-    rewards: RewardsCfg = RewardsCfg()
-    terminations: TerminationsCfg = TerminationsCfg()
+    commands: NavigationCommandsCfg = NavigationCommandsCfg()
+    observations: NavigationObservationsCfg = NavigationObservationsCfg()
+    rewards: NavigationRewardsCfg = NavigationRewardsCfg()
 
     def __post_init__(self) -> None:
-        """Post initialization."""
-        self.decimation = 2
-        self.episode_length_s = 5.0
-
-        self.viewer.eye = (0.0, 8.0, 16.0)
-        self.viewer.lookat = (0.0, 0.0, 0.5)
-
-        self.sim.dt = 1 / 60
-        self.sim.render_interval = self.decimation
+        super().__post_init__()
+        # một episode = trọn một lần bốc đích
+        self.episode_length_s = self.commands.pose_command.resampling_time_range[1]
 
 
 @configclass
 class BalanceCarNavigationEnvCfg_PLAY(BalanceCarNavigationEnvCfg):
-    """Play configuration for balance car navigation."""
-
     def __post_init__(self) -> None:
         super().__post_init__()
         self.scene.num_envs = 16
-        self.scene.env_spacing = 15.0
+        self.scene.env_spacing = 8.0
         self.observations.policy.enable_corruption = False
+        self.events.push_robot = None

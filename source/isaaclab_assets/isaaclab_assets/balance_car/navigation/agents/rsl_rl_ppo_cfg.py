@@ -3,43 +3,47 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""PPO configuration for balance car navigation training."""
+"""PPO cho hai task navigation, theo ``NavigationEnvPPORunnerCfg`` của Isaac Lab."""
 
 from isaaclab.utils import configclass
 
-from isaaclab_rl.rsl_rl import (
-    RslRlOnPolicyRunnerCfg,
-    RslRlPpoActorCriticCfg,
-    RslRlPpoAlgorithmCfg,
-)
+from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, RslRlPpoAlgorithmCfg
 
 
 @configclass
-class BalanceCarNavigationPPORunnerCfg(RslRlOnPolicyRunnerCfg):
-    """PPO runner configuration for balance car navigation."""
+class BalanceCarNavigationPretrainedPPORunnerCfg(RslRlOnPolicyRunnerCfg):
+    """Cascade: tầng cao xuất lệnh vận tốc cho policy thăng bằng đã đóng băng.
 
-    num_steps_per_env = int(5 * 60)
-    max_iterations = 100
-    save_interval = 10
-    experiment_name = "cart_v1_navigation"
+    Bài này nhẹ — mạng chỉ phải học ánh xạ "lệch quỹ đạo → lệnh vận tốc", phần vật lý khó đã
+    nằm ở tầng thấp. Vì vậy mạng nhỏ và rollout ngắn giống mẫu navigation của Isaac Lab, không
+    cần cỡ của một policy locomotion.
+    """
 
+    # tầng cao chạy 10 Hz, episode 20 s = 200 bước
+    num_steps_per_env = 24
+    max_iterations = 1000
+    save_interval = 50
+    # Thư mục log RIÊNG với task nav học-từ-đầu: hai task có obs/action khác hẳn nhau (bản
+    # từ-đầu xuất 2 mô-men bánh, bản này xuất 3 số vận tốc). Dùng chung ``experiment_name`` thì
+    # ``--resume`` và ``play.py`` đều lấy run mới nhất bất kể nó thuộc task nào, và nạp nhầm
+    # là lệch shape.
+    experiment_name = "balance_car_nav_pretrained"
     policy = RslRlPpoActorCriticCfg(
-        init_noise_std=0.3,
+        init_noise_std=0.5,
         actor_obs_normalization=True,
         critic_obs_normalization=True,
-        actor_hidden_dims=[256, 256, 128],
-        critic_hidden_dims=[256, 256, 128],
+        actor_hidden_dims=[128, 128],
+        critic_hidden_dims=[128, 128],
         activation="elu",
     )
-
     algorithm = RslRlPpoAlgorithmCfg(
         value_loss_coef=1.0,
         use_clipped_value_loss=True,
         clip_param=0.2,
-        entropy_coef=0.01,
+        entropy_coef=0.005,
         num_learning_epochs=5,
         num_mini_batches=4,
-        learning_rate=3.0e-4,
+        learning_rate=1.0e-3,
         schedule="adaptive",
         gamma=0.99,
         lam=0.95,
@@ -49,14 +53,21 @@ class BalanceCarNavigationPPORunnerCfg(RslRlOnPolicyRunnerCfg):
 
 
 @configclass
-class BalanceCarNavigationPretrainedPPORunnerCfg(BalanceCarNavigationPPORunnerCfg):
-    """Bản cascade: tầng cao xuất lệnh vận tốc cho policy thăng bằng đã đóng băng.
+class BalanceCarNavigationPPORunnerCfg(BalanceCarNavigationPretrainedPPORunnerCfg):
+    """Học từ đầu: một mạng vừa cân bằng vừa chạy tới đích, xuất thẳng mô-men bánh.
 
-    Phải có thư mục log RIÊNG. Hai task nav có obs/action khác hẳn nhau (bản phẳng xuất
-    2 mô-men bánh, bản này xuất 3 số vận tốc), dùng chung ``experiment_name`` thì ``--resume``
-    và ``play.py`` đều lấy run mới nhất bất kể nó thuộc task nào, và nạp nhầm là lệch shape.
+    Mạng to hơn và train lâu hơn bản cascade vì nó phải học lại toàn bộ phần cân bằng.
     """
 
-    experiment_name = "cart_v1_navigation_pretrained"
-    # tầng cao chạy 6 Hz, episode 5 s = 30 bước → 300 bước là 10 episode mỗi vòng
-    num_steps_per_env = 300
+    experiment_name = "balance_car_nav_scratch"
+    policy = RslRlPpoActorCriticCfg(
+        init_noise_std=1.0,
+        actor_obs_normalization=True,
+        critic_obs_normalization=True,
+        actor_hidden_dims=[128, 128, 128],
+        critic_hidden_dims=[128, 128, 128],
+        activation="elu",
+    )
+
+    def __post_init__(self) -> None:
+        self.max_iterations = 3000

@@ -20,8 +20,12 @@ phải giữ nhịp chứ không phải phóng tới rồi đứng đợi.
 Quy ước hướng
 -------------
 Thân xe có **hướng tiến là +Y của body** (xem ``BALANCE_CAR_CFG``), không phải +X như quy ước
-locomotion của Isaac Lab. Nên lệnh ở đây được đưa về **hệ heading**: thành phần dọc hướng tiến
-và thành phần ngang, đúng ngữ nghĩa với action ``[vx, vy, wz]`` mà tầng cao xuất ra.
+locomotion của Isaac Lab. Lệnh ở đây được đưa về **hệ heading** — thành phần dọc hướng tiến và
+thành phần ngang — nên nó độc lập với quy ước trục, đổi CAD cũng không phải sửa gì ở đây.
+
+Action mà tầng cao xuất ra là ``[vx, vy, wz]`` của tầng thấp, trong đó **``vy`` mới là lệnh
+tiến**. Policy tầng cao tự học ánh xạ đó nên không cần đổi chỗ ở code, nhưng đọc log thì phải
+nhớ: cột action thứ hai là ga, không phải cột thứ nhất.
 
 Vector lệnh, shape ``(num_envs, 4)``
 ------------------------------------
@@ -251,10 +255,11 @@ class PathCommandCfg(CommandTermCfg):
     radius_range: tuple[float, float] = (1.0, 2.0)
     """Bán kính đường [m]. Nhỏ quá thì xe hai bánh vi sai phải quay gắt liên tục."""
 
-    speed_range: tuple[float, float] = (0.15, 0.35)
+    speed_range: tuple[float, float] = (0.4, 0.9)
     """Tốc độ điểm mục tiêu chạy trên đường [m/s].
 
-    Phải nằm TRONG dải lệnh của tầng thấp (``lin_vel_x`` = ±0.5 m/s). Đặt cao hơn thì mục tiêu
+    Phải nằm TRONG dải lệnh của tầng thấp (``lin_vel_y`` = ±1.5 m/s — thành phần TIẾN của xe
+    này nằm ở trục Y, xem ``balance_env_cfg``). Đặt cao hơn thì mục tiêu
     chạy nhanh hơn khả năng bám của tầng thấp, xe không bao giờ đuổi kịp và tín hiệu học chỉ
     còn là "luôn luôn tụt lại" — không phân biệt được policy tốt với policy dở.
     """

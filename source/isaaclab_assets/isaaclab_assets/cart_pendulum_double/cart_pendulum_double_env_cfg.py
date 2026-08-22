@@ -15,6 +15,7 @@ from isaaclab.utils import configclass
 from isaaclab_assets.cart_pendulum.cart_pendulum_env_cfg import (
     CartPendulumEnvCfg,
     CartPendulumPositionEnvCfg,
+    set_control_rate,
 )
 
 from .cart_pendulum_double_cfg import CART_PENDULUM_DOUBLE_CFG, CART_PENDULUM_DOUBLE_RAIL_LIMIT
@@ -27,6 +28,10 @@ def use_double_pendulum(cfg: CartPendulumEnvCfg) -> None:
     # ray ở z≈0.45, chuỗi dựng lên tới z≈0.89 nên phải lùi ra và nâng mắt nhìn
     cfg.viewer.eye = (3.2, 0.0, 1.3)
     cfg.viewer.lookat = (0.0, 0.0, 0.6)
+    # Hai khâu có cực bất ổn nhanh nhất λ = 16.47 rad/s (τ = 61 ms). Ở 60 Hz thì sai lệch
+    # phồng 32% giữa hai bước điều khiển — gấp đôi con lắc đơn. 120 Hz đưa về 14.7%, ngang
+    # mức mà con lắc đơn đang chạy tốt. Xem bảng ở `CONTROL_RATE_HZ`.
+    set_control_rate(cfg, 120.0)
 
 
 @configclass

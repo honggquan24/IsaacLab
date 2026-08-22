@@ -3,125 +3,83 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Navigation environment using pre-trained balance policy for the balance car.
+"""Tầng navigation chạy trên policy thăng bằng đã train — bám quỹ đạo.
 
-This configuration uses a pre-trained balance policy as low-level controller
-and trains a high-level navigation policy on top of it.
+Dựng theo ``isaaclab_tasks/manager_based/navigation/config/anymal_c/navigation_env_cfg.py``,
+mẫu cascade chuẩn của Isaac Lab. Khác mẫu gốc ở một chỗ: mục tiêu không phải một điểm đứng yên
+mà là **một điểm chạy liên tục trên đường cong kín** (xem :mod:`.mdp.commands`).
+
+Kiến trúc
+---------
+::
+
+    tầng cao 10 Hz  ──(vx, vy, wz)──▶  policy thăng bằng 50 Hz  ──mô-men──▶  bánh xe
+
+Tầng cao chỉ xuất lệnh vận tốc; nó **không đụng tới mô-men bánh**. Policy tầng thấp đã được
+train để bám đúng loại lệnh này nên nó tự phối hợp nghiêng thân với quay bánh.
+
+Điều đã sửa so với bản trước
+----------------------------
+Bản trước **chép tay** danh sách quan sát của tầng thấp vào một class
+``LowLevelObservationsCfg`` riêng, kèm chú thích "thứ tự term phải khớp đúng PolicyCfg của tầng
+thấp". Đó là một ràng buộc không ai kiểm được: sửa quan sát ở :mod:`..balance_env_cfg` mà quên
+sửa ở đây thì policy nhận vào một vector trộn sai thứ tự, chạy trơn tru và cho kết quả vô
+nghĩa. Ở đây dùng thẳng ``LOW_LEVEL_ENV_CFG.observations.policy`` — đúng cách mẫu gốc làm,
+và không còn gì để lệch.
 """
-
-# ruff: noqa: F405  (env cfg dùng tên đến từ `import *` của package mdp trong cùng dự án)
 
 import math
 
 import isaaclab.envs.mdp as mdp
 from isaaclab.envs import ManagerBasedRLEnvCfg
-from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import ObservationGroupCfg as ObsGroup
 from isaaclab.managers import ObservationTermCfg as ObsTerm
 from isaaclab.managers import RewardTermCfg as RewTerm
-from isaaclab.managers import SceneEntityCfg
 from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.utils import configclass
 
-from ..balance_env_cfg import BalanceCarEnvCfg
-from ..mdp.observations import angl_vel_b, lin_vel_b, obs_body_pitch, obs_body_roll, obs_body_yaw
-from ..mdp.rewards import cover_flat_exp, cover_flat_l2
-from ..mdp.terminations import reset_when_fall
+from ..balance_env_cfg import BALANCE_CAR_FALL_ANGLE, BalanceCarEnvCfg
+from ..balance_env_cfg import EventCfg as LowLevelEventCfg
 from .mdp.commands import PathCommandCfg
 from .mdp.pre_trained_policy_action import PreTrainedBalancePolicyActionCfg, latest_exported_policy
-from .mdp.rewards import *  # noqa: F403
+from .mdp.rewards import path_heading_exp, path_lateral_l2, path_position_exp
 
-# Load low-level balance environment config
 LOW_LEVEL_ENV_CFG = BalanceCarEnvCfg()
 
-
-@configclass
-class LowLevelObservationsCfg(ObsGroup):
-    """Observations for the low-level balance policy.
-
-    This must match the observation space that the balance policy was trained on.
-    Based on balance_env_cfg.py ObservationsCfg.PolicyCfg (without obs_pos_w).
-    """
-
-    # observation terms (order preserved)
-    joint_pos = ObsTerm(
-        func=mdp.joint_pos,
-        params={"asset_cfg": SceneEntityCfg("robot")},
-    )
-    joint_vel = ObsTerm(
-        func=mdp.joint_vel,
-        params={"asset_cfg": SceneEntityCfg("robot")},
-    )
-    pitch_angl_p = ObsTerm(
-        func=obs_body_pitch,
-        params={"asset_cfg": SceneEntityCfg("imu")},
-    )
-    pitch_angl_r = ObsTerm(
-        func=obs_body_roll,
-        params={"asset_cfg": SceneEntityCfg("imu")},
-    )
-    pitch_angl_y = ObsTerm(
-        func=obs_body_yaw,
-        params={"asset_cfg": SceneEntityCfg("imu")},
-    )
-    l_vel = ObsTerm(
-        func=lin_vel_b,
-        params={"asset_cfg": SceneEntityCfg("imu")},
-    )
-    a_vel = ObsTerm(
-        func=angl_vel_b,
-        params={"asset_cfg": SceneEntityCfg("imu")},
-    )
-    # Chỗ giữ sẵn cho lệnh vận tốc; PreTrainedBalancePolicyAction ghi đè func lúc khởi tạo để
-    # nó trả về action của tầng cao. Thứ tự term phải khớp đúng PolicyCfg của tầng thấp.
-    velocity_commands = ObsTerm(
-        func=mdp.generated_commands,
-        params={"command_name": "base_velocity"},
-    )
-
-    def __post_init__(self) -> None:
-        self.enable_corruption = False
-        self.concatenate_terms = True
+# Policy tầng thấp được huấn luyện KHÔNG có nhiễu quan sát ở đây: nó đã đóng băng, thêm nhiễu
+# vào đầu vào của nó chỉ làm nó tệ đi chứ không dạy được gì cho ai.
+LOW_LEVEL_ENV_CFG.observations.policy.enable_corruption = False
 
 
 @configclass
 class ActionsCfg:
-    """Action configuration using pre-trained balance policy."""
+    """Action của tầng cao = lệnh vận tốc cho tầng thấp."""
 
     pre_trained_policy_action: PreTrainedBalancePolicyActionCfg = PreTrainedBalancePolicyActionCfg(
         asset_name="robot",
-        # Tự lấy run mới nhất của tầng thấp. Train Isaac-Balance-Car rồi chạy play.py một lần
-        # để nó export ra logs/rsl_rl/carbalance_ppo/<run>/exported/policy.pt là dùng được ngay,
-        # không phải quay lại sửa file này.
+        # Tự lấy run mới nhất. Train Isaac-Balance-Car rồi chạy play.py một lần để nó export
+        # logs/rsl_rl/carbalance_ppo/<run>/exported/policy.pt là dùng được ngay.
         policy_path=latest_exported_policy("carbalance_ppo"),
-        # PHẢI bằng decimation của env tầng thấp (2 → 30 Hz). apply_actions() được gọi mỗi
-        # bước vật lý 60 Hz, nên để 1 là policy thăng bằng bị hỏi ở 60 Hz trong khi nó được
-        # train ở 30 Hz — sai tần số thì vận tốc/gia tốc nó thấy lệch hẳn so với lúc học.
         low_level_decimation=LOW_LEVEL_ENV_CFG.decimation,
         low_level_actions=LOW_LEVEL_ENV_CFG.actions.joint_effort,
-        low_level_observations=LowLevelObservationsCfg(),
-        # debug_vis=True,
+        low_level_observations=LOW_LEVEL_ENV_CFG.observations.policy,
     )
 
 
 @configclass
 class ObservationsCfg:
-    """Observation configuration for navigation policy."""
+    """Quan sát của tầng cao — đúng bộ của mẫu navigation, thêm vận tốc góc.
+
+    Thêm ``base_ang_vel`` vì xe hai bánh vi sai rẽ bằng chênh lệch tốc độ bánh: không nhìn
+    thấy mình đang quay nhanh cỡ nào thì không điều tiết được lệnh ``wz``.
+    """
 
     @configclass
     class PolicyCfg(ObsGroup):
-        """High-level observations for navigation."""
-
-        # Robot state
         base_lin_vel = ObsTerm(func=mdp.base_lin_vel)
         base_ang_vel = ObsTerm(func=mdp.base_ang_vel)
         projected_gravity = ObsTerm(func=mdp.projected_gravity)
-
-        # Lệnh quỹ đạo: [lệch dọc, lệch ngang, lệch hướng, tốc độ mục tiêu]
-        path_command = ObsTerm(
-            func=mdp.generated_commands,
-            params={"command_name": "path_command"},
-        )
+        path_command = ObsTerm(func=mdp.generated_commands, params={"command_name": "path_command"})
 
         def __post_init__(self) -> None:
             self.enable_corruption = False
@@ -131,33 +89,31 @@ class ObservationsCfg:
 
 
 @configclass
-class EventCfg:
-    """Event configuration for navigation."""
+class EventCfg(LowLevelEventCfg):
+    """Kế thừa nguyên phần random miền của tầng thấp, chỉ nhẹ tay hơn lúc reset.
 
-    reset_pole_position = EventTerm(
-        func=mdp.events.reset_joints_by_offset,
-        mode="reset",
-        params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names=["Revolute_[1-2]"]),
-            "position_range": (-0.125 * math.pi, 0.125 * math.pi),
-            "velocity_range": (-0.01 * math.pi, 0.01 * math.pi),
-        },
-    )
+    Giữ nguyên ``physics_material`` / ``add_frame_mass`` / ``frame_com``: tầng cao phải chịu
+    được đúng dải robot mà tầng thấp đã học, nếu không nó sẽ học một quan hệ "lệnh → chuyển
+    động" chỉ đúng cho một con xe.
+    """
+
+    def __post_init__(self) -> None:
+        # Tầng cao đang học bám đường, không học gượng dậy. Để nhiễu nghiêng lớn như tầng thấp
+        # thì phần đầu mỗi episode là tầng thấp đang cứu xe, tầng cao không điều khiển được gì
+        # mà vẫn bị chấm điểm cho quãng đó.
+        self.reset_base.params["pose_range"] = {"yaw": (-math.pi, math.pi), "roll": (-0.05, 0.05)}
+        self.reset_base.params["velocity_range"] = {}
 
 
 @configclass
 class CommandsCfg:
-    """Command configuration for navigation."""
+    """Quỹ đạo để bám. Xem :mod:`.mdp.commands`."""
 
-    # BÁM QUỸ ĐẠO thay cho chạy tới một điểm đích. Mục tiêu chạy liên tục trên đường cong kín,
-    # nên không có khái niệm "đã tới nơi" — xem mdp/commands.py.
     path_command = PathCommandCfg(
         asset_name="robot",
         path_types=("circle", "figure8"),
         radius_range=(1.0, 2.0),
-        # phải nằm trong dải lệnh của tầng thấp (lin_vel_x = ±0.5 m/s), nếu không mục tiêu
-        # chạy nhanh hơn khả năng bám và tín hiệu học chỉ còn là "luôn tụt lại"
-        speed_range=(0.15, 0.35),
+        speed_range=(0.4, 0.9),
         # một quỹ đạo cho trọn một episode: đổi đường giữa chừng thì phần lớn thời gian là
         # chạy tới đường mới chứ không phải bám đường
         resampling_time_range=(20.0, 20.0),
@@ -167,78 +123,39 @@ class CommandsCfg:
 
 @configclass
 class RewardsCfg:
-    """Bám quỹ đạo, giữ thăng bằng, chạy mượt.
+    """Trọng số là **điểm mỗi giây** (Isaac Lab nhân reward với ``step_dt``)."""
 
-    Bộ reward "chạy tới đích" cũ đã bỏ hết vì nó giải bài khác:
+    # -- bám quỹ đạo
+    path_position = RewTerm(func=path_position_exp, weight=6.0, params={"command_name": "path_command", "std": 0.5})
+    path_heading = RewTerm(func=path_heading_exp, weight=2.0, params={"command_name": "path_command", "std": 0.6})
+    path_lateral = RewTerm(func=path_lateral_l2, weight=-2.0, params={"command_name": "path_command"})
 
-    * ``goal_progress`` thưởng theo mức giảm khoảng cách — vô nghĩa khi đích tự chạy. Nó còn
-      giữ trạng thái trong ``env.extras["prev_dist"]``, một dict DÙNG CHUNG cho mọi env và
-      không được dọn lúc reset, nên ngay sau mỗi lần reset nó cho một cú thưởng/phạt rác;
-    * ``reached_bonus`` thưởng khi vào bán kính 0.3 m — mục tiêu không đứng yên nên "tới nơi"
-      không tồn tại;
-    * ``velocity_to_goal``, ``heading_alignment`` cũng đều gắn với một đích đứng yên.
-    """
+    # -- giữ nắp phẳng, cùng term với tầng thấp
+    flat_orientation_l2 = RewTerm(func=mdp.flat_orientation_l2, weight=-2.0)
 
-    # =====================================================
-    # Bám quỹ đạo — phần chính
-    # =====================================================
-    path_position = RewTerm(
-        func=path_position_exp,
-        weight=6.0,
-        params={"command_name": "path_command", "std": 0.5},
-    )
-    # bám vị trí thôi thì xe vẫn có thể ĐI LÙI hoặc trượt ngang qua khúc cua mà vẫn ăn điểm.
-    # Term này bắt mũi xe quay đúng chiều tiếp tuyến — nó quyết định video có ra hồn không.
-    path_heading = RewTerm(
-        func=path_heading_exp,
-        weight=2.0,
-        params={"command_name": "path_command", "std": 0.6},
-    )
-    # tách riêng phần lệch NGANG: tụt lại sau vài chục phân là bình thường và tự sửa được,
-    # còn cắt cua ra ngoài đường mới đúng nghĩa đi sai quỹ đạo
-    path_lateral = RewTerm(
-        func=path_lateral_l2,
-        weight=-2.0,
-        params={"command_name": "path_command"},
-    )
-
-    # =====================================================
-    # Giữ thăng bằng — cùng hàm với tầng thấp
-    # =====================================================
-    cover_flat = RewTerm(func=cover_flat_l2, weight=-5.0)
-    cover_flat_bonus = RewTerm(func=cover_flat_exp, weight=2.0, params={"std": 0.05})
-
-    # =====================================================
-    # Kết thúc sớm
-    # =====================================================
-    # -300 của bản cũ là quá tay: nó áp đảo mọi tín hiệu bám đường, biến bài toán thành
-    # "đừng ngã" và policy học cách đứng yên tại chỗ cho an toàn. Đặt ngang tầm với phần
-    # thưởng bám đường tích luỹ trong vài giây.
-    termination_penalty = RewTerm(func=mdp.is_terminated, weight=-20.0)
-
-    # =====================================================
-    # Lệnh xuất ra tầng thấp phải mượt
-    # =====================================================
-    # Tầng cao chạy 6 Hz. Lệnh vận tốc nhảy loạn mỗi bước thì tầng thấp — vốn được train trên
-    # lệnh đổi mỗi 3-6 s — gặp phân phối hoàn toàn khác lúc học và bám rất tệ.
+    # -- lệnh xuất ra tầng thấp phải mượt
+    # Tầng cao chạy 10 Hz. Lệnh nhảy loạn mỗi bước thì tầng thấp — vốn được train trên lệnh đổi
+    # mỗi 5 s — gặp phân phối hoàn toàn khác lúc học và bám rất tệ.
     action_rate = RewTerm(func=mdp.action_rate_l2, weight=-0.1)
+
+    # -- ngã
+    # -300 của bản cũ áp đảo mọi tín hiệu bám đường và biến bài toán thành "đừng ngã", policy
+    # học cách đứng yên cho an toàn. Nhân với dt → -100 × 0.1 = -10 một lần ở 10 Hz, xấp xỉ
+    # 1.5 giây bám đường hoàn hảo.
+    termination_penalty = RewTerm(func=mdp.is_terminated, weight=-100.0)
 
 
 @configclass
 class TerminationsCfg:
-    """Termination configuration for navigation."""
-
     time_out = DoneTerm(func=mdp.time_out, time_out=True)
-    fall = DoneTerm(func=reset_when_fall)
+    base_fell = DoneTerm(func=mdp.bad_orientation, params={"limit_angle": BALANCE_CAR_FALL_ANGLE})
 
 
 @configclass
 class BalanceCarNavigationPretrainedEnvCfg(ManagerBasedRLEnvCfg):
-    """Navigation environment using pre-trained balance policy."""
+    """Bám quỹ đạo, tầng thấp là policy thăng bằng đã train."""
 
-    # Use the same scene as balance task
     scene = LOW_LEVEL_ENV_CFG.scene
-
     actions: ActionsCfg = ActionsCfg()
     observations: ObservationsCfg = ObservationsCfg()
     events: EventCfg = EventCfg()
@@ -247,33 +164,23 @@ class BalanceCarNavigationPretrainedEnvCfg(ManagerBasedRLEnvCfg):
     terminations: TerminationsCfg = TerminationsCfg()
 
     def __post_init__(self) -> None:
-        """Post initialization."""
-        # Use same simulation settings as low-level env
         self.sim.dt = LOW_LEVEL_ENV_CFG.sim.dt
         self.sim.render_interval = LOW_LEVEL_ENV_CFG.decimation
-
-        # Higher decimation for navigation (low-level runs faster)
+        self.sim.physics_material = LOW_LEVEL_ENV_CFG.sim.physics_material
+        # tầng cao 10 Hz = 200 / (4 × 5). Mẫu anymal dùng ×10 (5 Hz); ở đây ×5 vì mục tiêu
+        # chạy liên tục chứ không đứng yên, lệnh cập nhật thưa quá thì xe cắt cua.
         self.decimation = LOW_LEVEL_ENV_CFG.decimation * 5
-
-        # Một episode = trọn một lần bốc quỹ đạo. Ở 6 Hz thì 20 s = 120 bước tầng cao, đủ để
-        # chạy hết ~1 vòng đường bán kính 1.5 m ở 0.3 m/s.
+        # một episode = trọn một lần bốc quỹ đạo
         self.episode_length_s = self.commands.path_command.resampling_time_range[1]
 
-        # Viewer settings
-        self.viewer.eye = (0.0, 8.0, 4.0)
+        self.viewer.eye = (0.0, 8.0, 5.0)
         self.viewer.lookat = (0.0, 0.0, 0.5)
-
-        # Scene settings
-        self.scene.num_envs = 1
-        self.scene.env_spacing = 5.0
 
 
 @configclass
 class BalanceCarNavigationPretrainedEnvCfg_PLAY(BalanceCarNavigationPretrainedEnvCfg):
-    """Play configuration for navigation with pre-trained policy."""
-
     def __post_init__(self) -> None:
         super().__post_init__()
         self.scene.num_envs = 16
-        self.scene.env_spacing = 6.0
+        self.scene.env_spacing = 8.0
         self.observations.policy.enable_corruption = False

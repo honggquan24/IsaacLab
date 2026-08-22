@@ -40,8 +40,10 @@ CART_PENDULUM_TRIPLE_CFG = ArticulationCfg(
         articulation_props=sim_utils.ArticulationRootPropertiesCfg(
             enabled_self_collisions=False,
             # ba khâu nối tiếp là chuỗi dài và nhẹ, thiếu vòng lặp solver là khớp giãn ra khi lắc
-            solver_position_iteration_count=24,
-            solver_velocity_iteration_count=2,
+            # 8/0 giống con lắc đơn — xem chú thích cùng chỗ ở con lắc kép. Chuỗi ba khâu
+            # chạy 240 Hz nên dt nhỏ hơn 4 lần so với lúc phải dùng 24 vòng lặp.
+            solver_position_iteration_count=8,
+            solver_velocity_iteration_count=0,
         ),
     ),
     actuators={

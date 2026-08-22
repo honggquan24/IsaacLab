@@ -10,9 +10,11 @@ from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, R
 
 @configclass
 class CartPendulumDoublePPORunnerCfg(RslRlOnPolicyRunnerCfg):
-    # chuỗi này có chu kỳ lắc 1.09 s; 100 bước ở 60 Hz mới được 1.67 s, chưa đủ một nhịp
-    # lắc nên rollout cắt ngang giữa chừng và credit assignment của swing-up bị hỏng.
-    # 200 bước = 3.33 s, phủ 3.1 chu kỳ.
+    # 200 bước ở 120 Hz = 1.67 s. Bình luận cũ đòi phủ trọn một chu kỳ lắc (1.09 s) —
+    # lập luận đó thuộc về bài SWING-UP, mà `hanging_prob = 0.0` nên mọi env đã khởi động ở tư
+    # thế đứng và bài giờ là giữ thăng bằng thuần. Thứ rollout cần phủ là tầm nhìn của GAE:
+    # 1/(1-gamma*lam) = 18 bước, nhỏ hơn 200 rất nhiều. Giữ 200 để chi phí mỗi vòng
+    # không đổi so với lúc chạy 60 Hz.
     num_steps_per_env = 200
     max_iterations = 2000
     save_interval = 100
@@ -30,11 +32,17 @@ class CartPendulumDoublePPORunnerCfg(RslRlOnPolicyRunnerCfg):
         use_clipped_value_loss=True,
         clip_param=0.2,
         entropy_coef=0.01,
-        num_learning_epochs=1,
-        num_mini_batches=64,
-        learning_rate=1.0e-4,
-        schedule="adam",
-        gamma=0.99,
+        # 1 epoch + 64 mini-batch + lr cố định 1e-4 là bộ tham số cũ, học chậm hơn mặc định
+        # Isaac Lab khoảng 5-10 lần: mỗi rollout chỉ được dùng đúng một lần, mini-batch nhỏ nên
+        # gradient nhiễu, và `schedule="adam"` KHÔNG phải adaptive — nó để lr đứng yên, tức
+        # `desired_kl` bên dưới là dòng config chết.
+        num_learning_epochs=5,
+        num_mini_batches=4,
+        learning_rate=1.0e-3,
+        schedule="adaptive",
+        # 120 Hz thay vì 60 Hz nên gamma phải co theo, nếu không tầm nhìn tính bằng GIÂY bị
+        # cắt ngắn đúng 2 lần: 1/(1-0.995) = 200 bước = 1.67 s, bằng 0.99 ở 60 Hz.
+        gamma=0.995,
         lam=0.95,
         desired_kl=0.01,
         max_grad_norm=0.5,

@@ -48,8 +48,11 @@ CART_PENDULUM_DOUBLE_CFG = ArticulationCfg(
         articulation_props=sim_utils.ArticulationRootPropertiesCfg(
             enabled_self_collisions=False,
             # chuỗi dài hơn thì cần thêm vòng lặp solver, nếu không hai khâu sẽ giãn ra khi lắc mạnh
-            solver_position_iteration_count=16,
-            solver_velocity_iteration_count=1,
+            # 8/0 giống con lắc đơn. Trước đây tăng lên 16/1 để chống chuỗi bị giãn, nhưng
+            # gốc của giãn là bước thời gian quá to: sai số ràng buộc mỗi bước tỉ lệ với dt,
+            # nên hạ dt 2 lần vừa chính xác hơn vừa rẻ hơn nhiều so với gấp đôi số vòng lặp.
+            solver_position_iteration_count=8,
+            solver_velocity_iteration_count=0,
         ),
     ),
     actuators={

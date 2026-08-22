@@ -3,68 +3,100 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-r"""Xe hai bánh tự cân bằng — giữ thăng bằng và điều hướng tới đích.
+r"""Xe hai bánh tự cân bằng — bám lệnh vận tốc và bám quỹ đạo.
 
-Chuẩn bị USD
-------------
-``usd/balance_car_base.usd`` là bản Onshape thô, ``usd/balance_car_cfg.usd`` là bản đã vá và
-là bản env dùng. Sinh lại bằng::
+Ba task, dựng theo hai mẫu chuẩn của Isaac Lab
+==============================================
 
-    ./isaaclab.sh -p scripts/ute/prepare_usd.py --package balance_car \
-        --floating-base --base-body Group_1 --max-angular-velocity 40 --verify
+======================================  ==============================================  ======
+task                                    mẫu Isaac Lab                                   Hz
+======================================  ==============================================  ======
+``Isaac-Balance-Car``                   ``manager_based/locomotion/velocity``           50
+``Isaac-Balance-Car-Navigation``        cùng mẫu, đổi lệnh vận tốc → lệnh vị trí        50
+``Isaac-Balance-Car-Navigation-Pretrained``  ``manager_based/navigation`` (cascade)     10
+======================================  ==============================================  ======
+
+Toàn bộ MDP của tầng thấp dùng term có sẵn của ``isaaclab.envs.mdp`` — không còn observation,
+reward, termination hay command tự viết. Phần tự viết còn lại đúng hai thứ, và cả hai đều là
+thứ Isaac Lab không có: :class:`~.navigation.mdp.commands.PathCommand` (mục tiêu chạy trên
+đường cong kín) và ba hàm reward bám quỹ đạo đi kèm.
+
+Hướng tiến của xe là **+Y của thân**, không phải +X như quy ước locomotion. Chỗ duy nhất phải
+biết điều đó là dải lệnh trong ``CommandsCfg``: thành phần tiến nằm ở ``lin_vel_y``. Xem
+:mod:`.balance_env_cfg`.
+
+Thứ tự chạy
+===========
+Task cascade cần policy tầng thấp đã export. ``train.py`` **không** sinh ra file đó, chỉ
+``play.py`` mới sinh — nên bắt buộc phải chạy play của ``Isaac-Balance-Car`` ít nhất một lần
+trước khi train cascade. Đường dẫn tự dò theo run mới nhất, không phải sửa config bằng tay.
 
 Cách đọc lệnh quay video
-------------------------
-``--video_length`` đếm theo BƯỚC ĐIỀU KHIỂN, không phải giây. Tần số điều khiển
-= 1 / (sim.dt × decimation), ghi kèm ở từng task bên dưới.
-Video xuất ra ``logs/rsl_rl/<experiment_name>/<run>/videos/play/``.
-``--load_run`` lấy checkpoint mới nhất trong thư mục run đó; muốn chỉ đúng một
-checkpoint thì thay bằng ``--checkpoint <đường/dẫn/model_xxx.pt>``.
-Bỏ ``--headless`` nếu muốn xem cửa sổ Isaac Sim trong lúc ghi.
+========================
+``--video_length`` đếm theo **bước điều khiển**, không phải giây; tần số ghi ở bảng trên.
+Video xuất ra ``logs/rsl_rl/<experiment_name>/<run>/videos/play/``. ``--load_run`` lấy
+checkpoint mới nhất trong run đó; muốn chỉ đúng một checkpoint thì dùng
+``--checkpoint <đường/dẫn/model_xxx.pt>``. Bỏ ``--headless`` để xem cửa sổ Isaac Sim.
 
-Isaac-Balance-Car — giữ thăng bằng, bám lệnh vận tốc
-    30 Hz (sim.dt 1/60, decimation 2) → 60 s = 1800 step
-
-    ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
-        --task Isaac-Balance-Car --num_envs 2048 --headless
-
-    ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
-        --task Isaac-Balance-Car --num_envs 4 --headless \
-        --video --video_length 1800 --load_run <tên_run>
-
-Isaac-Balance-Car-Navigation — tầng cao tới đích, học từ đầu
-    30 Hz → 60 s = 1800 step; mỗi episode 5 s = 150 step
+1. Isaac-Balance-Car — giữ thăng bằng, bám lệnh vận tốc (50 Hz → 60 s = 3000 step)
+---------------------------------------------------------------------------------
+::
 
     ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
-        --task Isaac-Balance-Car-Navigation --num_envs 2048 --headless
+        --task Isaac-Balance-Car --num_envs 4096 --headless
 
     ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
-        --task Isaac-Balance-Car-Navigation-Play --num_envs 16 --headless \
-        --video --video_length 1800 --load_run <tên_run>
+        --task Isaac-Balance-Car-Play --num_envs 16 \
+        --video --video_length 3000 --load_run <tên_run>
 
-Isaac-Balance-Car-Navigation-Pretrained — BÁM QUỸ ĐẠO, tầng cao dùng policy thăng bằng đã train
-    Mục tiêu là một điểm CHẠY LIÊN TỤC trên đường tròn hoặc hình số 8 (bán kính 1-2 m,
-    0.15-0.35 m/s), không phải một đích đứng yên. Quả cầu đỏ = mục tiêu đang chạy,
-    chuỗi chấm xanh = nguyên hình quỹ đạo.
-    6 Hz (decimation 2×5) → 60 s = 360 step; mỗi episode 20 s = 120 step
-    Điều kiện: đã train ``Isaac-Balance-Car`` VÀ chạy ``play.py`` của nó ít nhất một lần —
-    chính play.py mới sinh ra ``exported/policy.pt``. Không phải sửa ``policy_path`` bằng tay,
-    ``latest_exported_policy("carbalance_ppo")`` tự lấy run mới nhất có file đó.
+Mũi tên XANH LÁ là lệnh, XANH DƯƠNG là vận tốc thật, cùng hệ nên nhìn là biết bám tốt hay
+không. Cả hai xoay theo thân xe — đúng, vì chúng là đại lượng trong hệ thân.
+
+2. Isaac-Balance-Car-Navigation — chạy tới đích, học từ đầu (50 Hz → 60 s = 3000 step)
+--------------------------------------------------------------------------------------
+Một mạng vừa cân bằng vừa điều hướng. Khó hơn hẳn bản cascade, để đối chứng.
+::
+
+    ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
+        --task Isaac-Balance-Car-Navigation --num_envs 4096 --headless
+
+    ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
+        --task Isaac-Balance-Car-Navigation-Play --num_envs 16 \
+        --video --video_length 3000 --load_run <tên_run>
+
+3. Isaac-Balance-Car-Navigation-Pretrained — BÁM QUỸ ĐẠO (10 Hz → 60 s = 600 step)
+----------------------------------------------------------------------------------
+Mục tiêu là một điểm **chạy liên tục** trên đường tròn hoặc hình số 8 (bán kính 1-2 m,
+0.4-0.9 m/s), không phải đích đứng yên. Quả cầu đỏ = mục tiêu đang chạy, chuỗi chấm xanh =
+nguyên hình quỹ đạo. Điều kiện: đã train ``Isaac-Balance-Car`` **và** chạy ``play.py`` của nó
+ít nhất một lần.
+::
 
     ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py \
         --task Isaac-Balance-Car-Navigation-Pretrained --num_envs 2048 --headless
 
     ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py \
-        --task Isaac-Balance-Car-Navigation-Pretrained-Play --num_envs 16 --headless \
-        --video --video_length 360 --load_run <tên_run>
+        --task Isaac-Balance-Car-Navigation-Pretrained-Play --num_envs 16 \
+        --video --video_length 600 --load_run <tên_run>
+
+Chuẩn bị USD
+============
+``usd/balance_car_base.usd`` là bản Onshape thô, ``usd/balance_car_cfg.usd`` là bản đã vá::
+
+    ./isaaclab.sh -p scripts/ute/prepare_usd.py --package balance_car \
+        --floating-base --base-body Group_1 --max-angular-velocity 40 --verify
 """
 
 import gymnasium as gym
 
 from . import agents
-from .balance_car_cfg import *
-from .balance_env_cfg import *
+from .balance_car_cfg import *  # noqa: F401, F403
+from .balance_env_cfg import *  # noqa: F401, F403
 from .navigation import agents as nav_agents
+
+##
+# 1. Giữ thăng bằng + bám lệnh vận tốc
+##
 
 gym.register(
     id="Isaac-Balance-Car",
@@ -76,9 +108,20 @@ gym.register(
     },
 )
 
-# ==============================================================================
-# Register Navigation Environment
-# ==============================================================================
+gym.register(
+    id="Isaac-Balance-Car-Play",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.balance_env_cfg:BalanceCarEnvCfg_PLAY",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:BalanceCarPPORunnerCfg",
+    },
+)
+
+##
+# 2. Chạy tới đích, học từ đầu
+##
+
 gym.register(
     id="Isaac-Balance-Car-Navigation",
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
@@ -99,19 +142,18 @@ gym.register(
     },
 )
 
-# ==============================================================================
-# Register Navigation with Pre-trained Balance Policy Environment
-# ==============================================================================
-# Train navigation with pre-trained balance policy:
-
-# Play navigation with pre-trained policy:
+##
+# 3. Bám quỹ đạo trên policy thăng bằng đã train
+##
 
 gym.register(
     id="Isaac-Balance-Car-Navigation-Pretrained",
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
     disable_env_checker=True,
     kwargs={
-        "env_cfg_entry_point": f"{__name__}.navigation.navigation_pretrained_env_cfg:BalanceCarNavigationPretrainedEnvCfg",
+        "env_cfg_entry_point": (
+            f"{__name__}.navigation.navigation_pretrained_env_cfg:BalanceCarNavigationPretrainedEnvCfg"
+        ),
         "rsl_rl_cfg_entry_point": f"{nav_agents.__name__}.rsl_rl_ppo_cfg:BalanceCarNavigationPretrainedPPORunnerCfg",
     },
 )
@@ -121,7 +163,9 @@ gym.register(
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
     disable_env_checker=True,
     kwargs={
-        "env_cfg_entry_point": f"{__name__}.navigation.navigation_pretrained_env_cfg:BalanceCarNavigationPretrainedEnvCfg_PLAY",
+        "env_cfg_entry_point": (
+            f"{__name__}.navigation.navigation_pretrained_env_cfg:BalanceCarNavigationPretrainedEnvCfg_PLAY"
+        ),
         "rsl_rl_cfg_entry_point": f"{nav_agents.__name__}.rsl_rl_ppo_cfg:BalanceCarNavigationPretrainedPPORunnerCfg",
     },
 )

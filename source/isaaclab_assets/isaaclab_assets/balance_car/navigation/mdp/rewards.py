@@ -3,7 +3,19 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Custom reward functions for balance car navigation."""
+"""Reward bám quỹ đạo cho tầng navigation.
+
+Chỉ còn ba hàm, đúng ba hàm đang được dùng. Bản trước có 15 hàm trong đó 12 hàm là di sản của
+thiết kế "chạy tới một đích đứng yên" đã bỏ (``goal_progress_reward``, ``position_reached_bonus``,
+``velocity_towards_goal``, ``upright_reward``, ``tilt_penalty``, ...). Chúng không được tham
+chiếu ở đâu nhưng vẫn mang docstring nói về một bài toán khác — đọc file là hiểu sai ngay
+env đang tối ưu cái gì. Có cái còn giữ trạng thái trong ``env.extras`` dùng chung cho mọi env
+và không được dọn lúc reset.
+
+Ba hàm này đọc ``path_command`` do :class:`~.commands.PathCommand` sinh ra, vector
+``(num_envs, 4)`` = ``[lệch dọc, lệch ngang, lệch hướng, tốc độ mục tiêu]`` trong hệ heading
+của xe.
+"""
 
 from __future__ import annotations
 
@@ -11,206 +23,8 @@ from typing import TYPE_CHECKING
 
 import torch
 
-from isaaclab.utils.math import euler_xyz_from_quat
-
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
-
-
-# =========================================================
-# BASIC POSITION / HEADING REWARDS (GIỮ TƯƠNG THÍCH CŨ)
-# =========================================================
-
-
-def position_command_error_tanh(
-    env: ManagerBasedRLEnv,
-    std: float,
-    command_name: str,
-) -> torch.Tensor:
-    command = env.command_manager.get_command(command_name)
-    des_pos_b = command[:, :2]
-    distance = torch.norm(des_pos_b, dim=1)
-    return 1.0 - torch.tanh(distance / std)
-
-
-def heading_command_error_abs(
-    env: ManagerBasedRLEnv,
-    command_name: str,
-) -> torch.Tensor:
-    command = env.command_manager.get_command(command_name)
-    heading = command[:, 3]
-    return torch.abs(heading)
-
-
-def position_reached_bonus(
-    env: ManagerBasedRLEnv,
-    threshold: float,
-    command_name: str,
-) -> torch.Tensor:
-    command = env.command_manager.get_command(command_name)
-    des_pos = command[:, :2]
-    distance = torch.norm(des_pos, dim=1)
-    return (distance < threshold).float()
-
-
-# =========================================================
-# VELOCITY / ALIGNMENT (WORLD + BODY FRAME CHUẨN)
-# =========================================================
-
-
-def navigation_velocity_reward(
-    env: ManagerBasedRLEnv,
-    command_name: str,
-    scale: float = 1.0,
-) -> torch.Tensor:
-    command = env.command_manager.get_command(command_name)
-    des_pos_b = command[:, :2]
-
-    vel_b = env.scene["robot"].data.root_lin_vel_b[:, :2]
-    direction = torch.nn.functional.normalize(des_pos_b, dim=1, eps=1e-6)
-
-    vel_towards_target = torch.sum(vel_b * direction, dim=1)
-    return scale * torch.clamp(vel_towards_target, min=0.0)
-
-
-def forward_velocity_tracking(
-    env: ManagerBasedRLEnv,
-) -> torch.Tensor:
-    return env.scene["robot"].data.root_lin_vel_b[:, 0]
-
-
-def lateral_velocity_penalty(
-    env: ManagerBasedRLEnv,
-) -> torch.Tensor:
-    return -torch.abs(env.scene["robot"].data.root_lin_vel_b[:, 1])
-
-
-def velocity_goal_alignment(
-    env: ManagerBasedRLEnv,
-    command_name: str = "pose_command",
-) -> torch.Tensor:
-    command = env.command_manager.get_command(command_name)
-    goal_pos = command[:, :2]
-
-    robot_pos = env.scene["robot"].data.root_pos_w[:, :2]
-    to_goal = torch.nn.functional.normalize(goal_pos - robot_pos, dim=1, eps=1e-6)
-
-    vel_w = env.scene["robot"].data.root_lin_vel_w[:, :2]
-    return torch.sum(vel_w * to_goal, dim=1)
-
-
-# =========================================================
-# NAVIGATION CORE REWARD (RESET-SAFE)
-# =========================================================
-
-
-def goal_progress_reward(
-    env: ManagerBasedRLEnv,
-    command_name: str,
-) -> torch.Tensor:
-    command = env.command_manager.get_command(command_name)
-    goal = command[:, :2]
-    pos = env.scene["robot"].data.root_pos_w[:, :2]
-
-    dist = torch.norm(goal - pos, dim=1)
-
-    if "prev_dist" not in env.extras:
-        env.extras["prev_dist"] = dist.clone()
-        return torch.zeros_like(dist)
-
-    progress = env.extras["prev_dist"] - dist
-    env.extras["prev_dist"] = dist.clone()
-    return progress
-
-
-def velocity_towards_goal(
-    env: ManagerBasedRLEnv,
-    command_name: str,
-    stop_radius: float = 0.4,
-) -> torch.Tensor:
-    command = env.command_manager.get_command(command_name)
-    goal = command[:, :2]
-    pos = env.scene["robot"].data.root_pos_w[:, :2]
-
-    dist = torch.norm(goal - pos, dim=1)
-
-    vel = env.scene["robot"].data.root_lin_vel_w[:, :2]
-    to_goal = torch.nn.functional.normalize(goal - pos, dim=1, eps=1e-6)
-    vel_proj = torch.sum(vel * to_goal, dim=1)
-
-    return torch.where(dist > stop_radius, vel_proj, torch.zeros_like(vel_proj))
-
-
-# =========================================================
-# HEADING / STABILITY (ISAAC LAB SAFE)
-# =========================================================
-
-
-def heading_alignment_reward(
-    env: ManagerBasedRLEnv,
-    command_name: str,
-) -> torch.Tensor:
-    command = env.command_manager.get_command(command_name)
-    desired_yaw = command[:, 3]
-
-    quat = env.scene["robot"].data.root_quat_w
-    _, _, robot_yaw = euler_xyz_from_quat(quat)
-
-    err = torch.atan2(
-        torch.sin(desired_yaw - robot_yaw),
-        torch.cos(desired_yaw - robot_yaw),
-    )
-    return -torch.abs(err)
-
-
-def yaw_rate_penalty(
-    env: ManagerBasedRLEnv,
-) -> torch.Tensor:
-    return -torch.abs(env.scene["robot"].data.root_ang_vel_b[:, 2])
-
-
-def joint_velocity_penalty(
-    env: ManagerBasedRLEnv,
-    scale: float = 0.01,
-) -> torch.Tensor:
-    v = env.scene["robot"].data.joint_vel
-    return -scale * torch.sum(v**2, dim=1)
-
-
-def upright_reward(env: ManagerBasedRLEnv) -> torch.Tensor:
-    quat = env.scene["robot"].data.root_quat_w
-    # body z-axis trong world frame
-    z_axis = torch.stack(
-        [
-            2 * (quat[:, 1] * quat[:, 3] - quat[:, 0] * quat[:, 2]),
-            2 * (quat[:, 2] * quat[:, 3] + quat[:, 0] * quat[:, 1]),
-            1 - 2 * (quat[:, 1] ** 2 + quat[:, 2] ** 2),
-        ],
-        dim=1,
-    )
-
-    # dot với world up (0,0,1)
-    upright = z_axis[:, 2]
-    return torch.clamp(upright, min=0.0)
-
-
-def tilt_penalty(env: ManagerBasedRLEnv) -> torch.Tensor:
-    quat = env.scene["robot"].data.root_quat_w
-    pitch = torch.asin(2 * (quat[:, 0] * quat[:, 2] - quat[:, 3] * quat[:, 1]))
-    roll = torch.atan2(
-        2 * (quat[:, 0] * quat[:, 1] + quat[:, 2] * quat[:, 3]),
-        1 - 2 * (quat[:, 1] ** 2 + quat[:, 2] ** 2),
-    )
-    return -(pitch.abs() + roll.abs())
-
-
-# =========================================================
-# BÁM QUỸ ĐẠO (dùng với PathCommand)
-# =========================================================
-#
-# Ba term dưới đây thay cho bộ reward "chạy tới đích" ở trên. Khác biệt cốt lõi: mục tiêu
-# CHUYỂN ĐỘNG, nên không có khái niệm "đã tới nơi" và cũng không cần term thưởng tiến độ.
-# Chỉ cần bám sát điểm đang chạy là đủ; tốc độ tự bị ràng buộc vì mục tiêu không đợi.
 
 
 def path_position_exp(
@@ -220,10 +34,10 @@ def path_position_exp(
 ) -> torch.Tensor:
     """Thưởng theo khoảng cách tới điểm mục tiêu đang chạy. Bằng 1 khi trùng khít.
 
-    Dùng ``exp(-d²/std²)`` chứ không phải ``1 - tanh(d/std)``: ở đây mục tiêu luôn ở gần (nó
-    xuất phát ngay tại chỗ xe), nên thứ cần là độ phân giải CAO quanh 0 để phân biệt bám sát
-    với bám lỏng. ``tanh`` thì ngược lại — nó thoải ở gần và dốc ở xa, hợp với bài chạy tới
-    một đích ở xa hơn.
+    Dùng ``exp(-d²/std²)`` chứ không phải ``1 - tanh(d/std)`` như mẫu navigation của Isaac Lab:
+    ở đó đích nằm cách vài mét nên cần một hàm còn dốc ở XA, còn ở đây mục tiêu luôn ở gần (nó
+    xuất phát ngay tại chỗ xe), nên thứ cần là độ phân giải cao QUANH 0 để phân biệt bám sát
+    với bám lỏng.
 
     ``std = 0.5`` nghĩa là lệch 0.5 m còn được 37% điểm, lệch 1 m còn 2%.
     """
@@ -240,8 +54,7 @@ def path_heading_exp(
     """Thưởng khi mũi xe quay đúng chiều tiếp tuyến quỹ đạo.
 
     Không có term này thì xe vẫn bám được điểm mục tiêu bằng cách **đi lùi** hoặc trượt ngang
-    qua các khúc cua — bám đúng vị trí mà nhìn thì sai hoàn toàn. Đây là term quyết định video
-    trông có ra hồn hay không.
+    qua các khúc cua — bám đúng vị trí mà nhìn thì sai hoàn toàn.
     """
     command = env.command_manager.get_command(command_name)
     return torch.exp(-torch.square(command[:, 2]) / std**2)
@@ -255,7 +68,29 @@ def path_lateral_l2(
 
     ``path_position_exp`` gộp chung lệch dọc và lệch ngang, nhưng hai cái không tương đương:
     tụt lại phía sau vài chục phân là chuyện bình thường và tự sửa được, còn cắt cua ra ngoài
-    đường thì đúng nghĩa là đi sai quỹ đạo. Tách ra để phạt nặng riêng phần ngang.
+    đường thì đúng nghĩa là đi sai quỹ đạo.
     """
     command = env.command_manager.get_command(command_name)
     return torch.square(command[:, 1])
+
+
+def position_command_error_tanh(
+    env: ManagerBasedRLEnv,
+    std: float,
+    command_name: str = "pose_command",
+) -> torch.Tensor:
+    """Thưởng theo khoảng cách tới một đích ĐỨNG YÊN, nhân tanh.
+
+    Bản sao của term cùng tên trong ``isaaclab_tasks.manager_based.navigation.mdp`` (không
+    import thẳng được vì sẽ tạo vòng import giữa ``isaaclab_assets`` và ``isaaclab_tasks``).
+
+    Chỉ dùng cho ``Isaac-Balance-Car-Navigation`` — nhiệm vụ chạy tới một điểm. Bài bám quỹ đạo
+    dùng :func:`path_position_exp`, vì ở đó mục tiêu luôn ở gần và cần độ phân giải quanh 0
+    chứ không cần độ dốc ở xa.
+
+    ``command[:, :3]`` là vector tới đích trong hệ thân; lấy ``norm`` nên không phụ thuộc quy
+    ước trục của xe.
+    """
+    command = env.command_manager.get_command(command_name)
+    distance = torch.norm(command[:, :3], dim=1)
+    return 1 - torch.tanh(distance / std)

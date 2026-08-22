@@ -14,6 +14,7 @@ from isaaclab.utils import configclass
 from isaaclab_assets.cart_pendulum.cart_pendulum_env_cfg import (
     CartPendulumEnvCfg,
     CartPendulumPositionEnvCfg,
+    set_control_rate,
 )
 
 from .cart_pendulum_triple_cfg import CART_PENDULUM_TRIPLE_CFG, CART_PENDULUM_TRIPLE_RAIL_LIMIT
@@ -30,6 +31,11 @@ def use_triple_pendulum(cfg: CartPendulumEnvCfg) -> None:
     # ba khâu thì miền hút hẹp hơn hẳn hai khâu: giữ nhiễu khởi động ở ~1.1° cho mỗi khâu,
     # nếu không phần lớn env sinh ra đã ở trạng thái không cứu nổi
     cfg.events.reset_pendulum.params["angle_noise"] = 0.02
+    # Ba khâu có cực bất ổn nhanh nhất λ = 23.27 rad/s (τ = 43 ms). Ở 60 Hz sai lệch phồng
+    # 47% giữa hai bước điều khiển và bài KHÔNG GIẢI ĐƯỢC bằng bất kỳ reward nào — triệu chứng
+    # là episode dài đúng bằng thời gian rơi tự do (log vòng 224: 17.5 bước, rơi tự do 9.5).
+    # 240 Hz đưa về 10.2%, thấp hơn cả con lắc đơn ở 60 Hz. Xem bảng ở `CONTROL_RATE_HZ`.
+    set_control_rate(cfg, 240.0)
 
 
 @configclass

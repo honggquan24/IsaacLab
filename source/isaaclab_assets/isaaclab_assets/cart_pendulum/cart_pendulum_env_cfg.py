@@ -42,6 +42,57 @@ FALL_ANGLE = 0.8
 dải 0.4–0.8 rad cho ``swing_up`` làm tín hiệu gượng dậy trước khi bị tính là ngã."""
 
 
+##
+# Nhịp điều khiển — chọn theo VẬT LÝ của chuỗi, không phải theo cảm giác.
+##
+
+CONTROL_RATE_HZ = 60.0
+"""Tần số điều khiển của con lắc ĐƠN [Hz]. Chuỗi dài hơn phải chạy nhanh hơn — xem bảng dưới.
+
+Con lắc ngược là hệ bất ổn hở vòng: mọi sai lệch tự nhân lên theo ``e^(λt)`` với λ là cực bất
+ổn nhanh nhất. Giữa hai lần ra quyết định, sai lệch nhân lên ``e^(λ·T)``. Đó mới là "độ khó
+mỗi bước" thật sự, và nó là thứ quyết định bài có giải được hay không — không phải reward.
+
+Tuyến tính hoá quanh tư thế đứng (thanh đều ℓ = 0.20 m, m = 0.0597 kg, xe 0.3425 kg, số đọc
+từ USD) cho:
+
+======  =====================  =========  ==============  ===================================
+số khâu λ nhanh nhất [rad/s]   τ = 1/λ    ``e^(λ·T)``     nhịp cần để bằng độ khó con lắc đơn
+======  =====================  =========  ==============  ===================================
+1        9.10                  110 ms     1.164 @ 60 Hz   60 Hz   ← chuẩn so sánh
+2       16.47                   61 ms     1.318 @ 60 Hz   **109 Hz**
+3       23.27                   43 ms     1.474 @ 60 Hz   **153 Hz**
+======  =====================  =========  ==============  ===================================
+
+Ở 60 Hz, chuỗi ba khâu để sai lệch **phồng 47% giữa hai bước điều khiển**. Cộng thêm một bước
+trễ ZOH (Isaac Lab giữ nguyên action suốt bước vật lý) thì biên độ ổn định còn lại gần bằng 0
+— đây là giới hạn của lý thuyết điều khiển lấy mẫu, không phải chuyện tuning.
+
+Triệu chứng khi để sai: episode dài đúng bằng thời gian rơi tự do. Chuỗi ba khâu xuất phát
+lệch 0.02 rad cần 159 ms (9.5 bước @60 Hz) để chạm ngưỡng ngã 0.8 rad **nếu không ai điều
+khiển**; log ở vòng 224 cho 17.5 bước — policy chỉ mua thêm được chưa tới gấp đôi, rồi đứng im
+suốt 3000 vòng.
+
+Chọn 120 Hz cho hai khâu và 240 Hz cho ba khâu: cả hai đưa ``e^(λ·T)`` xuống ngang hoặc thấp
+hơn mức 1.164 mà con lắc đơn đang chạy tốt.
+"""
+
+
+def set_control_rate(cfg: ManagerBasedRLEnvCfg, hz: float) -> None:
+    """Đặt nhịp vật lý và nhịp điều khiển bằng nhau ở ``hz``.
+
+    Giữ ``decimation = 1``: với chuỗi bất ổn thì cho vật lý chạy nhanh hơn điều khiển chỉ mô
+    phỏng chính xác hơn cú ngã chứ không giúp cứu nó — thứ phải nhanh lên là **nhịp ra quyết
+    định**.
+
+    Nhớ chỉnh ``gamma`` của PPO theo cùng tỉ lệ, nếu không tầm nhìn tính theo giây bị co lại
+    đúng bằng tỉ lệ đó: ``gamma_mới = 1 - (1 - gamma_cũ)·(hz_cũ / hz_mới)``.
+    """
+    cfg.decimation = 1
+    cfg.sim.dt = 1.0 / hz
+    cfg.sim.render_interval = cfg.decimation
+
+
 @configclass
 class CartPendulumSceneCfg(InteractiveSceneCfg):
     """Scene: một mặt sàn, một đèn dome, một robot."""
@@ -246,18 +297,16 @@ class CartPendulumEnvCfg(ManagerBasedRLEnvCfg):
     terminations: TerminationsCfg = TerminationsCfg()
 
     def __post_init__(self) -> None:
-        # Tần số điều khiển 60 Hz. Ở 30 Hz cũ, với trần 20 m/s thì mỗi bước điều khiển xe đi
-        # 0.67 m — hơn 60% chiều dài ray, tức policy không kịp lái: nới trần tốc độ mà không
-        # nới nhịp ra quyết định thì chỉ đổi lấy việc xe đâm đầu ray.
-        self.decimation = 1  # tần số điều khiển = 60/1 = 60 Hz
+        # Nhịp điều khiển đặt ở cuối hàm qua `set_control_rate`. Con lắc đơn dùng 60 Hz; ở
+        # 30 Hz cũ, với trần 20 m/s thì mỗi bước điều khiển xe đi 0.67 m — hơn 60% chiều dài
+        # ray, tức policy không kịp lái.
         self.episode_length_s = 20.0
 
         # ray nằm dọc Y nên đặt camera trên trục X, nếu không sẽ nhìn dọc thân ray
         self.viewer.eye = (2.5, 0.0, 0.9)
         self.viewer.lookat = (0.0, 0.0, 0.3)
 
-        self.sim.dt = 1 / 60
-        self.sim.render_interval = self.decimation
+        set_control_rate(self, CONTROL_RATE_HZ)
 
 
 ##

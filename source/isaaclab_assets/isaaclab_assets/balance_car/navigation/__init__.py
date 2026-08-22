@@ -3,7 +3,15 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Navigation environment configuration for balance car v1."""
+"""Hai task điều hướng cho xe cân bằng.
 
-from .navigation_env_cfg import *
-from .navigation_pretrained_env_cfg import *
+* :mod:`.navigation_env_cfg` — học từ đầu, một mạng vừa cân bằng vừa chạy tới đích;
+* :mod:`.navigation_pretrained_env_cfg` — cascade, tầng cao bám quỹ đạo trên policy thăng
+  bằng đã train.
+
+Task được đăng ký ở ``balance_car/__init__.py``, không phải ở đây.
+"""
+
+from . import agents  # noqa: F401
+from .navigation_env_cfg import *  # noqa: F401, F403
+from .navigation_pretrained_env_cfg import *  # noqa: F401, F403
